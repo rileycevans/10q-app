@@ -1,0 +1,109 @@
+---
+description: "Create PRs using GitHub CLI with mandatory title format, description template, and pre-merge checks."
+---
+# PR Creation Rules
+
+## Context
+
+- Apply when creating, updating, or reviewing pull requests.
+- Ensures consistent PR format, mandatory checks, and proper use of GitHub CLI.
+- All PRs must be created via `gh` CLI, never through GitHub UI.
+
+## Requirements
+
+### Pre-PR Checks
+
+- Confirm you're on a feature branch (never main) using `git status` and `git branch --show-current`.
+- Ensure branch is up to date with main: `git fetch origin` then `git rebase origin/main`.
+- Run minimum required checks locally: `npm test` and `npm run lint`.
+- If Supabase migrations/functions changed, run `npx supabase db reset`.
+
+### PR Title Format (Mandatory)
+
+- Use one of these prefixes: `feat(domain):`, `fix(domain):`, `chore(domain):`, `docs(domain):`, `refactor(domain):`, `test(domain):`.
+- Follow with `<short outcome>` describing the change.
+- Domain must match the area of code changed (e.g., `attempt`, `leaderboard`, `scoring`).
+
+### PR Description Template (Mandatory)
+
+- Include "What changed" section with bullet list of behavior-level changes (not file lists).
+- Include "Why" section linking to spec/ADR/rule being satisfied.
+- Include "How it works" section with key invariants and trust boundary notes.
+- For Edge Functions: document auth, idempotency keys, and timing authority.
+- Include "Tests" section with exact commands run and key cases covered.
+- Include "Risk / Rollback" section describing what could break and how to revert safely.
+- Include "Screenshots" section if UI changed.
+
+### PR Creation Command
+
+- Use `gh pr create` with `--base main`, `--title`, and `--body` flags.
+- Prefer reading body from template: `gh pr create --base main --title "..." --body "$(cat .github/PULL_REQUEST_TEMPLATE.md)"`.
+- If no template exists, provide body inline: `gh pr create --base main --title "..." --body "..."`.
+
+### PR Hygiene Rules
+
+- Keep PRs small and reviewable: prefer < ~400 lines changed unless unavoidable.
+- One domain outcome per PR.
+- No mixed concerns: don't combine refactors + feature changes + formatting.
+- Explicitly call out RLS changes, schema/migration changes, and any changes to scoring/timing/publish logic.
+
+### Updating PRs
+
+- Update the same branch and push when review asks for changes.
+- Keep history clean: prefer rebase + fixup commits.
+- Before finalizing: `git fetch origin`, `git rebase origin/main`, then `git push --force-with-lease`.
+
+## Examples
+
+<example>
+  Valid PR title: `feat(attempt): server-authoritative submit-answer`
+  
+  Valid PR title: `fix(leaderboard): correct 7-day window query`
+  
+  Valid PR title: `chore(repo): add supabase local scripts`
+</example>
+
+<example type="invalid">
+  Invalid PR title: `Add submit answer function` (missing prefix and domain)
+  
+  Invalid PR title: `fix: bug in leaderboard` (missing domain)
+  
+  Invalid PR title: `feat(attempt) submit answer` (missing colon)
+</example>
+
+<example>
+  Valid PR creation command:
+  
+  ```bash
+  gh pr create \
+    --base main \
+    --title "feat(attempt): server-authoritative submit-answer" \
+    --body "$(cat .github/PULL_REQUEST_TEMPLATE.md)"
+  ```
+</example>
+
+<example>
+  Valid PR description structure:
+  
+  ```markdown
+  ## What changed
+  - Implemented server-authoritative answer submission
+  - Added idempotency key validation
+  
+  ## Why
+  - Satisfies timing-authority rule: client timestamps never used for scoring
+  
+  ## How it works
+  - Edge Function validates attempt_id and question_id
+  - Uses server timestamp for expiry checks
+  - Idempotency enforced via (attempt_id, question_id) unique constraint
+  
+  ## Tests
+  - Ran: `npm test`
+  - Covered: duplicate submission rejection, timing boundary cases
+  
+  ## Risk / Rollback
+  - Risk: Breaking change to client API
+  - Rollback: Revert migration and Edge Function deployment
+  ```
+</example>

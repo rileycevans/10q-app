@@ -1,0 +1,113 @@
+---
+description: "Enforce rebase-first Git workflow with descriptive commits, branch naming, and merge policies."
+---
+# Git Workflow Rules
+
+## Context
+
+- Apply when creating branches, making commits, or merging code.
+- Ensures linear history, descriptive commits, and proper branch hygiene.
+- Main branch must always be deployable.
+
+## Requirements
+
+### Branching Rules
+
+- Create a branch per work item using format: `<type>/<domain>-<short-slug>`.
+- Types: `feat/`, `fix/`, `chore/`, `docs/`.
+- Never commit directly to main.
+- Before creating branch: `git checkout main`, `git pull --rebase origin main`, then `git checkout -b <branch-name>`.
+
+### Commit Message Format (Mandatory)
+
+- Use structure: `<type>(<domain>): <imperative summary>`.
+- Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
+- Include optional body answering: what changed, why, and any invariant/security implications.
+- Domain must match the area of code changed.
+
+### Commit Sizing Rules
+
+- Each commit must be logically coherent.
+- "Add migration + function change + tests" is acceptable if it's one feature slice.
+- Avoid mega-commits mixing unrelated changes.
+- If touching core correctness areas (timing/scoring/RLS), commits must include tests in same PR.
+
+### Rebase-First Workflow
+
+- Keep history linear: rebase branch onto `origin/main` frequently.
+- Use `git fetch origin` then `git rebase origin/main`.
+- Resolve conflicts locally; never merge main into your branch.
+
+### Fixups and Squashing
+
+- During development, use fixup commits: `git commit --fixup <commit_sha>`.
+- Before PR is final, autosquash: `git rebase -i --autosquash origin/main`.
+- Push with lease: `git push --force-with-lease`.
+
+### What Must Never Be Committed
+
+- Secrets (Supabase service role key, JWT secrets, etc.).
+- Local env files: `.env.local`, `.env.*` (except `.env.example`).
+- Generated build output: `.next/`, `dist/`, etc.
+- Verify entries in `.gitignore`.
+
+### Merging Policy
+
+- Default merge strategy: Squash merge (recommended for clean main history).
+- PR title becomes the squash commit message.
+- Squash commit message should preserve key bullets from PR description.
+- Alternatively: "Rebase and merge" if full history preferred, but enforce tight commit hygiene.
+
+### Post-Merge Cleanup
+
+- After merge: `git checkout main`, `git pull --rebase origin main`.
+- Delete local branch: `git branch -d <branch>`.
+- Delete remote branch: `git push origin --delete <branch>`.
+
+## Examples
+
+<example>
+  Valid branch names:
+  - `feat/attempt-submit-answer`
+  - `fix/publish-quiz-idempotency`
+  - `chore/repo-supabase-scripts`
+</example>
+
+<example type="invalid">
+  Invalid branch names:
+  - `feature-branch` (missing domain)
+  - `fix-bug` (missing domain and wrong format)
+  - `submit-answer` (missing type prefix)
+</example>
+
+<example>
+  Valid commit message:
+  
+  ```
+  feat(scoring): implement linear bonus with half-point rounding
+  
+  Adds linear bonus calculation to scoring formula with proper
+  rounding to nearest half-point. Enforces invariant that total
+  score never exceeds question point value.
+  ```
+</example>
+
+<example type="invalid">
+  Invalid commit message:
+  
+  ```
+  fixed scoring
+  ```
+  
+  Missing type prefix, domain, and imperative format.
+</example>
+
+<example>
+  Valid fixup commit workflow:
+  
+  ```bash
+  git commit --fixup abc1234
+  git rebase -i --autosquash origin/main
+  git push --force-with-lease
+  ```
+</example>
