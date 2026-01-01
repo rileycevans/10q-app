@@ -1,0 +1,92 @@
+---
+description: "Publish quizzes at 11:30 UTC with validation; safe to re-run, testable locally, independent of UI."
+---
+
+# Daily Quiz Publishing & 11:30 UTC Release
+
+## Context
+
+- Apply when implementing quiz publishing, cron jobs, or quiz selection logic.
+- Ensures reliable daily quiz releases with proper validation and failure handling.
+- Critical for operational reliability.
+
+## Requirements
+
+### Publish Operation (DB Terms)
+
+- Publish sets one quiz as LIVE for the day.
+- Update quiz `status` from `'draft'` to `'published'`.
+- Ensure only one quiz is live: use unique partial index `UNIQUE WHERE status = 'published' AND release_at_utc <= now()`.
+- Or use singleton table `current_quiz` with `quiz_id` and `published_at`.
+
+### Pre-Publish Validation (Hard Fail)
+
+- Cron job must validate before publishing:
+  - Quiz has exactly 10 questions.
+  - Each question has exactly 4 choices.
+  - Each question has 1–5 tags.
+  - Correct answers exist in private table for all 10 questions.
+- If validation fails: log error, alert, leave quiz as `'draft'`.
+- Never publish invalid quiz.
+
+### Publishing Schedule
+
+- Cron job runs every day at 11:30 UTC.
+- Find quiz where `release_at_utc <= now()` and `status = 'draft'`.
+- Validate quiz (see above).
+- If valid, set `status = 'published'`.
+- Write event `QuizPublished` to `outbox_events` with `publish_date`.
+
+### Idempotency
+
+- Running publish twice must yield same live quiz.
+- Check `status = 'published'` before publishing (skip if already published).
+- Publish must be safe to re-run without side effects.
+
+### Failure Mode Contract
+
+- If no valid quiz available at 11:30 UTC:
+  - System returns `503 QUIZ_NOT_AVAILABLE` with `Retry-After` header.
+  - Client shows "Come Back Tomorrow" screen with explanation.
+  - Log error and alert operations team.
+
+### Current Quiz Selection
+
+- "Today's quiz" = latest published quiz with `release_at_utc <= now()`.
+- Query: `SELECT * FROM quizzes WHERE status = 'published' AND release_at_utc <= now() ORDER BY release_at_utc DESC LIMIT 1`.
+- If no quiz found, return `503 QUIZ_NOT_AVAILABLE`.
+
+### Testability
+
+- Publish must be testable locally (not depend on production cron).
+- Create test function that can be called manually.
+- Test with mock quizzes and validate all failure modes.
+- Publish must not depend on UI; it's a backend operation only.
+
+### Observability
+
+- Log all publish operations with structured JSON.
+- Include: `quiz_id`, `release_at_utc`, `validation_results`, `publish_status`.
+- Write `QuizPublished` event to `outbox_events` for audit trail.
+
+## Examples
+
+<example>
+  Valid publish flow:
+  1. Cron runs at 11:30 UTC
+  2. Find draft quiz with `release_at_utc <= now()`
+  3. Validate: 10 questions, 4 choices each, 1–5 tags, correct answers exist
+  4. If valid: set `status = 'published'`, write `QuizPublished` event
+  5. If invalid: log error, alert, leave as draft
+  6. Idempotent: re-running skips if already published
+</example>
+
+<example type="invalid">
+  Invalid publish flow:
+  - Publish without validation
+  - Allow multiple live quizzes
+  - Depend on UI to trigger publish
+  - Non-idempotent (creates duplicates on re-run)
+  - No error handling for missing quiz
+  - Cannot test locally
+</example>

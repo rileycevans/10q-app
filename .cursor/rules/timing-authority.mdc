@@ -1,0 +1,68 @@
+---
+description: "Enforce server-authoritative timing for questions; client timestamps never used for scoring or expiry."
+---
+
+# Server-Authoritative Timing & Anti-Cheat
+
+## Context
+
+- Apply when implementing question timing, answer submission, or attempt resume logic.
+- Prevents cheating by ensuring all timing calculations use server timestamps only.
+- Critical for fairness in competitive gameplay.
+
+## Requirements
+
+### Canonical Timestamps
+
+- Store `question_presented_at` TIMESTAMPTZ in `attempts` table (server `now()` when question starts).
+- Store `current_question_expires_at` TIMESTAMPTZ = `question_presented_at + 16 seconds`.
+- On answer submission, store `answered_at` TIMESTAMPTZ (server `now()`).
+- Compute `elapsed_ms` = `clamp(answered_at - question_presented_at, 0, 16000)`.
+- All time calculations use server `now()` only; client timestamps are never used for scoring or expiry.
+
+### Resume Behavior
+
+- On resume, server computes remaining time: `remaining_ms = max(0, current_question_expires_at - now())`.
+- If `now() - question_presented_at >= 16000`, question is expired:
+  - Mark as `answer_kind = 'timeout'` with `selected_answer_id = NULL`.
+  - Set `is_correct = false`, `base_points = 0`, `bonus_points = 0`.
+  - Auto-advance to next question (increment `current_index`).
+- Refresh/resume does not pause time; time continues counting on server.
+
+### Client Input Restrictions
+
+- Client may send only: `attempt_id`, `question_id`, `selected_choice` (and optional `seen_at` for telemetry).
+- Server ignores all client-provided timing data.
+- Server computes all timing from stored `question_presented_at` and server `now()`.
+
+### Auto-Advance Semantics
+
+- UI may show countdown and auto-advance visually, but authoritative progression is server-driven.
+- Server increments `current_index` after writing `attempt_answers` row.
+- Client must poll or use server-sent events to detect question changes.
+
+### Database Constraints
+
+- `attempts.current_question_expires_at` must equal `current_question_started_at + INTERVAL '16 seconds'`.
+- Enforce via CHECK constraint or trigger.
+- `attempt_answers.time_ms` must be BETWEEN 0 AND 16000.
+
+## Examples
+
+<example>
+  Valid implementation:
+  - Edge Function receives `{ attempt_id, question_id, selected_choice }`
+  - Server reads `attempts.current_question_started_at` from DB
+  - Server computes `elapsed_ms = clamp(now() - current_question_started_at, 0, 16000)`
+  - Server writes `attempt_answers` with server-computed `time_ms`
+  - Server increments `attempts.current_index`
+</example>
+
+<example type="invalid">
+  Invalid implementation:
+  - Edge Function accepts `{ attempt_id, question_id, selected_choice, client_time_ms }`
+  - Server uses `client_time_ms` for scoring
+  - Client sends countdown timer value
+  - Server trusts client's "time remaining" calculation
+  - Resume pauses the timer
+</example>

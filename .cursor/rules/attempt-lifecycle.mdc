@@ -1,0 +1,89 @@
+---
+description: "Enforce explicit attempt state machine with DB constraints; reject invalid transitions with stable error codes."
+---
+
+# Attempt State Machine & Lifecycle
+
+## Context
+
+- Apply when implementing attempt creation, answer submission, finalization, or resume logic.
+- Ensures valid state transitions and prevents invalid operations.
+- Critical for data integrity and user experience.
+
+## Requirements
+
+### State Definitions
+
+- Define three states stored in `attempts` table:
+  - `NOT_STARTED`: attempt created but no questions answered.
+  - `IN_PROGRESS`: at least one question answered, not yet finalized.
+  - `COMPLETED`: attempt finalized, immutable.
+- Use `finalized_at` TIMESTAMPTZ to distinguish: NULL = IN_PROGRESS, NOT NULL = COMPLETED.
+- Use `current_index` to distinguish: 1 = NOT_STARTED, 2-10 = IN_PROGRESS.
+
+### State Transition Table
+
+- Allowed transitions:
+  - `NOT_STARTED → IN_PROGRESS`: first answer submitted.
+  - `IN_PROGRESS → IN_PROGRESS`: idempotent answer submissions (same question).
+  - `IN_PROGRESS → COMPLETED`: finalize attempt (all 10 questions answered or expired).
+- Forbidden transitions:
+  - `COMPLETED → *`: any operation on finalized attempt.
+  - Any transition not listed above.
+
+### Transition Enforcement
+
+- Enforce transitions via database constraints or triggers.
+- Edge Functions must reject invalid transitions with stable error codes:
+  - `ATTEMPT_ALREADY_COMPLETED`: operation on finalized attempt.
+  - `INVALID_STATE_TRANSITION`: attempted invalid transition.
+- Return error codes, not generic messages.
+
+### Resume Persistence
+
+- Store for resuming: `current_index`, `current_question_started_at`, `current_question_expires_at`.
+- Store per-question answers in `attempt_answers` table.
+- Resume reads from DB and computes remaining time server-side.
+
+### Idempotency Keys
+
+- Enforce `PRIMARY KEY (attempt_id, question_id)` on `attempt_answers`.
+- Prevents duplicate submissions for same question.
+- Idempotent operations: submitting same answer twice returns same result.
+
+### Cross-Quiz Rule
+
+- Attempt is bound to `quiz_id` at start.
+- Attempt remains playable even after next day publishes.
+- Rule: "Attempt is bound to quiz_id at start; it remains playable even after next day publishes."
+- User can complete yesterday's attempt even if today's quiz is live.
+
+### One Attempt Per Day
+
+- Enforce `UNIQUE(player_id, quiz_id)` constraint on `attempts` table.
+- Prevents multiple attempts for same quiz.
+- Edge Function must check constraint and return `ATTEMPT_ALREADY_EXISTS` if violated.
+
+### Immutability After Finalization
+
+- Once `finalized_at` is set, attempt is immutable.
+- No updates allowed to `attempts` or `attempt_answers` after finalization.
+- Enforce via database trigger or application logic.
+
+## Examples
+
+<example>
+  Valid state transitions:
+  - Start attempt: `NOT_STARTED → IN_PROGRESS` (current_index = 1 → 2)
+  - Submit answer: `IN_PROGRESS → IN_PROGRESS` (idempotent, same question)
+  - Finalize: `IN_PROGRESS → COMPLETED` (set finalized_at, current_index = 11)
+  - Resume: read from DB, compute remaining time, continue IN_PROGRESS
+</example>
+
+<example type="invalid">
+  Invalid state transitions:
+  - Submit answer to COMPLETED attempt (should return ATTEMPT_ALREADY_COMPLETED)
+  - Update finalized attempt (should be rejected by DB constraint)
+  - Create second attempt for same quiz (should return ATTEMPT_ALREADY_EXISTS)
+  - Resume that pauses timer (time continues on server)
+</example>

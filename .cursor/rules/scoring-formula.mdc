@@ -1,0 +1,89 @@
+---
+description: "Implement scoring formula once in contracts; enforce exact math, rounding, and invariants."
+---
+
+# Scoring Formula & Bonus Calculation
+
+## Context
+
+- Apply when implementing scoring logic, bonus calculations, or score validation.
+- Ensures consistent scoring across all implementations.
+- Prevents scoring drift and calculation errors.
+
+## Requirements
+
+### Constants Location
+
+- Define all scoring constants in `packages/contracts/scoring.ts`:
+  - `QUESTION_TIME_LIMIT_MS = 16000`
+  - `BONUS_WINDOW_MS = 10000`
+  - `BASE_POINTS_CORRECT = 5`
+  - `BASE_POINTS_INCORRECT = 0`
+  - `MAX_BONUS_POINTS = 5`
+  - `SCORING_VERSION = 1`
+- Never scatter magic numbers; import from contracts only.
+
+### Scoring Implementation
+
+- Implement scoring formula once in `packages/contracts/scoring.ts`.
+- Edge Functions and tests must import and reuse this implementation.
+- No duplicated formulas allowed.
+
+### Base Points Formula
+
+- `base_points = 5` if `is_correct = true` else `0`.
+- Base points are integer values only.
+
+### Bonus Points Formula
+
+- Bonus is linear from 0–10 seconds, 0 after 10 seconds.
+- Formula: `bonus = MAX_BONUS_POINTS * (1 - (clamped_time_ms / BONUS_WINDOW_MS))`.
+- `clamped_time_ms = min(max(elapsed_ms, 0), BONUS_WINDOW_MS)`.
+- Round bonus to nearest 0.5 using HALF_UP rounding.
+- Final bonus must be in set: `{0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0}`.
+
+### Timeout Behavior
+
+- If question expired (no answer within 16s):
+  - `is_correct = false`.
+  - `base_points = 0`.
+  - `bonus_points = 0`.
+  - `elapsed_ms = 16000`.
+
+### Score Invariants
+
+- Max score validation: `total_score <= 10 * (BASE_POINTS_CORRECT + MAX_BONUS_POINTS)`.
+- Reject any score calculation that violates this constraint.
+- Scoring must be deterministic: same inputs → same outputs.
+- Include `scoring_version` in all score calculations for future migrations.
+
+### Per-Question Score
+
+- `question_score = base_points + bonus_points`.
+- Store both values separately in `attempt_answers` table.
+- Total score = sum of all question scores.
+
+## Examples
+
+<example>
+  Valid implementation:
+  ```typescript
+  // packages/contracts/scoring.ts
+  export function calculateBonus(elapsed_ms: number): number {
+    const clamped = Math.min(Math.max(elapsed_ms, 0), BONUS_WINDOW_MS);
+    const bonus = MAX_BONUS_POINTS * (1 - (clamped / BONUS_WINDOW_MS));
+    return Math.round(bonus * 2) / 2; // Round to nearest 0.5
+  }
+  ```
+  - Edge Function imports and uses this function
+  - Tests use same function for assertions
+</example>
+
+<example type="invalid">
+  Invalid implementation:
+  - Edge Function implements its own bonus calculation
+  - Different rounding logic in tests vs production
+  - Magic numbers like `10000` or `5` scattered in code
+  - Bonus calculated as float without rounding
+  - Score validation missing or inconsistent
+</example>

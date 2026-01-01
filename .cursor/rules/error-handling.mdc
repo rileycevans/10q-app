@@ -1,0 +1,117 @@
+---
+description: "Return standard error envelope with stable error codes; implement retry rules and graceful degradation."
+---
+
+# Error Handling & Resilience
+
+## Context
+
+- Apply when implementing Edge Functions, API endpoints, or error responses.
+- Ensures consistent error handling and graceful degradation.
+- Critical for production reliability and debugging.
+
+## Requirements
+
+### Standard Error Codes
+
+- Define stable error codes in `packages/contracts/errors.ts`.
+- Never invent ad-hoc error strings.
+- Required error codes:
+  - `ATTEMPT_ALREADY_COMPLETED`: operation on finalized attempt.
+  - `ATTEMPT_NOT_FOUND`: attempt does not exist.
+  - `QUESTION_ALREADY_ANSWERED`: duplicate answer submission.
+  - `QUESTION_EXPIRED`: question time limit exceeded.
+  - `QUIZ_NOT_AVAILABLE`: no current quiz available.
+  - `NOT_AUTHORIZED`: authentication/authorization failure.
+  - `VALIDATION_ERROR`: input validation failure.
+  - `LEAGUE_NOT_FOUND`: league does not exist.
+  - `NOT_A_MEMBER`: user not member of league.
+  - `NO_VIEWER_SCORE`: user has no score in requested window.
+
+### Error Response Envelope
+
+- Every Edge Function must return standard envelope:
+  - Success: `{ ok: true, data: T, request_id: string }`
+  - Error: `{ ok: false, error: { code: string, message: string, details?: unknown }, request_id: string }`
+- Use error codes from `packages/contracts/errors.ts` only.
+- Include `request_id` in all responses for tracing.
+
+### Retry Rules
+
+- Safe retries only for idempotent operations.
+- Idempotent operations: answer submission (enforced by PK), read operations.
+- Non-idempotent operations require idempotency keys.
+- Return `409 CONFLICT` or `400 BAD_REQUEST` for non-retryable errors.
+- Include `Retry-After` header for transient failures.
+
+### Logging Requirements
+
+- Structured logs must include:
+  - `request_id` (required)
+  - `user_id` (if authenticated)
+  - `attempt_id` (if applicable)
+  - `quiz_id` (if applicable)
+  - `event_type` (operation name)
+  - `timestamp` (ISO 8601)
+- Log all errors with full context.
+- Log all state transitions (attempt started, answer submitted, attempt completed).
+
+### Graceful Degradation
+
+- If leaderboard rollups lag/fail, fall back to computing from `daily_scores` (slower but correct).
+- If quiz publish fails, return `503 QUIZ_NOT_AVAILABLE` with clear message.
+- If database connection fails, return `503 SERVICE_UNAVAILABLE` with retry guidance.
+- Never expose internal errors to client; map to user-friendly messages.
+
+### Error Code Mapping
+
+- Map database constraint violations to stable error codes:
+  - `UNIQUE(player_id, quiz_id)` → `ATTEMPT_ALREADY_EXISTS`
+  - `PRIMARY KEY (attempt_id, question_id)` → `QUESTION_ALREADY_ANSWERED`
+  - `FOREIGN KEY` violations → `VALIDATION_ERROR`
+- Map RLS policy denials to `NOT_AUTHORIZED`.
+- Map missing resources to `*_NOT_FOUND` codes.
+
+### Testing Requirements
+
+- Test all error code paths.
+- Verify error codes are stable (same error → same code).
+- Test retry behavior for idempotent operations.
+- Test graceful degradation scenarios.
+
+## Examples
+
+<example>
+  Valid error handling:
+  ```typescript
+  // Edge Function returns standard envelope
+  if (attempt.finalized_at) {
+    return {
+      ok: false,
+      error: {
+        code: 'ATTEMPT_ALREADY_COMPLETED',
+        message: 'Attempt has already been completed',
+      },
+      request_id: requestId,
+    };
+  }
+  // Structured logging
+  console.log(JSON.stringify({
+    request_id: requestId,
+    user_id: userId,
+    attempt_id: attemptId,
+    event_type: 'answer_submitted',
+    timestamp: new Date().toISOString(),
+  }));
+  ```
+</example>
+
+<example type="invalid">
+  Invalid error handling:
+  - Returning ad-hoc error strings: `{ error: 'Something went wrong' }`
+  - Inconsistent error format across functions
+  - Missing request_id in responses
+  - Exposing internal errors: `{ error: 'Database connection failed' }`
+  - No structured logging
+  - Retrying non-idempotent operations
+</example>
