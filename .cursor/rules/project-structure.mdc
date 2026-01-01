@@ -1,0 +1,82 @@
+---
+description: "Enforce fixed monorepo structure with domain boundaries; UI routes are thin, business logic in Edge Functions."
+---
+
+# Fixed Project Structure + Domain Boundaries
+
+## Context
+
+- Apply when creating new files, components, or features.
+- Ensures code lands in the correct domain folder and maintains strict separation between UI and business logic.
+- The repo structure is non-negotiable and prevents spaghetti code.
+
+## Requirements
+
+### Directory Structure
+
+- Place all Next.js app code under `apps/web/src/`.
+- Place all Supabase migrations under `supabase/migrations/`.
+- Place all Edge Functions under `supabase/functions/`.
+- Place all shared types/contracts under `packages/contracts/`.
+
+### Route Handlers (apps/web/src/app/)
+
+- Keep route handlers thin (data fetching and rendering only).
+- Delegate all business logic to Edge Functions via typed API clients.
+- Never implement scoring, timing, or attempt state logic in route handlers.
+
+### Components (apps/web/src/components/)
+
+- Components are presentation-only (dumb UI).
+- Components receive data via props and emit events.
+- Never access database directly or compute business logic.
+
+### Domain Adapters (apps/web/src/domains/)
+
+- Create domain folders for each business domain: `attempt/`, `quiz/`, `leaderboard/`, `league/`, `identity/`.
+- Domain adapters transform Edge Function responses into UI-friendly shapes.
+- Domain adapters never write to database or contain business rules.
+
+### Edge Functions (supabase/functions/)
+
+- All trusted business logic lives in Edge Functions.
+- Each Edge Function handles one specific operation (e.g., `start-attempt`, `submit-answer`).
+- Edge Functions use service role to access private data and enforce invariants.
+
+### Contracts (packages/contracts/)
+
+- Define all API shapes, events, scoring rules, and database types in contracts.
+- Contracts are the source of truth for types shared between client and server.
+- Update contracts before implementing features.
+
+### File Naming Conventions
+
+- Edge Functions: use kebab-case for folders and files (e.g., `supabase/functions/submit-answer/index.ts`).
+- React components: use PascalCase (e.g., `components/CountdownTimer.tsx`).
+- Hooks: use camelCase with `use` prefix (e.g., `useAttemptState.ts`).
+- Domain modules: use lowercase or kebab-case folders with `index.ts` exports (e.g., `domains/attempt/index.ts`).
+- DB migrations: use Supabase timestamped format with descriptive suffix.
+- Event types: use PascalCase strings (e.g., `"AnswerSubmitted"`, `"ScoreComputed"`).
+- No exceptions: rename files that violate conventions immediately.
+
+## Examples
+
+<example>
+  Valid structure and naming:
+  - `apps/web/src/app/play/page.tsx` - thin route that calls domain adapter
+  - `apps/web/src/components/CountdownTimer.tsx` - PascalCase component
+  - `apps/web/src/domains/attempt/useAttempt.ts` - camelCase hook
+  - `apps/web/src/lib/api/attempt.ts` - typed client for `/api/attempt/start`
+  - `supabase/functions/start-attempt/index.ts` - kebab-case Edge Function
+  - `packages/contracts/scoring.ts` - scoring formula and types
+</example>
+
+<example type="invalid">
+  Invalid structure and naming:
+  - `apps/web/src/app/play/page.tsx` - contains scoring calculation logic
+  - `apps/web/src/utils/attempt.ts` - ad-hoc utility outside domain folder
+  - `apps/web/src/lib/db.ts` - direct database access from client
+  - `supabase/functions/submitAnswer/index.ts` - camelCase instead of kebab-case
+  - `components/countdown-timer.tsx` - kebab-case instead of PascalCase
+  - Business logic in route handlers or components
+</example>

@@ -1,0 +1,14 @@
+{
+  "name": "@10q/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:phase1": "tsx test-phase1.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "tsx": "^4.7.0"
+  }
+}
+

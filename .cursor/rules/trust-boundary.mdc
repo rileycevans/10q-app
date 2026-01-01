@@ -1,0 +1,79 @@
+---
+description: "Enforce strict client trust boundary; client reads from public views only, all writes via Edge Functions."
+---
+
+# Trust Boundary: Public Views + Edge Functions Only
+
+## Context
+
+- Apply when implementing any client-side data access or API endpoints.
+- Assumes the client is hostile and cannot be trusted with sensitive data or business logic.
+- Prevents cheating and data tampering by enforcing strict read/write boundaries.
+
+## Requirements
+
+### Client Read Access
+
+- Client may SELECT only from safe public read models (e.g., `public.quiz_play_view`).
+- Public views must include: question text, choices, tags, order.
+- Public views must never include correct answers or scoring logic.
+
+### Client Write Access
+
+- Client must call Edge Functions for all gameplay state changes.
+- Client must never write directly to `attempts`, `attempt_answers`, or `daily_scores` tables.
+- Edge Functions enforce all business rules and invariants.
+
+### Correct Answer Protection
+
+- Store correct answers in locked table (e.g., `private.correct_answers`) with RLS deny-all.
+- Use `public.quiz_play_view` for gameplay (no correct answer field).
+- Edge Functions use service role to read private answers and compute results.
+
+### Client Prohibitions
+
+- Client must never fetch correct answers (directly or indirectly).
+- Client must never compute score or bonus points.
+- Client must never act as timing authority.
+- Client must never bypass Edge Functions for writes.
+
+### RLS Policy Requirements
+
+- Create RLS policies that deny all access to private tables from authenticated users.
+- Grant SELECT on public views only.
+- Edge Functions use service role to bypass RLS for trusted operations.
+
+### Edge Function Standards (Supabase)
+
+- Use Deno runtime for all Edge Functions (Supabase standard).
+- Enforce CORS and JSON envelope standardized across all functions.
+- Verify JWT on every function (except public read endpoints).
+- Use service role only inside Edge Functions; never ship to client.
+- Attach `request_id` to all requests, log structured JSON, and return it in responses.
+- Return uniform response format:
+  - Success: `{ ok: true, data: ..., request_id: string }`
+  - Error: `{ ok: false, error: { code: string, message: string, details?: unknown }, request_id: string }`
+- All Edge Functions must compute time/scoring server-side (never trust client).
+
+## Examples
+
+<example>
+  Valid pattern:
+  - Client queries `SELECT * FROM public.quiz_play_view WHERE quiz_id = $1`
+  - Client calls `POST /api/attempt/answer` Edge Function with JWT
+  - Edge Function verifies JWT, generates `request_id`, logs structured JSON
+  - Edge Function reads `private.correct_answers` using service role
+  - Edge Function computes score server-side and writes to `attempt_answers`
+  - Edge Function returns `{ ok: true, data: {...}, request_id: "..." }`
+</example>
+
+<example type="invalid">
+  Invalid pattern:
+  - Client queries `SELECT * FROM questions` (includes correct_answer column)
+  - Client computes score locally: `if (selected === correct) score += 5`
+  - Client writes directly: `INSERT INTO attempt_answers ...`
+  - Client uses client-side timer to calculate bonus
+  - Edge Function trusts client-provided `time_ms` without server validation
+  - Edge Function returns inconsistent response format
+  - Edge Function uses client credentials instead of service role
+</example>

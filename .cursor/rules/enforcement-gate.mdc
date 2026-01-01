@@ -1,0 +1,75 @@
+---
+description: "Require migrations, RLS policies, and tests for every change; prove invariants before shipping."
+---
+
+# Enforcement Gate: Migrations + RLS + Tests Required
+
+## Context
+
+- Apply when implementing any feature, bug fix, or schema change.
+- Ensures AI-built code is safe and stable by requiring proof of correctness.
+- Prevents shipping code that violates invariants or security boundaries.
+
+## Requirements
+
+### Required Artifacts Per Change
+
+- Include SQL migration(s) for any schema change in `supabase/migrations/`.
+- Update RLS policies where relevant (access control changes).
+- Write tests that prove invariants are enforced.
+
+### Test Coverage Requirements
+
+- Use Vitest for unit and integration tests (fast feedback, great TypeScript ergonomics).
+- Use Playwright for E2E tests (real browser, flake-resistant, great CI tooling).
+- All new domain logic must have Vitest coverage.
+- All gameplay flows must have a Playwright happy-path test.
+- Test scoring edge cases: 0–16s timing, bonus curve, unanswered questions, resume scenarios.
+- Test attempt state machine: one attempt/day, immutability after finalize, resumability.
+- Write integration tests hitting Edge Functions: start → submit → finalize → fetch results.
+- Test security boundaries: cannot read correct answers, cannot access other users' data, league scoping enforced.
+
+### RLS Policy Testing
+
+- Run tests against local Supabase stack (seed + migrations) to verify RLS policies.
+- Test RLS policies as part of CI pipeline.
+- Verify RLS policies prevent unauthorized access.
+- Test that authenticated users cannot read private tables.
+- Test that league members can only see their league's data.
+- Verify service role can bypass RLS for Edge Functions.
+
+### Migration Testing
+
+- Test migrations on clean database to verify constraints work.
+- Verify migrations are reversible (if rollback is required).
+- Test that constraints prevent invalid data insertion.
+
+### Shipping Criteria
+
+- Code does not ship without passing tests.
+- Code does not ship without RLS policy updates (if access patterns change).
+- Code does not ship without migration (if schema changes).
+
+## Examples
+
+<example>
+  Valid change process:
+  1. Add migration: `ALTER TABLE attempts ADD CONSTRAINT ...`
+  2. Update RLS: `CREATE POLICY ... ON attempts ...`
+  3. Write Vitest unit test: `it('prevents duplicate attempts', async () => { ... })`
+  4. Write Vitest integration test: `it('start → submit → finalize flow', async () => { ... })`
+  5. Write Playwright E2E test: `test('complete quiz flow', async ({ page }) => { ... })`
+  6. Run tests against local Supabase stack
+  7. Verify all tests pass before merging
+</example>
+
+<example type="invalid">
+  Invalid change process:
+  1. Add feature code without migration
+  2. Skip RLS policy updates
+  3. No Vitest tests written for domain logic
+  4. No Playwright tests for gameplay flows
+  5. Skip testing against local Supabase stack
+  6. Ship code and hope it works
+  7. Rely on manual testing only
+</example>

@@ -1,0 +1,92 @@
+---
+description: "Build evented, replayable core with immutable facts; leaderboards derived from append-only data."
+---
+
+# Evented + Replayable Core Architecture
+
+## Context
+
+- Apply when implementing data writes, leaderboard queries, or stats calculations.
+- This architectural pattern goes beyond MVP requirements but makes leaderboard windows resilient and rebuildable.
+- Ensures system can recover from bugs by replaying immutable events.
+
+## Requirements
+
+### Immutability Rules
+
+- Make `daily_scores` append-only (insert once when attempt finalized; never update).
+- Make `attempt_answers` append-only (no edits after submission).
+- Use database constraints to prevent updates to finalized attempts.
+
+### Domain Events
+
+- Write domain events to `outbox_events` table for: QuizPublished, AttemptStarted, AnswerSubmitted, AttemptCompleted, ScoreComputed.
+- Events must include all data needed to rebuild state.
+- Events are append-only and immutable.
+- Use exact schema:
+```sql
+CREATE TABLE IF NOT EXISTS public.outbox_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  aggregate_type TEXT NOT NULL,
+  aggregate_id UUID NOT NULL,
+  event_type TEXT NOT NULL,
+  event_version INT NOT NULL DEFAULT 1,
+  idempotency_key TEXT NULL,
+  actor_user_id UUID NULL,
+  payload JSONB NOT NULL,
+  trace_id TEXT NULL,
+  published_at TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS outbox_events_occurred_at_idx ON public.outbox_events (occurred_at);
+CREATE INDEX IF NOT EXISTS outbox_events_agg_idx ON public.outbox_events (aggregate_type, aggregate_id);
+CREATE INDEX IF NOT EXISTS outbox_events_type_idx ON public.outbox_events (event_type);
+```
+- All important state transitions must write a row with stable `event_type` and versioned `payload`.
+
+### Leaderboard Derivation
+
+- Derive leaderboards (Today/7d/30d/365d) from immutable facts in `daily_scores`.
+- Use materialized views or rollup tables for performance.
+- Ensure leaderboards can be rebuilt from `daily_scores` and events.
+
+### Idempotency Requirements
+
+- Make `publish-quiz` safe to run twice (check status before publishing).
+- Make `submit-answer` idempotent per `(attempt_id, question_id)` (use PRIMARY KEY constraint).
+- Ensure rollup rebuilds produce identical results every time (deterministic queries).
+
+### Rebuild Capability
+
+- Design queries so leaderboards can be recomputed from scratch.
+- Store sufficient data in `daily_scores` to rebuild any time window.
+- Test rebuild process to verify correctness.
+
+## Examples
+
+<example>
+  Valid pattern:
+  - `daily_scores` inserted once on finalization, never updated
+  - Leaderboard query: `SELECT * FROM daily_scores WHERE completed_at >= NOW() - INTERVAL '7 days' ORDER BY score DESC`
+  - Event written with full schema:
+    ```sql
+    INSERT INTO outbox_events (
+      aggregate_type, aggregate_id, event_type, event_version,
+      actor_user_id, payload, trace_id
+    ) VALUES (
+      'attempt', $attempt_id, 'AttemptCompleted', 1,
+      $player_id, '{"score": 85, "correct_count": 9}'::jsonb, $request_id
+    )
+    ```
+  - Rebuild script can truncate materialized view and recompute from `daily_scores`
+</example>
+
+<example type="invalid">
+  Invalid pattern:
+  - `UPDATE daily_scores SET score = score + 5 WHERE ...` (mutating existing rows)
+  - Leaderboard computed from mutable `attempts` table
+  - Events written without required fields: `INSERT INTO outbox_events (event_type) VALUES ('AttemptCompleted')`
+  - No events written, cannot replay history
+  - Non-idempotent operations that fail on retry
+  - Using ad-hoc event table schema instead of standard `outbox_events`
+</example>

@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: 10Q API
+  version: 1.0.0
+  description: Edge Function API contracts for 10Q game
+
+paths:
+  /api/quiz/current:
+    get:
+      summary: Get current quiz
+      operationId: getCurrentQuiz
+      responses:
+        '200':
+          description: Current quiz available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '503':
+          description: No quiz available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/attempt/start:
+    post:
+      summary: Start a new attempt
+      operationId: startAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - quiz_id
+              properties:
+                quiz_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Attempt started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/attempt/resume:
+    get:
+      summary: Resume an in-progress attempt
+      operationId: resumeAttempt
+      parameters:
+        - name: attempt_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Attempt resumed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '404':
+          description: Attempt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/attempt/answer:
+    post:
+      summary: Submit an answer
+      operationId: submitAnswer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - attempt_id
+                - question_id
+                - selected_choice_id
+              properties:
+                attempt_id:
+                  type: string
+                  format: uuid
+                question_id:
+                  type: string
+                  format: uuid
+                selected_choice_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Answer submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /api/attempt/finalize:
+    post:
+      summary: Finalize an attempt
+      operationId: finalizeAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - attempt_id
+              properties:
+                attempt_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Attempt finalized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+components:
+  schemas:
+    ApiResponse:
+      type: object
+      required:
+        - ok
+        - request_id
+      properties:
+        ok:
+          type: boolean
+        data:
+          type: object
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+        request_id:
+          type: string
+

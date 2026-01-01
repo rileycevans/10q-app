@@ -1,0 +1,67 @@
+---
+description: "Update contracts and DB invariants before implementing features; enforce constraints in SQL, not code."
+---
+
+# Contracts + DB Invariants First
+
+## Context
+
+- Apply when starting any new feature or modifying existing behavior.
+- Ensures invariants are encoded in the database schema before implementation begins.
+- Prevents security vulnerabilities and data integrity issues by enforcing constraints at the database level.
+
+## Requirements
+
+### Implementation Order
+
+- Update `packages/contracts/` with API shapes, scoring inputs/outputs, and events before writing code.
+- Create or modify SQL migration that enforces invariants in Postgres.
+- Only then implement Edge Function logic and UI wiring.
+
+### Contract Format Requirements
+
+- Define Edge Function request/response shapes in OpenAPI (`packages/contracts/openapi.yaml`).
+- Generate TypeScript types from OpenAPI: `packages/contracts/generated/api.ts`.
+- Generate typed client from OpenAPI: `apps/web/src/lib/api/client.ts`.
+- Keep hand-written TypeScript types for: domain models, scoring rules, event payloads.
+- OpenAPI is the single source of truth for Edge Function contracts.
+
+### Database-Enforced Invariants
+
+- Enforce one attempt per user per quiz with `UNIQUE(player_id, quiz_id)` constraint.
+- Enforce attempt immutability after finalization with database constraint or trigger.
+- Enforce tags constraint: each question must have 1–5 tags via CHECK constraint or trigger.
+- Prevent correct answers from being exposed via schema separation and RLS policies.
+
+### Constraint Enforcement Priority
+
+- Prefer SQL constraints (UNIQUE, CHECK, FOREIGN KEY) over application code.
+- Use triggers for complex invariants that cannot be expressed as simple constraints.
+- If an invariant cannot be encoded in SQL, enforce it in Edge Functions (never in client).
+
+### Migration Requirements
+
+- Every schema change must include a migration file in `supabase/migrations/`.
+- Migrations must include constraints, not just table definitions.
+- Test migrations on clean database to verify constraints work.
+
+## Examples
+
+<example>
+  Valid workflow:
+  1. Update `packages/contracts/openapi.yaml` with `/api/attempt/start` request/response
+  2. Run codegen to generate `packages/contracts/generated/api.ts` and `apps/web/src/lib/api/client.ts`
+  3. Update `packages/contracts/scoring.ts` with bonus calculation types
+  4. Add migration: `ALTER TABLE attempts ADD CONSTRAINT one_attempt_per_quiz UNIQUE (player_id, quiz_id)`
+  5. Implement Edge Function that respects the constraint
+  6. Wire UI to use generated typed client
+</example>
+
+<example type="invalid">
+  Invalid workflow:
+  1. Implement Edge Function without updating OpenAPI
+  2. Manually write TypeScript types instead of generating from OpenAPI
+  3. Add migration without constraints
+  4. Rely on client-side validation to prevent invalid data
+  5. Skip contract updates and implement directly
+</example>
