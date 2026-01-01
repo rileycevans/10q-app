@@ -1,0 +1,99 @@
+---
+description: "Guide for creating all future CursorAI rules with proper structure, formatting, and best practices."
+alwaysApply: false
+---
+
+# Rule Creation Guidelines
+
+## Context
+
+- Apply when creating, updating, or reviewing any CursorAI rule file.
+- Ensures all rules follow consistent structure and formatting for optimal AI interpretability.
+- This meta-rule defines the standard template for all future rules.
+- Rules use "Apply Intelligently" - they are dynamically applied based on relevance to the current task.
+
+## Requirements
+
+### Frontmatter (YAML)
+
+- Include YAML frontmatter at the top, delimited by `---` lines.
+- **CRITICAL: `description` field is the primary trigger for rule visibility** - the AI uses this to determine if a rule is relevant to the current task.
+- Write `description` as a brief, semantic summary (under ~120 characters) in "action/trigger/outcome" style.
+- Use specific, descriptive keywords in the description that match the contexts where the rule should apply.
+- **Use "Apply Intelligently" by default** - omit `alwaysApply` or set `alwaysApply: false` to enable dynamic rule selection based on the description.
+- Only use `alwaysApply: true` for truly universal rules that must be considered in every context (rare).
+- Keep frontmatter minimal - avoid unnecessary metadata fields.
+
+### Structure
+
+- Use H1 heading (`#`) for the rule title - descriptive and specific.
+- Include `## Context` section explaining when/why to apply the rule.
+- Include `## Requirements` (or `## Guidelines` or `## Critical Rules`) with specific directives.
+- Include `## Examples` with at least one valid and one invalid example.
+
+### Content Formatting
+
+- Use bullet points for requirements, not paragraphs.
+- Each requirement must be a single, actionable directive starting with an imperative verb.
+- Each requirement must be testable/verifiable.
+- Keep language concise and direct - avoid verbose explanations.
+- Use 2-space indentation within XML-style tags (e.g., `<example>` blocks).
+
+### Examples
+
+- Use `<example>` tags for valid examples with brief explanations.
+- Use `<example type="invalid">` tags for invalid examples with explanations.
+- Keep examples short and focused on demonstrating the rule.
+- Indent content within example tags by 2 spaces.
+
+### Scope and Organization
+
+- One rule file = one purpose/domain (e.g., separate rules for styling, testing, naming).
+- Keep each rule file under ~200 lines.
+- **If a rule exceeds ~200 lines, split it into multiple focused rules** - create separate rule files for distinct concerns rather than one large rule.
+- Use descriptive filenames that indicate the rule's purpose (e.g., `feature-modules.mdc`, `module-boundaries.mdc`, `project-structure.mdc`).
+- **Do not prefix filenames with the project/app name** - all rules in `.cursor/rules/` are already scoped to the project, so prefixes are redundant.
+- Store rules in `.cursor/rules/` directory.
+- Avoid overlapping or conflicting rules - resolve conflicts explicitly.
+
+### Length and Detail
+
+- Prioritize high information density - remove redundancy.
+- Provide sufficient detail to avoid ambiguity.
+- Use examples instead of lengthy explanations when possible.
+- Be concise but complete - cover what's needed, nothing more.
+- **When creating or updating a rule, if it approaches or exceeds ~200 lines, split it into multiple rules** - identify distinct concerns and create separate rule files for each.
+
+## Examples
+
+<example>
+  ---
+  description: "Enforce Python naming conventions following PEP8 standards."
+  ---
+  # Python Naming Conventions
+
+  ## Context
+  - Apply when writing or reviewing Python source files.
+  - The description includes keywords like "Python", "naming conventions", and "PEP8" which help the AI identify when this rule is relevant via "Apply Intelligently".
+
+  ## Requirements
+  - Use snake_case for function and variable names.
+  - Use PascalCase for class names.
+  - Use UPPER_CASE for constants.
+
+  ## Examples
+  <example>
+    Valid: `def load_data():`, `class DataLoader:`, `MAX_RETRIES = 3`
+  </example>
+  <example type="invalid">
+    Invalid: `def LoadData():`, `class dataLoader:`, `maxRetries = 3`
+  </example>
+</example>
+
+<example type="invalid">
+  # Python code style
+
+  Please follow good coding practices. Use nice names and make code look professional. Try to be consistent.
+
+  This is invalid because it lacks frontmatter, structure, specific requirements, and examples. The instructions are vague and not testable.
+</example>
