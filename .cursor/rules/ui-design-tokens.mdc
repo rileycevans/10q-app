@@ -1,0 +1,99 @@
+---
+description: "Define and enforce design tokens for colors, gradients, spacing, shapes, and shadows using CSS variables or Tailwind theme."
+---
+# UI Design Tokens
+
+## Context
+
+- Apply when defining CSS variables, Tailwind theme configuration, or styling components.
+- All colors, spacing, and shape values must come from these tokens.
+- Never freehand random colors or spacing values.
+
+## Requirements
+
+### Core Color Palette
+
+- Define these as CSS variables in `:root` or Tailwind theme tokens.
+- `ink` (outline/shadow): `#1A1A21` (near-black)
+- `paper` (surface): `#F5F7F7`
+- `purpleA` (primary bg): `#413DE1`
+- `purpleB` (secondary bg): `#8164ED`
+- `cyanA`: `#4CEAFD`
+- `cyanB`: `#3BC4FB`
+- `green`: `#29F724`
+- `red`: `#FE3F3B`
+- `yellow`: `#DEFD4E`
+
+### Gradients
+
+- Background gradient: `linear-gradient(180deg, #413DE1 0%, #8164ED 100%)`
+- Accent gradient: `linear-gradient(135deg, #4CEAFD 0%, #3BC4FB 100%)`
+- Warm gradient (alt screens): `linear-gradient(180deg, #FE686F 0%, #F3A43E 100%)`
+
+### Shape and Depth Tokens
+
+- `radiusCard`: `24px`
+- `radiusButton`: `18px` (or `999px` for full pills)
+- `borderW`: `4px` (default), `3px` for smaller elements
+- `shadowOffset`: `8px` (cards), `6px` (buttons)
+- `shadow`: `8px 8px 0 #1A1A21` (cards), `6px 6px 0 #1A1A21` (buttons)
+
+### Spacing Tokens (Mobile)
+
+- `gutter`: `16px`
+- `stackGap`: `12px`
+- `hudHeight`: `44px–56px`
+- `tapHeight`: `56px` minimum for answer options
+
+### Tailwind Utility Classes
+
+- Create custom utilities in `globals.css`:
+  - `.shadow-sticker`: `box-shadow: 8px 8px 0 var(--ink)`
+  - `.shadow-sticker-sm`: `box-shadow: 6px 6px 0 var(--ink)`
+  - `.border-ink`: `border-color: var(--ink)`
+  - `.bg-paper`: `background: var(--paper)`
+  - `.bg-arcade`: base gradient background class
+
+## Examples
+
+<example>
+  Valid CSS variable definition:
+  
+  ```css
+  :root {
+    --ink: #1A1A21;
+    --paper: #F5F7F7;
+    --purpleA: #413DE1;
+    --purpleB: #8164ED;
+    --green: #29F724;
+    --red: #FE3F3B;
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Using hardcoded colors in components instead of tokens:
+  
+  ```css
+  .button {
+    border: 4px solid #000000; /* Should use --ink */
+    background: #FFFFFF; /* Should use --paper */
+  }
+  ```
+</example>
+
+<example>
+  Valid Tailwind component class:
+  
+  ```html
+  <div class="bg-paper border-4 border-ink rounded-[24px] shadow-sticker">
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Mixing custom utilities with random inline styles:
+  
+  ```html
+  <div class="bg-paper shadow-sticker" style="border: 2px solid gray; border-radius: 12px;">
+  ```
+</example>

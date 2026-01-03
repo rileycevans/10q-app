@@ -1,0 +1,118 @@
+---
+description: "Implement game-like motion and interactions with scale transforms, shadow shifts, and snappy transitions for buttons and screen changes."
+---
+# UI Interactions and Motion
+
+## Context
+
+- Apply when implementing button states, screen transitions, or any animated interactions.
+- Motion must feel game-like, snappy, and responsive.
+- Never use long, gooey animations.
+
+## Requirements
+
+### Button Press Interaction
+
+- On press: `transform: translate(2px, 2px)` and shadow offset reduces.
+- Shadow shifts from `8px 8px 0` to `6px 6px 0` (or `6px 6px 0` to `4px 4px 0`).
+- Use CSS `:active` pseudo-class.
+- Duration: `100–150ms`, `ease-out` timing.
+
+### Hover State (Desktop)
+
+- Slight raise: `transform: translate(-1px, -1px)`.
+- Shadow unchanged (maintains sticker effect).
+- Use CSS `:hover` pseudo-class.
+- Duration: `150ms`, `ease-out` timing.
+
+### Screen Transitions
+
+- Use subtle slide/fade transitions.
+- Duration: `180–240ms`.
+- Timing: `ease-out`.
+- Optional: slide from right for forward navigation, slide to left for back.
+
+### Progress Bars and Countdowns
+
+- Animate smoothly using CSS `transition: width`.
+- Duration: match the actual progress time or `200–300ms` for UI feedback.
+- Use `ease-out` or `linear` timing depending on context.
+
+### Animation Constraints
+
+- Never use long animations (>500ms) except for intentional delays.
+- Never use gooey, elastic, or bouncy easing functions.
+- Keep animations snappy and game-like.
+- Disable animations for users with `prefers-reduced-motion`.
+
+## Examples
+
+<example>
+  Valid button press interaction:
+  
+  ```css
+  .answer-button {
+    transition: transform 120ms ease-out, box-shadow 120ms ease-out;
+  }
+  
+  .answer-button:active {
+    transform: translate(2px, 2px);
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Long, bouncy animation:
+  
+  ```css
+  .answer-button:active {
+    transform: scale(0.95);
+    transition: transform 600ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+  ```
+</example>
+
+<example>
+  Valid hover state:
+  
+  ```css
+  .answer-button:hover {
+    transform: translate(-1px, -1px);
+    /* Shadow stays the same */
+  }
+  ```
+</example>
+
+<example>
+  Valid screen transition:
+  
+  ```css
+  .screen-transition {
+    transition: opacity 200ms ease-out, transform 200ms ease-out;
+  }
+  
+  .screen-transition.entering {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  
+  .screen-transition.entered {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  ```
+</example>
+
+<example>
+  Valid reduced motion support:
+  
+  ```css
+  @media (prefers-reduced-motion: reduce) {
+    .answer-button,
+    .screen-transition {
+      transition: none;
+    }
+  }
+  ```
+</example>

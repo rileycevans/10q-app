@@ -1,0 +1,111 @@
+---
+description: "Enforce accessibility constraints including minimum tap targets, color contrast, and non-color feedback for game-like UI interactions."
+---
+# UI Accessibility Rules
+
+## Context
+
+- Apply when implementing interactive elements, color feedback, or touch targets.
+- Ensures UI is accessible while maintaining game-like feel.
+- Accessibility must not compromise the neo-brutalist visual style.
+
+## Requirements
+
+### Touch Targets
+
+- Minimum tap target: `44px` (iOS/Android standard).
+- Answer buttons: Use `56px` minimum height (exceeds requirement).
+- HUD elements: Ensure `44px` minimum touch area.
+- Bottom dock buttons: `48–56px` square (exceeds requirement).
+
+### Color Contrast
+
+- Ink outline ensures high contrast (black on white/colored backgrounds).
+- Maintain WCAG AA contrast ratios for text on colored backgrounds.
+- Test green (`#29F724`) and red (`#FE3F3B`) text on white/ink backgrounds.
+
+### Non-Color Feedback
+
+- Don't rely on color alone for correctness feedback.
+- Add icon (checkmark/X) or text ("Correct"/"Incorrect") alongside color changes.
+- Use both visual (color) and textual/iconographic feedback.
+
+### Focus States
+
+- Provide visible focus indicators for keyboard navigation.
+- Use thick outline (2–3px) in accent color (cyan or yellow) for focus.
+- Maintain game-like aesthetic (not default browser outline).
+
+### Screen Reader Support
+
+- Use semantic HTML (`<button>`, `<nav>`, etc.).
+- Provide `aria-label` for icon-only buttons.
+- Announce correctness feedback with `aria-live` regions.
+- Label form inputs and interactive elements properly.
+
+### Reduced Motion
+
+- Respect `prefers-reduced-motion` media query.
+- Disable animations for users who prefer reduced motion.
+- Maintain functionality without animations.
+
+## Examples
+
+<example>
+  Valid answer button with accessibility:
+  
+  ```tsx
+  <button
+    className="h-14 w-full border-4 border-ink rounded-[18px] shadow-sticker-sm font-bold"
+    aria-label={`Answer option: ${answerText}`}
+    aria-pressed={isSelected}
+  >
+    {isSelected && <span className="sr-only">Selected</span>}
+    {answerText}
+  </button>
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Button below minimum touch target:
+  
+  ```tsx
+  <button className="h-10 w-full"> {/* Too small */}
+    {answerText}
+  </button>
+  ```
+</example>
+
+<example>
+  Valid correctness feedback with non-color indicator:
+  
+  ```tsx
+  {isCorrect && (
+    <div className="flex items-center gap-2 text-green">
+      <CheckIcon aria-hidden="true" />
+      <span>Correct!</span>
+    </div>
+  )}
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Color-only feedback:
+  
+  ```tsx
+  <div className={isCorrect ? 'text-green' : 'text-red'}>
+    {/* No icon or text, relies only on color */}
+  </div>
+  ```
+</example>
+
+<example>
+  Valid focus state:
+  
+  ```css
+  .answer-button:focus-visible {
+    outline: 3px solid var(--cyanA);
+    outline-offset: 2px;
+  }
+  ```
+</example>

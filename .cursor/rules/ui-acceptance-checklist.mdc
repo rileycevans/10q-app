@@ -1,0 +1,87 @@
+---
+description: "Checklist for validating UI implementation matches neo-brutalist arcade style with thick borders, sticker shadows, and vibrant backgrounds."
+---
+# UI Acceptance Checklist
+
+## Context
+
+- Apply when reviewing UI implementations before merging or shipping.
+- Use this checklist to verify components match the neo-brutalist arcade style.
+- Every item must be satisfied for UI to be considered complete.
+
+## Acceptance Criteria
+
+### Visual Style
+
+- [ ] Every major surface and button has a thick black outline (3–4px).
+- [ ] Shadows are flat, offset, ink-colored (`#1A1A21`), not blurred gray.
+- [ ] Background has halftone dots and burst rays (never flat solid).
+- [ ] Main card is paper/white (`#F5F7F7`), chunky, rounded (24px), shadowed (8px 8px 0).
+- [ ] Answer buttons are tall (56px+) and feel tappable.
+- [ ] Selected state uses solid bright fill (green) while keeping black border.
+- [ ] Typography is bold (800) and playful; labels are uppercase pills.
+- [ ] UI looks good at 390×844 (iPhone-ish) and scales to desktop centered.
+
+### Design Tokens
+
+- [ ] All colors come from defined tokens (ink, paper, purpleA, purpleB, green, red, etc.).
+- [ ] Spacing uses defined tokens (gutter: 16px, stackGap: 12px, etc.).
+- [ ] Border radius uses tokens (24px cards, 18px buttons).
+- [ ] Shadows use custom utilities (`.shadow-sticker`, `.shadow-sticker-sm`).
+
+### Components
+
+- [ ] HUD has proper styling (3px border, paper background, 4px shadow).
+- [ ] Question card follows exact spec (paper bg, 4px border, 24px radius, 8px shadow).
+- [ ] Answer buttons have correct default and selected states.
+- [ ] Bottom dock buttons are square (48–56px) with thick borders and shadows.
+
+### Typography
+
+- [ ] Question text: bold 800, 20–24px, left-aligned.
+- [ ] Answer text: bold 800, 16–18px, centered.
+- [ ] Category/round pills: uppercase, 12px, 0.08em letter-spacing.
+- [ ] Fonts loaded from Google Fonts (Rubik/Nunito for body, Bungee/Luckiest Guy for headings).
+
+### Interactions
+
+- [ ] Button press uses scale + shadow shift (translate 2px, shadow reduces).
+- [ ] Hover (desktop) raises slightly (translate -1px) with unchanged shadow.
+- [ ] Screen transitions are snappy (180–240ms, ease-out).
+- [ ] Progress bars animate smoothly.
+
+### Accessibility
+
+- [ ] All touch targets are 44px minimum (buttons are 56px+).
+- [ ] Correctness feedback includes non-color indicators (icon/text).
+- [ ] Focus states are visible and game-like.
+- [ ] Reduced motion is respected.
+
+### Background
+
+- [ ] Background uses 3-layer recipe (gradient + halftone + radial burst).
+- [ ] Never uses flat solid background.
+- [ ] Halftone dots are visible and subtle (opacity 0.55, soft-light blend).
+
+## Examples
+
+<example>
+  Valid implementation passes all checklist items:
+  - Thick 4px black borders on all interactive elements
+  - Flat sticker shadows (8px 8px 0 ink)
+  - Background with gradient + halftone + radial burst
+  - Paper card with proper styling
+  - Tall answer buttons (56px) with selected states
+  - Bold typography with proper sizing
+  - Responsive at mobile and desktop sizes
+</example>
+
+<example type="invalid">
+  Invalid implementation fails checklist:
+  - Thin 1px borders
+  - Soft blurred shadows
+  - Flat solid background
+  - Small buttons (40px)
+  - Normal weight typography
+  - Missing non-color feedback
+</example>

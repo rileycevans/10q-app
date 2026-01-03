@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
 
     // Get correct answer from private schema (service role can access)
     const { data: correct, error: correctError } = await supabase
-      .from("correct_answers")
+      .from("private.correct_answers")
       .select("correct_choice_id")
       .eq("question_id", question_id)
       .single();
