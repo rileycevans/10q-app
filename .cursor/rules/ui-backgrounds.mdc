@@ -1,0 +1,109 @@
+---
+description: "Implement arcade-style backgrounds with gradients, halftone dots overlay, and radial burst rays using layered CSS pseudo-elements."
+---
+# UI Background Rules
+
+## Context
+
+- Apply when styling page backgrounds, screen containers, or main app shells.
+- Backgrounds must never be flat or solid colors.
+- Always use the 3-layer background recipe: base gradient + halftone dots + radial burst rays.
+
+## Requirements
+
+### Background Structure
+
+- Implement background as 3 layers using CSS pseudo-elements.
+- Base layer: purple gradient (`linear-gradient(180deg, #413DE1 0%, #8164ED 100%)`).
+- Middle layer: halftone dots overlay (subtle, soft-light blend).
+- Top layer: radial burst rays centered behind main card (optional but on-brand).
+
+### Base Gradient Layer
+
+- Use class `.bg-arcade` for the base gradient.
+- Gradient: `linear-gradient(180deg, #413DE1 0%, #8164ED 100%)`.
+- Position: `relative` with `overflow: hidden`.
+
+### Halftone Dots Overlay
+
+- Implement using `::before` pseudo-element.
+- Pattern: `radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 1.2px)`.
+- Background size: `10px 10px`.
+- Opacity: `0.55`.
+- Mix-blend-mode: `soft-light`.
+- Pointer-events: `none`.
+
+### Radial Burst Rays Overlay
+
+- Implement using `::after` pseudo-element.
+- Pattern: `repeating-conic-gradient(from 0deg, rgba(255,255,255,0.14) 0deg 8deg, rgba(255,255,255,0) 8deg 16deg)`.
+- Position: `inset: -40%` to extend beyond viewport.
+- Mask: `radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 60%)`.
+- Opacity: `0.45`.
+- Pointer-events: `none`.
+
+### Non-Negotiable Rule
+
+- Never ship a flat solid background.
+- Always include at least the base gradient + halftone dots.
+- Radial burst rays are optional but recommended for main screens.
+
+## Examples
+
+<example>
+  Valid background implementation:
+  
+  ```css
+  .bg-arcade {
+    background: linear-gradient(180deg, #413DE1 0%, #8164ED 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .bg-arcade::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.18) 1.2px, transparent 1.2px);
+    background-size: 10px 10px;
+    opacity: 0.55;
+    mix-blend-mode: soft-light;
+    pointer-events: none;
+  }
+  
+  .bg-arcade::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background: repeating-conic-gradient(
+      from 0deg,
+      rgba(255,255,255,0.14) 0deg 8deg,
+      rgba(255,255,255,0) 8deg 16deg
+    );
+    mask-image: radial-gradient(circle at 50% 40%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 60%);
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Flat solid background:
+  
+  ```css
+  .bg-arcade {
+    background: #413DE1; /* Missing gradient and overlays */
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Gradient without texture overlays:
+  
+  ```css
+  .bg-arcade {
+    background: linear-gradient(180deg, #413DE1 0%, #8164ED 100%);
+    /* Missing halftone dots and radial burst */
+  }
+  ```
+</example>

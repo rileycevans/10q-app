@@ -1,0 +1,97 @@
+---
+description: "Enforce neo-brutalist arcade mobile UI style with thick black outlines, flat sticker shadows, vibrant gradients, and chunky rounded cards."
+---
+# UI Style Brief
+
+## Context
+
+- Apply when designing, implementing, or reviewing any UI component or screen.
+- Target style: "Neo-brutalist arcade mobile UI: vibrant gradients + halftone/radial burst backgrounds + thick black outlines + chunky rounded cards + flat 'sticker' shadows + bold friendly typography + high-contrast color feedback (green correct, red wrong)."
+- Ensures consistent visual language across all user-facing interfaces.
+
+## Critical Visual Rules
+
+### Borders and Outlines
+
+- Every interactive element must have a thick black outline.
+- Default border: 3–4px solid near-black (`#1A1A21`).
+- Border radius: 16–28px depending on component size.
+- Never use thin borders (1–2px) or subtle gray borders.
+
+### Shadows
+
+- Use flat "sticker" shadows, never soft realistic ones.
+- Single directional drop shadow: 6–10px offset, 0 blur, same near-black color.
+- Never use subtle gray blurs as the primary shadow style.
+- Shadow formula: `8px 8px 0 #1A1A21` for cards, `6px 6px 0 #1A1A21` for buttons.
+
+### Backgrounds
+
+- Background is never plain or solid.
+- Always include halftone dots and/or radial burst rays behind phone content.
+- Use vibrant gradients (purple/blue primary, warm gradients for alt screens).
+- Never ship a flat solid background.
+
+### Cards and Surfaces
+
+- Cards are chunky and layered.
+- White (or very light) content surfaces on top of saturated purple/blue backgrounds.
+- Use high contrast between surface and background.
+- Default card: white fill, 4px black border, 24px radius, 8px sticker shadow.
+
+### Buttons
+
+- Buttons are tall pill-like slabs.
+- Default option button: white fill + black border.
+- Selected: solid color fill (green for correct) while keeping black border.
+- Minimum height: 56px for answer options.
+- Use rounded pill shape (18px radius or 999px for full pills).
+
+### Iconography
+
+- Icons are thick and toy-like.
+- Use icons with 2.5–3px stroke or chunky filled icons.
+- Never use thin, delicate line icons.
+
+### Color Feedback
+
+- Use high-contrast color feedback for correctness.
+- Green (`#29F724`) for correct answers.
+- Red (`#FE3F3B`) for incorrect answers.
+- Maintain black border even in selected/feedback states.
+
+## Examples
+
+<example>
+  Valid card styling:
+  - White background (`#F5F7F7`)
+  - 4px solid black border (`#1A1A21`)
+  - 24px border radius
+  - `8px 8px 0 #1A1A21` box shadow
+  - Padding: 16–20px
+</example>
+
+<example type="invalid">
+  Invalid card styling:
+  - Gray background
+  - 1px subtle border
+  - Soft blurred shadow (`0 4px 12px rgba(0,0,0,0.15)`)
+  - No background pattern
+</example>
+
+<example>
+  Valid button styling:
+  - White fill with 4px black border
+  - 18px border radius (pill shape)
+  - `6px 6px 0 #1A1A21` box shadow
+  - Minimum 56px height
+  - Bold 800 font weight
+</example>
+
+<example type="invalid">
+  Invalid button styling:
+  - Gradient fill without border
+  - Soft shadow with blur
+  - Thin 1px border
+  - Small height (40px)
+</example>

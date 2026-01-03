@@ -82,7 +82,7 @@ async function validateQuiz(
 
     // Check correct answer exists
     const { data: correctAnswer, error: correctError } = await supabase
-      .from("correct_answers")
+      .from("private.correct_answers")
       .select("correct_choice_id")
       .eq("question_id", question.id)
       .single();

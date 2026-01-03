@@ -1,0 +1,99 @@
+---
+description: "Enforce bold playful typography with specific font choices, weights, sizes, and uppercase labels for UI elements."
+---
+# UI Typography Rules
+
+## Context
+
+- Apply when selecting fonts, setting text styles, or implementing typography in components.
+- Typography must be bold, friendly, and game-like.
+- Use one playful display font + one clean UI font loaded via Google Fonts.
+
+## Requirements
+
+### Font Selection
+
+- Headings / labels: Bungee or Luckiest Guy (use sparingly for emphasis).
+- Body / questions / buttons: Rubik or Nunito (bold weights 700–800).
+- Load fonts via Google Fonts, never use system defaults without explicit choice.
+
+### Question Text
+
+- Font-weight: `800` (extra bold).
+- Size: `20–24px` on mobile.
+- Left-aligned with comfortable line-height.
+- Use Rubik or Nunito font family.
+
+### Answer Text
+
+- Font-weight: `800` (extra bold).
+- Size: `16–18px`.
+- Centered alignment for answer buttons.
+- Use Rubik or Nunito font family.
+
+### Category/Round Pills
+
+- Uppercase text.
+- Size: `12px`.
+- Letter-spacing: `0.08em` (tighter tracking).
+- Font-weight: `700` or `800`.
+- Use Rubik or Nunito font family.
+
+### Labels and HUD Elements
+
+- Uppercase for status labels ("ROUND 1", "SCORE", etc.).
+- Bold weight (`700–800`).
+- Consistent sizing within component hierarchy.
+
+## Examples
+
+<example>
+  Valid question text styling:
+  
+  ```css
+  .question-text {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    line-height: 1.4;
+    text-align: left;
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Using default system font with normal weight:
+  
+  ```css
+  .question-text {
+    font-size: 18px;
+    font-weight: 400; /* Too light */
+  }
+  ```
+</example>
+
+<example>
+  Valid category pill styling:
+  
+  ```css
+  .category-pill {
+    font-family: 'Rubik', sans-serif;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Lowercase category label without proper tracking:
+  
+  ```css
+  .category-pill {
+    font-size: 12px;
+    text-transform: none; /* Should be uppercase */
+    letter-spacing: normal; /* Should be 0.08em */
+  }
+  ```
+</example>

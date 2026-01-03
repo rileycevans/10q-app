@@ -1,0 +1,120 @@
+---
+description: "Build reusable UI components with specific anatomy and styling: HUD, question cards, answer buttons, and bottom dock following neo-brutalist design system."
+---
+# UI Component System
+
+## Context
+
+- Apply when building or styling UI components (HUD, cards, buttons, docks).
+- All components must follow the neo-brutalist design system with thick borders, sticker shadows, and chunky shapes.
+- Build components as reusable, not one-off styled elements.
+
+## Requirements
+
+### App Shell / Phone Layout
+
+- Centered column layout.
+- Max width: `~420px` for mobile web.
+- Outer "phone frame" optional for marketing pages, not required in app.
+
+### HUD (Top Bar)
+
+- Anatomy: Left (progress/lives), Center (category pill), Right (score/time pill).
+- Style: Small capsules with `3px solid ink` border, `paper` or translucent white background, `4px 4px 0 ink` shadow.
+- Icons: Use thick stroke (2.5–3px).
+- Height: `44px–56px`.
+
+### Question Card (Main Surface)
+
+- Anatomy: Optional tiny "topic pill" above question text, question text, optional thin progress bar beneath HUD.
+- Style (non-negotiable):
+  - Background: `paper` (`#F5F7F7`).
+  - Border: `4px solid ink` (`#1A1A21`).
+  - Border-radius: `24px`.
+  - Box-shadow: `8px 8px 0 ink`.
+  - Padding: `16–20px`.
+- Question text: Left-aligned, bold (800), comfortable line-height.
+
+### Answer Option Button
+
+- Anatomy: Full-width button, centered label text, tall hit area.
+- Default style:
+  - Height: `56–64px`.
+  - Background: white.
+  - Border: `4px solid ink`.
+  - Border-radius: `18px` or `999px` for pills.
+  - Box-shadow: `6px 6px 0 ink`.
+  - Text: bold 800, centered.
+- Selected state:
+  - Fill becomes green (`#29F724`).
+  - Text becomes ink (or white if needed for contrast).
+  - Border stays ink.
+  - Shadow stays ink.
+- Correctness feedback:
+  - Immediately show Correct/Incorrect indicator without revealing correct answer.
+  - Use top badge or small toast.
+  - Do not recolor wrong answers to reveal the right one.
+
+### Bottom "Power-ups" Dock
+
+- Anatomy: Row of square buttons (48–56px) for rank badge, streak badge, league shortcut, settings.
+- Style:
+  - Each button: solid bright color fill, black border, slight sticker shadow.
+  - Small count pill overlay bottom/right.
+  - Icons: thick, toy-like.
+
+### Component Class Patterns
+
+- Card: `bg-paper border-4 border-ink rounded-[24px] shadow-sticker`.
+- Option button: `h-14 bg-white border-4 border-ink rounded-[18px] shadow-sticker-sm`.
+- Use Tailwind + custom utilities, no random inline CSS.
+
+## Examples
+
+<example>
+  Valid question card component:
+  
+  ```tsx
+  <div className="bg-paper border-4 border-ink rounded-[24px] shadow-sticker p-5">
+    <p className="font-bold text-[22px] text-left leading-relaxed">
+      {questionText}
+    </p>
+  </div>
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Card without proper styling:
+  
+  ```tsx
+  <div className="bg-white p-4 rounded-lg">
+    <p>{questionText}</p>
+  </div>
+  ```
+  
+  Missing thick border, sticker shadow, and proper tokens.
+</example>
+
+<example>
+  Valid answer button with selected state:
+  
+  ```tsx
+  <button
+    className={`h-14 w-full border-4 border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg ${
+      isSelected ? 'bg-green text-ink' : 'bg-white'
+    }`}
+  >
+    {answerText}
+  </button>
+  ```
+</example>
+
+<example type="invalid">
+  Invalid: Button with soft shadow and thin border:
+  
+  ```tsx
+  <button className="h-10 border border-gray-300 rounded-md shadow-md">
+    {answerText}
+  </button>
+  ```
+</example>

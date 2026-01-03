@@ -2,6 +2,8 @@
  * Standardized response format for all Edge Functions
  */
 
+import { corsHeaders } from "./cors.ts";
+
 // Error codes (mirrored from contracts package for Deno compatibility)
 export const ErrorCodes = {
   ATTEMPT_ALREADY_COMPLETED: "ATTEMPT_ALREADY_COMPLETED",
@@ -45,7 +47,10 @@ export function successResponse<T>(
   };
 
   return new Response(JSON.stringify(response), {
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      ...corsHeaders,
+    },
     status: 200,
   });
 }
@@ -68,7 +73,10 @@ export function errorResponse(
   };
 
   return new Response(JSON.stringify(response), {
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      ...corsHeaders,
+    },
     status,
   });
 }

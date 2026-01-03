@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+:root {
+  /* Design Tokens - Colors */
+  --ink: #1A1A21;
+  --paper: #F5F7F7;
+  --purpleA: #413DE1;
+  --purpleB: #8164ED;
+  --cyanA: #4CEAFD;
+  --cyanB: #3BC4FB;
+  --green: #29F724;
+  --red: #FE3F3B;
+  --yellow: #DEFD4E;
+
+  /* Design Tokens - Spacing */
+  --gutter: 16px;
+  --stackGap: 12px;
+  --hudHeight: 44px;
+  --tapHeight: 56px;
+
+  /* Design Tokens - Shapes */
+  --radiusCard: 24px;
+  --radiusButton: 18px;
+  --borderW: 4px;
+  --borderWSmall: 3px;
+
+  /* Design Tokens - Shadows */
+  --shadowOffsetCard: 8px;
+  --shadowOffsetButton: 6px;
+  --shadowCard: 8px 8px 0 var(--ink);
+  --shadowButton: 6px 6px 0 var(--ink);
+  --shadowHUD: 4px 4px 0 var(--ink);
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-purpleA: var(--purpleA);
+  --color-purpleB: var(--purpleB);
+  --color-cyanA: var(--cyanA);
+  --color-cyanB: var(--cyanB);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-yellow: var(--yellow);
+}
+
+/* Custom Utility Classes */
+.shadow-sticker {
+  box-shadow: var(--shadowCard);
+}
+
+.shadow-sticker-sm {
+  box-shadow: var(--shadowButton);
+}
+
+.shadow-sticker-hud {
+  box-shadow: var(--shadowHUD);
+}
+
+.border-ink {
+  border-color: var(--ink);
+}
+
+.bg-paper {
+  background-color: var(--paper);
+}
+
+.bg-arcade {
+  background: linear-gradient(180deg, var(--purpleA) 0%, var(--purpleB) 100%);
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+/* Arcade Background - 3 Layer Recipe */
+.bg-arcade::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1.2px, transparent 1.2px);
+  background-size: 10px 10px;
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+}
+
+.bg-arcade::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background: repeating-conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.14) 0deg 8deg,
+    rgba(255, 255, 255, 0) 8deg 16deg
+  );
+  mask-image: radial-gradient(circle at 50% 40%, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 60%);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Typography */
+body {
+  font-family: var(--font-rubik), sans-serif;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--paper);
+  margin: 0;
+  padding: 0;
+}
+
+.font-display {
+  font-family: var(--font-bungee), cursive;
+}
+
+.font-body {
+  font-family: var(--font-rubik), sans-serif;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
