@@ -188,5 +188,171 @@ export const edgeFunctions = {
       method: 'GET',
       requireAuth: true,
     }),
+
+  getGlobalLeaderboard: (params: {
+    window: 'today' | '7d' | '30d' | '365d';
+    mode: 'top' | 'around';
+    limit?: number;
+    count?: number;
+    score_type?: 'cumulative' | 'average';
+  }) => {
+    const { window, mode, limit = 100, count = 12, score_type = 'cumulative' } = params;
+    const queryParams = new URLSearchParams({
+      window,
+      mode,
+      score_type,
+      ...(mode === 'top' ? { limit: limit.toString() } : { count: count.toString() }),
+    });
+    return callEdgeFunction<{
+      window: string;
+      score_type: string;
+      mode: string;
+      entries: Array<{
+        rank: number;
+        player_id: string;
+        handle_display: string;
+        aggregated_score: number;
+        attempt_count: number;
+        total_time_ms: number;
+        earliest_completed_at: string;
+      }>;
+      user_rank: number | null;
+      user_entry: {
+        rank: number;
+        player_id: string;
+        handle_display: string;
+        aggregated_score: number;
+        attempt_count: number;
+        total_time_ms: number;
+        earliest_completed_at: string;
+      } | null;
+      total_players: number;
+    }>(`get-global-leaderboard?${queryParams.toString()}`, {
+      method: 'GET',
+      requireAuth: mode === 'around',
+    });
+  },
+
+  getLeagueLeaderboard: (params: {
+    league_id: string;
+    window: 'today' | '7d' | '30d' | '365d';
+    mode: 'top' | 'around';
+    limit?: number;
+    count?: number;
+    score_type?: 'cumulative' | 'average';
+  }) => {
+    const { league_id, window, mode, limit = 100, count = 12, score_type = 'cumulative' } = params;
+    const queryParams = new URLSearchParams({
+      league_id,
+      window,
+      mode,
+      score_type,
+      ...(mode === 'top' ? { limit: limit.toString() } : { count: count.toString() }),
+    });
+    return callEdgeFunction<{
+      league_id: string;
+      window: string;
+      score_type: string;
+      mode: string;
+      entries: Array<{
+        rank: number;
+        player_id: string;
+        handle_display: string;
+        aggregated_score: number;
+        attempt_count: number;
+        total_time_ms: number;
+        earliest_completed_at: string;
+      }>;
+      user_rank: number | null;
+      user_entry: {
+        rank: number;
+        player_id: string;
+        handle_display: string;
+        aggregated_score: number;
+        attempt_count: number;
+        total_time_ms: number;
+        earliest_completed_at: string;
+      } | null;
+      total_players: number;
+    }>(`get-league-leaderboard?${queryParams.toString()}`, {
+      method: 'GET',
+      requireAuth: true,
+    });
+  },
+
+  createLeague: (name: string) =>
+    callEdgeFunction<{
+      league_id: string;
+      name: string;
+      owner_id: string;
+      created_at: string;
+    }>('create-league', {
+      method: 'POST',
+      body: { name },
+      requireAuth: true,
+    }),
+
+  getMyLeagues: () =>
+    callEdgeFunction<{
+      leagues: Array<{
+        league_id: string;
+        name: string;
+        owner_id: string;
+        created_at: string;
+        role: 'owner' | 'member';
+        member_count: number;
+        is_owner: boolean;
+      }>;
+    }>('get-my-leagues', {
+      method: 'GET',
+      requireAuth: true,
+    }),
+
+  getLeagueDetails: (leagueId: string) =>
+    callEdgeFunction<{
+      league_id: string;
+      name: string;
+      owner_id: string;
+      created_at: string;
+      is_owner: boolean;
+      members: Array<{
+        player_id: string;
+        handle_display: string;
+        role: 'owner' | 'member';
+        created_at: string;
+      }>;
+    }>(`get-league-details?league_id=${encodeURIComponent(leagueId)}`, {
+      method: 'GET',
+      requireAuth: true,
+    }),
+
+  addLeagueMember: (leagueId: string, handle: string) =>
+    callEdgeFunction<{
+      player_id: string;
+      handle_display: string;
+      role: 'member';
+    }>('add-league-member', {
+      method: 'POST',
+      body: { league_id: leagueId, handle },
+      requireAuth: true,
+    }),
+
+  removeLeagueMember: (leagueId: string, playerId: string) =>
+    callEdgeFunction<{
+      success: boolean;
+    }>('remove-league-member', {
+      method: 'POST',
+      body: { league_id: leagueId, player_id: playerId },
+      requireAuth: true,
+    }),
+
+  deleteLeague: (leagueId: string) =>
+    callEdgeFunction<{
+      success: boolean;
+    }>('delete-league', {
+      method: 'POST',
+      body: { league_id: leagueId },
+      requireAuth: true,
+    }),
 };
 
