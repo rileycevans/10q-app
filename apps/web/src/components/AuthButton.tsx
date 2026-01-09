@@ -53,11 +53,28 @@ export function AuthButton() {
   async function handleSignIn() {
     try {
       setIsLoading(true);
-      await signInAnonymously();
+      setError(null);
+      console.log('Attempting anonymous sign-in...');
+      const result = await signInAnonymously();
+      console.log('Sign-in successful:', result);
       setIsAuthenticated(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign in error:', error);
-      alert('Failed to sign in. Make sure anonymous auth is enabled in Supabase.');
+      const errorMessage = error?.message || 'Unknown error';
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes('anonymous') || errorMessage.includes('disabled')) {
+        setError('Anonymous auth is disabled. Enable it in Supabase Dashboard → Authentication → Providers → Anonymous');
+      } else if (errorMessage.includes('API') || errorMessage.includes('key')) {
+        setError('Invalid API key. Check your .env.local file.');
+      } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
+        setError('Network error. Check your Supabase URL in .env.local');
+      } else {
+        setError(`Sign-in failed: ${errorMessage}`);
+      }
+      
+      // Also show alert for immediate feedback
+      alert(`Failed to sign in: ${errorMessage}\n\nSee TROUBLESHOOTING_AUTH.md for help.`);
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +94,9 @@ export function AuthButton() {
 
   if (error) {
     return (
-      <div className="h-10 px-4 bg-red border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink flex items-center">
-        Auth Error
+      <div className="h-auto px-4 py-2 bg-red border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink max-w-xs">
+        <div className="mb-1">Auth Error</div>
+        <div className="text-[10px] font-normal leading-tight">{error}</div>
       </div>
     );
   }
