@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Rubik, Bungee } from "next/font/google";
 import "./globals.css";
+import { ToastProvider } from "@/components/Toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const rubik = Rubik({
   weight: ["400", "700", "800"],
@@ -29,7 +31,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${rubik.variable} ${bungee.variable} font-body antialiased`}>
-        {children}
+        <ErrorBoundary>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

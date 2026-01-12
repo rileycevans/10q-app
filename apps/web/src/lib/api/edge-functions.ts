@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import type { ErrorCode } from '@10q/contracts';
+import { withRetry, getUserFriendlyErrorMessage } from '@/lib/error-handling';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -19,73 +20,106 @@ async function callEdgeFunction<T>(
     method?: 'GET' | 'POST';
     body?: unknown;
     requireAuth?: boolean;
+    retry?: boolean;
   } = {}
 ): Promise<ApiResponse<T>> {
-  const { method = 'GET', body, requireAuth = false } = options;
+  const { method = 'GET', body, requireAuth = false, retry = true } = options;
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+  const performRequest = async (): Promise<ApiResponse<T>> => {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+
+    if (requireAuth) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        return {
+          ok: false,
+          error: {
+            code: 'NOT_AUTHORIZED' as ErrorCode,
+            message: 'Authentication required',
+          },
+        };
+      }
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    const response = await fetch(`${EDGE_FUNCTION_BASE_URL}/${functionName}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!response.ok) {
+      // Try to parse error response
+      try {
+        const errorData = await response.json();
+        // Always normalize 401 errors to UNAUTHORIZED for consistent handling
+        if (response.status === 401) {
+          const error: ApiResponse<T> = {
+            ok: false,
+            error: {
+              code: 'NOT_AUTHORIZED' as ErrorCode,
+              message: errorData.error?.message || 'Authentication required. Please sign in.',
+            },
+            request_id: errorData.request_id,
+          };
+          // Add status for retry logic
+          (error as any).status = response.status;
+          throw error;
+        }
+        const error: ApiResponse<T> = errorData;
+        (error as any).status = response.status;
+        throw error;
+      } catch (parseError: any) {
+        // If JSON parsing fails, return a generic error
+        // Check for 401 specifically
+        if (response.status === 401) {
+          const error: ApiResponse<T> = {
+            ok: false,
+            error: {
+              code: 'NOT_AUTHORIZED' as ErrorCode,
+              message: 'Authentication required. Please sign in.',
+            },
+          };
+          (error as any).status = response.status;
+          throw error;
+        }
+        const error: ApiResponse<T> = {
+          ok: false,
+          error: {
+            code: 'SERVICE_UNAVAILABLE' as ErrorCode,
+            message: getUserFriendlyErrorMessage(
+              { message: `Server error: ${response.status} ${response.statusText}` },
+              response.status
+            ),
+          },
+        };
+        (error as any).status = response.status;
+        throw error;
+      }
+    }
+
+    return response.json();
   };
 
-  if (requireAuth) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      return {
-        ok: false,
-        error: {
-          code: 'NOT_AUTHORIZED' as ErrorCode,
-          message: 'Authentication required',
-        },
-      };
-    }
-    headers['Authorization'] = `Bearer ${session.access_token}`;
-  }
-
-  const response = await fetch(`${EDGE_FUNCTION_BASE_URL}/${functionName}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  if (!response.ok) {
-    // Try to parse error response
+  // Apply retry logic for network errors and retryable status codes
+  if (retry) {
     try {
-      const errorData = await response.json();
-      // Always normalize 401 errors to UNAUTHORIZED for consistent handling
-      if (response.status === 401) {
-        return {
-          ok: false,
-          error: {
-            code: 'NOT_AUTHORIZED' as ErrorCode,
-            message: errorData.error?.message || 'Authentication required. Please sign in.',
-          },
-          request_id: errorData.request_id,
-        };
+      return await withRetry(performRequest, {
+        retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+        retryableErrorCodes: ['SERVICE_UNAVAILABLE'],
+      });
+    } catch (error: any) {
+      // If retry exhausted, enhance error message
+      if (error.error) {
+        error.error.message = getUserFriendlyErrorMessage(error.error, error.status);
       }
-      return errorData;
-    } catch {
-      // If JSON parsing fails, return a generic error
-      // Check for 401 specifically
-      if (response.status === 401) {
-        return {
-          ok: false,
-          error: {
-            code: 'NOT_AUTHORIZED' as ErrorCode,
-            message: 'Authentication required. Please sign in.',
-          },
-        };
-      }
-      return {
-        ok: false,
-        error: {
-          code: 'SERVICE_UNAVAILABLE' as ErrorCode,
-          message: `Server error: ${response.status} ${response.statusText}`,
-        },
-      };
+      throw error;
     }
   }
 
-  return response.json();
+  return performRequest();
 }
 
 export const edgeFunctions = {
@@ -353,6 +387,47 @@ export const edgeFunctions = {
       method: 'POST',
       body: { league_id: leagueId },
       requireAuth: true,
+    }),
+
+  updateHandle: (handle: string) =>
+    callEdgeFunction<{
+      handle_display: string;
+      handle_canonical: string;
+      handle_last_changed_at: string;
+    }>('update-handle', {
+      method: 'POST',
+      body: { handle },
+      requireAuth: true,
+    }),
+
+  getProfileByHandle: (handle: string) =>
+    callEdgeFunction<{
+      player_id: string;
+      handle_display: string;
+      handle_canonical: string;
+      created_at: string;
+      stats: {
+        all_time_best: number | null;
+        all_time_worst: number | null;
+        total_games: number;
+        average_score: number | null;
+      };
+      recent_results: Array<{
+        score: number;
+        correct_count: number;
+        completed_at: string;
+      }>;
+      category_performance: Array<{
+        category: string;
+        total_questions: number;
+        correct_count: number;
+        accuracy: number;
+        average_score: number;
+        best_score: number;
+      }>;
+    }>(`get-profile-by-handle?handle=${encodeURIComponent(handle)}`, {
+      method: 'GET',
+      requireAuth: false, // Public profile page
     }),
 };
 
