@@ -1,10 +1,28 @@
 import { supabase } from './supabase/client';
 
 /**
- * Sign in anonymously (for testing)
+ * Sign up with email and password
  */
-export async function signInAnonymously() {
-  const { data, error } = await supabase.auth.signInAnonymously();
+export async function signUp(email: string, password: string) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Sign in with email and password
+ */
+export async function signIn(email: string, password: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
   if (error) throw error;
   return data;
 }

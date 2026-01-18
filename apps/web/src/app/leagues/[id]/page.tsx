@@ -157,7 +157,7 @@ export default function LeagueDetailPage() {
             {isAuthError && (
               <div className="mb-6">
                 <p className="font-body text-sm mb-4 text-ink/80">
-                  Click the "Sign In (Test)" button in the top-right corner, then refresh this page.
+                  Click the "Sign In" button in the top-right corner, then refresh this page.
                 </p>
               </div>
             )}

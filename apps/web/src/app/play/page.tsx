@@ -38,7 +38,7 @@ export default function PlayPage() {
         // Check authentication first
         const session = await getSession();
         if (!session) {
-          setError('Please sign in to play. Click "Sign In (Test)" in the top-right corner.');
+          setError('Please sign in to play. Click "Sign In" in the top-right corner.');
           setLoading(false);
           return;
         }
@@ -81,7 +81,7 @@ export default function PlayPage() {
             errorMessage.includes('sign in') ||
             errorMessage.includes('Sign In') ||
             errorMessage.includes('401')) {
-          setError('Please sign in to play. Click "Sign In (Test)" in the top-right corner.');
+          setError('Please sign in to play. Click "Sign In" in the top-right corner.');
         } else {
           setError(errorMessage);
         }
@@ -173,7 +173,7 @@ export default function PlayPage() {
             {isAuthError && (
               <div className="mb-6">
                 <p className="font-body text-sm mb-4 text-ink/80">
-                  Click the "Sign In (Test)" button in the top-right corner, then refresh this page.
+                  Click the "Sign In" button in the top-right corner, then refresh this page.
                 </p>
               </div>
             )}

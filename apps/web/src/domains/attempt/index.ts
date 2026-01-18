@@ -35,7 +35,7 @@ export async function startAttempt(quizId: string): Promise<AttemptState> {
         errorMsg.toLowerCase().includes('authorization') ||
         errorMsg.toLowerCase().includes('sign in') ||
         errorMsg.toLowerCase().includes('not authorized')) {
-      throw new Error('Please sign in to play. Click "Sign In (Test)" in the top-right corner.');
+      throw new Error('Please sign in to play. Click "Sign In" in the top-right corner.');
     }
     
     throw new Error(errorMsg);
