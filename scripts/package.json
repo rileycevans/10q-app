@@ -6,7 +6,8 @@
   "scripts": {
     "test:phase1": "tsx test-phase1.ts",
     "test:phase2": "tsx test-phase2.ts",
-    "test:full-lifecycle": "tsx test-full-lifecycle.ts"
+    "test:full-lifecycle": "tsx test-full-lifecycle.ts",
+    "create-test-quiz": "tsx create-test-quiz.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

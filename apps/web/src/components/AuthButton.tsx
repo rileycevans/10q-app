@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getSession, signInAnonymously, signOut } from '@/lib/auth';
+import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
+import { SignInModal } from './SignInModal';
 
 export function AuthButton() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   useEffect(() => {
     let subscription: { unsubscribe: () => void } | null = null;
@@ -50,34 +52,13 @@ export function AuthButton() {
     }
   }
 
-  async function handleSignIn() {
-    try {
-      setIsLoading(true);
-      setError(null);
-      console.log('Attempting anonymous sign-in...');
-      const result = await signInAnonymously();
-      console.log('Sign-in successful:', result);
-      setIsAuthenticated(true);
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      const errorMessage = error?.message || 'Unknown error';
-      
-      // Provide more helpful error messages
-      if (errorMessage.includes('anonymous') || errorMessage.includes('disabled')) {
-        setError('Anonymous auth is disabled. Enable it in Supabase Dashboard → Authentication → Providers → Anonymous');
-      } else if (errorMessage.includes('API') || errorMessage.includes('key')) {
-        setError('Invalid API key. Check your .env.local file.');
-      } else if (errorMessage.includes('fetch') || errorMessage.includes('network')) {
-        setError('Network error. Check your Supabase URL in .env.local');
-      } else {
-        setError(`Sign-in failed: ${errorMessage}`);
-      }
-      
-      // Also show alert for immediate feedback
-      alert(`Failed to sign in: ${errorMessage}\n\nSee TROUBLESHOOTING_AUTH.md for help.`);
-    } finally {
-      setIsLoading(false);
-    }
+  function handleSignIn() {
+    setShowSignInModal(true);
+  }
+
+  function handleAuthSuccess() {
+    setIsAuthenticated(true);
+    setShowSignInModal(false);
   }
 
   async function handleSignOut() {
@@ -124,12 +105,19 @@ export function AuthButton() {
   }
 
   return (
-    <button
-      onClick={handleSignIn}
-      className="h-10 px-4 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
-    >
-      Sign In (Test)
-    </button>
+    <>
+      <button
+        onClick={handleSignIn}
+        className="h-10 px-4 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+      >
+        Sign In
+      </button>
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+        onSuccess={handleAuthSuccess}
+      />
+    </>
   );
 }
 

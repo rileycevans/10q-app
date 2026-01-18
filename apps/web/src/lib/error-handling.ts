@@ -4,6 +4,7 @@
  */
 
 import type { ErrorCode } from '@10q/contracts';
+import { logger } from './logger';
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -115,10 +116,19 @@ export async function withRetry<T>(
         opts.backoffMultiplier
       );
 
-      console.warn(
-        `Retry attempt ${attempt + 1}/${opts.maxRetries} after ${delay}ms`,
-        error
-      );
+      const statusCode = error.status || error.statusCode;
+      const errorObj = error.error || error;
+
+      logger.warn({
+        event: 'NETWORK_RETRY',
+        scope: 'network',
+        attempt: attempt + 1,
+        max_retries: opts.maxRetries,
+        delay_ms: delay,
+        error_code: errorObj.code,
+        status_code: statusCode,
+        error_message: errorObj.message,
+      });
 
       await sleep(delay);
     }

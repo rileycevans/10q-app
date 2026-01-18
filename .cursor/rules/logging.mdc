@@ -1,0 +1,206 @@
+---
+description: "Enforce structured logging with correlation IDs, event types, and context for AI-debuggable traces across client and Edge Functions."
+alwaysApply: false
+---
+
+# Structured Logging Guidelines
+
+## Context
+
+- Apply when adding, updating, or reviewing logging statements in client code (Next.js) or Edge Functions.
+- Ensures logs are structured, parseable, and contain sufficient context for AI-assisted debugging.
+- Builds on existing `logStructured` pattern in `supabase/functions/_shared/utils.ts`.
+- Enables "copy-paste console output" debugging workflow.
+
+## Requirements
+
+### Log Format
+
+- Use structured JSON logs with consistent shape: `event`, `scope`, `requestId`/`actionId`, `timestamp`, plus context fields.
+- Server-side: Use `logStructured(requestId, eventType, data)` from `_shared/utils.ts`.
+- Client-side: Create structured logger that outputs JSON.stringify format matching server pattern.
+- Include correlation IDs on every log: `requestId` for network requests, `actionId` for user actions spanning multiple steps.
+- Never log sensitive data: auth tokens, refresh tokens, cookies, PII (email, phone, address), full user content.
+- Log sanitized summaries instead: `payloadBytes`, `payloadKeys`, hashed identifiers (`userIdHash = sha256(userId).slice(0, 8)`).
+
+### Event Types and Required Fields
+
+- Use UPPER_SNAKE_CASE event names: `QUIZ_LOADED`, `ANSWER_SELECTED`, `SUBMIT_STARTED`, `SUBMIT_ACKED`, `STATE_TRANSITION`.
+- Include required context fields per event type:
+  - `QUIZ_LOADED`: `quizId`, `questionCount`, `serverTs`
+  - `QUESTION_SHOWN`: `questionIndex`, `questionId`, `attemptId`
+  - `ANSWER_SELECTED`: `questionId`, `selectedChoiceId`, `attemptId`, `clientTs`
+  - `SUBMIT_STARTED`: `actionId`, `attemptId`, `questionId`, `clientTs`, `remainingMs`
+  - `SUBMIT_ACKED`: `actionId`, `requestId`, `attemptId`, `questionId`, `status` ("accepted"/"rejected"), `reason`, `durationMs`, `serverTs`, `clientTs`
+  - `STATE_TRANSITION`: `from`, `to`, `reason`, `attemptId` (if applicable)
+  - `NETWORK_REQUEST`: `method`, `endpoint`, `requestId`, `status`, `durationMs`, `retryCount` (if retried)
+  - `ERROR`: `errorName`, `errorMessage`, `scope`, `stack` (debug only), `context` (quizId, questionId, actionId, requestId)
+
+### Scopes
+
+- Use lowercase scope identifiers: `auth`, `quiz`, `timer`, `network`, `storage`, `ui`, `league`, `leaderboard`.
+- Include `scope` field on every log line to enable filtering.
+
+### App Lifecycle Logging
+
+- Log once per session on app initialization: `build`/`version`/`commitHash`, `environment` (prod/staging/local), `browserInfo` (coarse), `authState` (signed in/anon).
+- Log route transitions: `ROUTE_CHANGED` with `from`, `to`, `routePath`.
+- Log critical view state: `VIEW_LOADED` with `viewName`, `renderTimeMs` (optional).
+
+### Game Flow Logging
+
+- Log complete trace for each quiz attempt: `QUIZ_LOADED` → `QUESTION_SHOWN` → `ANSWER_SELECTED` → `SUBMIT_STARTED` → `SUBMIT_ACKED` → `SCORE_UPDATED` → `ATTEMPT_FINALIZED`.
+- Generate `actionId` (UUID) at start of user action (e.g., "Submit Answer") and include on all related logs.
+- Log both client and server timestamps when server-authoritative timing is involved.
+- Log "why" not just "what": `reason: "timer_expired_server_side"`, `reason: "prevented_double_submit"`.
+
+### Network Request Logging
+
+- Log every Edge Function call: `NETWORK_REQUEST_START` with `requestId`, `method`, `endpoint`, `actionId` (if tied to action).
+- Log response: `NETWORK_REQUEST_COMPLETE` with `requestId`, `status`, `durationMs`, `retryCount` (if retried), `errorCode` (if failed).
+- Classify errors: `timeout`, `401`, `500`, `validation`, `network_offline`.
+- Never log full request/response payloads; log `payloadBytes`, `responseBytes`, `payloadKeys` (whitelist).
+
+### State Machine Logging
+
+- Log state transitions at "edges" only (not every render): `STATE_TRANSITION` with `from`, `to`, `reason`, `attemptId`.
+- Log guardrail checks: `GUARDRAIL_TRIGGERED` with `reason` (e.g., "prevented_double_submit", "already_submitted").
+- Use state machine pattern for key flows (quiz attempt, auth flow) and log transitions.
+
+### Error Logging
+
+- Log errors with full context: `ERROR` event with `errorName`, `errorMessage`, `scope`, `stack` (debug only), `context` object (quizId, questionId, actionId, requestId, remainingMs).
+- Classify expected errors as `warn` not `error`: validation rejections, timer expiry rejections, network offline.
+- Log user-visible outcome: `userOutcome: "showed_retry_toast"`, `userOutcome: "forced_reload"`.
+
+### Performance Logging
+
+- Log high-value timing: `timeToQuizLoad`, `timeFromAnswerSelectToSubmitAck`, `longTaskDetected` (optional).
+- Use `durationMs` field consistently for all timing measurements.
+
+### Log Levels and Sampling
+
+- Use `LOG_LEVEL` environment variable: `info` in prod, `debug` in staging/local.
+- Use `ENABLE_DIAGNOSTIC_LOGS` feature flag or `?debug=1` query param to enable verbose logging.
+- Implement optional sampling: `DEBUG_LOG_SAMPLING_RATE=0.05` in prod for high-volume debug logs.
+- Keep `info`/`warn`/`error` meaningful in production; reserve `debug` for development.
+
+### Flight Recorder Pattern
+
+- Implement in-memory ring buffer of last ~500-2000 log events (client-side only).
+- On error, print: `"Diagnostic bundle id: {bundleId}"`.
+- Provide "Copy debug bundle" button that exports sanitized JSON to clipboard.
+- Include `bundleId` in error logs to enable correlation.
+
+## Examples
+
+<example>
+  // Server-side (Edge Function)
+  import { logStructured, generateRequestId } from "../_shared/utils.ts";
+  
+  const requestId = generateRequestId();
+  logStructured(requestId, "SUBMIT_ANSWER_REQUEST", {
+    scope: "quiz",
+    attempt_id: attemptId,
+    question_id: questionId,
+  });
+  
+  logStructured(requestId, "SUBMIT_ACKED", {
+    scope: "quiz",
+    action_id: actionId,
+    attempt_id: attemptId,
+    question_id: questionId,
+    status: "accepted",
+    duration_ms: 145,
+    server_ts: new Date().toISOString(),
+    reason: "valid_answer_within_time",
+  });
+</example>
+
+<example>
+  // Client-side structured logger
+  const actionId = crypto.randomUUID();
+  logger.info({
+    event: "SUBMIT_STARTED",
+    scope: "quiz",
+    action_id: actionId,
+    attempt_id: attemptId,
+    question_id: questionId,
+    client_ts: new Date().toISOString(),
+    remaining_ms: remainingMs,
+  });
+  
+  const response = await edgeFunctions.submitAnswer(...);
+  
+  logger.info({
+    event: "SUBMIT_ACKED",
+    scope: "quiz",
+    action_id: actionId,
+    request_id: response.request_id,
+    attempt_id: attemptId,
+    question_id: questionId,
+    status: response.ok ? "accepted" : "rejected",
+    duration_ms: Date.now() - startTime,
+    server_ts: response.data?.timestamp,
+    client_ts: new Date().toISOString(),
+  });
+</example>
+
+<example>
+  // State transition logging
+  logger.info({
+    event: "STATE_TRANSITION",
+    scope: "quiz",
+    from: "active",
+    to: "submitting",
+    reason: "user_click",
+    attempt_id: attemptId,
+  });
+</example>
+
+<example>
+  // Error logging with context
+  logger.error({
+    event: "ERROR",
+    scope: "quiz",
+    error_name: error.name,
+    error_message: error.message,
+    context: {
+      quiz_id: quizId,
+      question_id: questionId,
+      action_id: actionId,
+      request_id: requestId,
+      remaining_ms: remainingMs,
+    },
+    user_outcome: "showed_retry_toast",
+  });
+</example>
+
+<example type="invalid">
+  // Unstructured logging
+  console.log("User clicked submit");
+  console.log("Got response:", response);
+  console.error("Something went wrong");
+  
+  // Missing correlation IDs, event types, scope, structured format
+</example>
+
+<example type="invalid">
+  // Logging sensitive data
+  logger.info({
+    event: "AUTH_SUCCESS",
+    access_token: session.access_token, // NEVER log tokens
+    user_email: user.email, // NEVER log PII
+  });
+  
+  // Should log: userIdHash, tokenLength, authState instead
+</example>
+
+<example type="invalid">
+  // Inconsistent format
+  console.log("Submit started");
+  logStructured(requestId, "submit_started", {}); // lowercase event
+  logger.info("SUBMIT_STARTED", data); // different format than server
+  
+  // Must use consistent UPPER_SNAKE_CASE and same structure everywhere
+</example>
