@@ -2,6 +2,7 @@
 
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { ArcadeBackground } from './ArcadeBackground';
+import { logger } from '@/lib/logger';
 
 interface Props {
   children: ReactNode;
@@ -30,7 +31,15 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    logger.error({
+      event: 'ERROR',
+      scope: 'ui',
+      error_name: error.name,
+      error_message: error.message,
+      stack: error.stack,
+      component_stack: errorInfo.componentStack,
+      user_outcome: 'error_boundary_caught',
+    });
   }
 
   handleReset = () => {
@@ -67,6 +76,21 @@ export class ErrorBoundary extends Component<Props, State> {
                 >
                   Go Home
                 </button>
+                {process.env.NODE_ENV === 'development' && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await logger.copyDiagnosticBundleToClipboard();
+                        alert('Debug bundle copied to clipboard!');
+                      } catch (err) {
+                        console.error('Failed to copy bundle:', err);
+                      }
+                    }}
+                    className="w-full h-12 bg-yellowA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+                  >
+                    Copy Debug Bundle
+                  </button>
+                )}
               </div>
             </div>
           </div>
