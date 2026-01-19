@@ -40,24 +40,24 @@ export default function SettingsPage() {
           return;
         }
 
-        // Get current profile to fetch handle and last changed date
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
+        // Get current player to fetch handle and last changed date (Notion plan: players table)
+        const { data: player, error: playerError } = await supabase
+          .from('players')
           .select('handle_display, handle_last_changed_at')
           .eq('id', session.user.id)
           .single();
 
-        if (profileError || !profile) {
-          setError('Failed to load profile');
+        if (playerError || !player) {
+          setError('Failed to load player profile');
           setLoading(false);
           return;
         }
 
-        setCurrentHandle(profile.handle_display);
+        setCurrentHandle(player.handle_display);
 
         // Calculate days until next change
-        if (profile.handle_last_changed_at) {
-          const lastChanged = new Date(profile.handle_last_changed_at);
+        if (player.handle_last_changed_at) {
+          const lastChanged = new Date(player.handle_last_changed_at);
           const now = new Date();
           const daysSinceChange = (now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
           const daysRemaining = Math.max(0, Math.ceil(30 - daysSinceChange));
@@ -130,7 +130,7 @@ export default function SettingsPage() {
     return (
       <ArcadeBackground>
         <div className="flex items-center justify-center min-h-screen px-4">
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 left-4">
             <AuthButton />
           </div>
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">

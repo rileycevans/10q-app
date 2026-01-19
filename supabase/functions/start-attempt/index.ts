@@ -51,44 +51,45 @@ Deno.serve(async (req) => {
 
     const supabase = createServiceClient();
 
-    // Ensure profile exists (create if not)
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
+    // Ensure player exists (create if not)
+    const { data: player, error: playerError } = await supabase
+      .from("players")
       .select("id")
       .eq("id", userId)
       .single();
 
-    if (profileError && profileError.code === "PGRST116") {
-      // Profile doesn't exist, create one with auto-generated handle
+    if (playerError && playerError.code === "PGRST116") {
+      // Player doesn't exist, create one with auto-generated handle
       const handleDisplay = `Player${userId.slice(0, 8)}`;
       const handleCanonical = handleDisplay.toLowerCase();
 
       const { error: createError } = await supabase
-        .from("profiles")
+        .from("players")
         .insert({
           id: userId,
+          linked_auth_user_id: userId,
           handle_display: handleDisplay,
           handle_canonical: handleCanonical,
         });
 
       if (createError) {
-        logStructured(requestId, "start_attempt_profile_error", {
+        logStructured(requestId, "start_attempt_player_error", {
           error: createError.message,
         });
         return errorResponse(
           ErrorCodes.SERVICE_UNAVAILABLE,
-          "Failed to create profile",
+          "Failed to create player",
           requestId,
           500
         );
       }
-    } else if (profileError) {
-      logStructured(requestId, "start_attempt_profile_error", {
-        error: profileError.message,
+    } else if (playerError) {
+      logStructured(requestId, "start_attempt_player_error", {
+        error: playerError.message,
       });
       return errorResponse(
         ErrorCodes.SERVICE_UNAVAILABLE,
-        "Failed to fetch profile",
+        "Failed to fetch player",
         requestId,
         500
       );
@@ -105,11 +106,40 @@ Deno.serve(async (req) => {
     if (existingAttempt) {
       // Attempt exists - return it
       if (existingAttempt.finalized_at) {
-        return errorResponse(
-          ErrorCodes.ATTEMPT_ALREADY_COMPLETED,
-          "Attempt has already been completed",
-          requestId,
-          400
+        // Already finalized - return state indicating completion
+        logStructured(requestId, "start_attempt_already_finalized", {
+          attempt_id: existingAttempt.id,
+        });
+        return successResponse(
+          {
+            attempt_id: existingAttempt.id,
+            quiz_id: existingAttempt.quiz_id,
+            current_index: existingAttempt.current_index,
+            current_question: null,
+            question_started_at: null,
+            question_expires_at: null,
+            state: "FINALIZED",
+          },
+          requestId
+        );
+      }
+
+      // Check if all questions answered (ready to finalize)
+      if (existingAttempt.current_index > 10) {
+        logStructured(requestId, "start_attempt_ready_to_finalize", {
+          attempt_id: existingAttempt.id,
+        });
+        return successResponse(
+          {
+            attempt_id: existingAttempt.id,
+            quiz_id: existingAttempt.quiz_id,
+            current_index: existingAttempt.current_index,
+            current_question: null,
+            question_started_at: null,
+            question_expires_at: null,
+            state: "READY_TO_FINALIZE",
+          },
+          requestId
         );
       }
 
@@ -144,6 +174,7 @@ Deno.serve(async (req) => {
           current_question: questions[0],
           question_started_at: existingAttempt.current_question_started_at,
           question_expires_at: existingAttempt.current_question_expires_at,
+          state: "IN_PROGRESS",
         },
         requestId
       );

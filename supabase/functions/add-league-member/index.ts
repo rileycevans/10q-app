@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
     // Find player by handle (case-insensitive)
     const handleCanonical = handle.trim().toLowerCase();
     const { data: profile, error: profileError } = await supabase
-      .from("profiles")
+      .from("players")
       .select("id, handle_display")
       .eq("handle_canonical", handleCanonical)
       .single();

@@ -104,21 +104,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch question details for each answer
+    // Fetch question details for each answer (Notion plan: body, question_answers, question_tags with tag_id)
     const questionIds = answers.map((a) => a.question_id);
+    
+    // Get questions with answers and tags
     const { data: questions, error: questionsError } = await supabase
       .from("questions")
       .select(`
         id,
-        prompt,
-        order_index,
-        question_choices (
+        body,
+        question_answers (
           id,
-          text,
-          order_index
+          body,
+          sort_index
         ),
         question_tags (
-          tag
+          tag_id,
+          tags (
+            id,
+            name,
+            slug
+          )
         )
       `)
       .in("id", questionIds);
@@ -135,36 +141,48 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create a map for quick lookup
+    // Get order_index from quiz_questions junction table
+    const { data: quizQuestions } = await supabase
+      .from("quiz_questions")
+      .select("question_id, order_index")
+      .eq("quiz_id", attempt.quiz_id)
+      .in("question_id", questionIds);
+
+    // Create maps for quick lookup
     const questionMap = new Map();
     questions?.forEach((q: any) => {
       questionMap.set(q.id, q);
     });
 
-    // Format the response
+    const orderMap = new Map();
+    quizQuestions?.forEach((qq: any) => {
+      orderMap.set(qq.question_id, qq.order_index);
+    });
+
+    // Format the response (Notion plan field names)
     const questionResults = answers
       .map((answer) => {
         const question = questionMap.get(answer.question_id);
         if (!question) return null;
 
-        const selectedChoice = question.question_choices?.find(
-          (c: any) => c.id === answer.selected_answer_id
+        const selectedAnswer = question.question_answers?.find(
+          (a: any) => a.id === answer.selected_answer_id
         );
 
         return {
           question_id: answer.question_id,
-          order_index: question.order_index || 0,
-          prompt: question.prompt || "",
-          tags: question.question_tags?.map((t: any) => t.tag) || [],
-          choices: question.question_choices
-            ?.sort((a: any, b: any) => a.order_index - b.order_index)
-            .map((c: any) => ({
-              id: c.id,
-              text: c.text,
-              order_index: c.order_index,
+          order_index: orderMap.get(answer.question_id) || 0,
+          body: question.body || "",
+          tags: question.question_tags?.map((t: any) => t.tags?.name).filter(Boolean) || [],
+          answers: question.question_answers
+            ?.sort((a: any, b: any) => a.sort_index - b.sort_index)
+            .map((a: any) => ({
+              id: a.id,
+              body: a.body,
+              sort_index: a.sort_index,
             })) || [],
-          selected_choice_id: answer.selected_answer_id,
-          selected_choice_text: selectedChoice?.text || null,
+          selected_answer_id: answer.selected_answer_id,
+          selected_answer_body: selectedAnswer?.body || null,
           answer_kind: answer.answer_kind,
           is_correct: answer.is_correct,
           time_ms: answer.time_ms,
@@ -176,9 +194,9 @@ Deno.serve(async (req) => {
       .filter((q) => q !== null)
       .sort((a: any, b: any) => a.order_index - b.order_index);
 
-    // Get daily result
-    const { data: dailyResult } = await supabase
-      .from("daily_results")
+    // Get daily score (Notion plan: daily_scores table)
+    const { data: dailyScore } = await supabase
+      .from("daily_scores")
       .select("*")
       .eq("quiz_id", attempt.quiz_id)
       .eq("player_id", userId)
@@ -198,7 +216,7 @@ Deno.serve(async (req) => {
         total_time_ms: attempt.total_time_ms,
         correct_count: questionResults.filter((q: any) => q && q.is_correct).length,
         questions: questionResults,
-        daily_result: dailyResult || null,
+        daily_score: dailyScore || null,
       },
       requestId
     );

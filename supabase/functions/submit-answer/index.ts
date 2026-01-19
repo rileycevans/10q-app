@@ -93,12 +93,12 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { attempt_id, question_id, selected_choice_id } = body;
+    const { attempt_id, question_id, selected_answer_id } = body;
 
-    if (!attempt_id || !question_id || !selected_choice_id) {
+    if (!attempt_id || !question_id || !selected_answer_id) {
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
-        "attempt_id, question_id, and selected_choice_id are required",
+        "attempt_id, question_id, and selected_answer_id are required",
         requestId,
         400
       );
@@ -133,23 +133,24 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verify question is current question
-    const { data: question, error: questionError } = await supabase
-      .from("questions")
-      .select("id, quiz_id, order_index")
-      .eq("id", question_id)
+    // Verify question is current question (via quiz_questions junction)
+    const { data: quizQuestion, error: questionError } = await supabase
+      .from("quiz_questions")
+      .select("question_id, quiz_id, order_index")
+      .eq("question_id", question_id)
+      .eq("quiz_id", attempt.quiz_id)
       .single();
 
-    if (questionError || !question) {
+    if (questionError || !quizQuestion) {
       return errorResponse(
         ErrorCodes.QUESTION_NOT_FOUND,
-        "Question not found",
+        "Question not found in quiz",
         requestId,
         404
       );
     }
 
-    if (question.order_index !== attempt.current_index) {
+    if (quizQuestion.order_index !== attempt.current_index) {
       return errorResponse(
         ErrorCodes.INVALID_STATE_TRANSITION,
         "Question is not the current question",
@@ -207,42 +208,30 @@ Deno.serve(async (req) => {
     const isExpired = elapsedMs >= QUESTION_TIME_LIMIT_MS;
     const isTimeout = isExpired;
 
-    // Get correct answer from private schema (service role can access)
-    const { data: correct, error: correctError } = await supabase
-      .from("private.correct_answers")
-      .select("correct_choice_id")
+    // Get selected answer and check if correct (Notion plan: is_correct on question_answers)
+    const { data: selectedAnswer, error: answerCheckError } = await supabase
+      .from("question_answers")
+      .select("id, is_correct")
+      .eq("id", selected_answer_id)
       .eq("question_id", question_id)
       .single();
 
-    if (correctError || !correct) {
-      logStructured(requestId, "submit_answer_correct_not_found", {
+    if (answerCheckError || !selectedAnswer) {
+      logStructured(requestId, "submit_answer_invalid_answer", {
         question_id,
-        error: correctError?.message,
+        selected_answer_id,
+        error: answerCheckError?.message,
       });
       return errorResponse(
-        ErrorCodes.QUESTION_NOT_FOUND,
-        "Correct answer not found",
+        ErrorCodes.INVALID_ANSWER,
+        "Selected answer not found for this question",
         requestId,
-        404
+        400
       );
     }
 
-    const correctChoiceId = correct.correct_choice_id;
-
-    if (!correctChoiceId) {
-      logStructured(requestId, "submit_answer_correct_not_found", {
-        question_id,
-      });
-      return errorResponse(
-        ErrorCodes.QUESTION_NOT_FOUND,
-        "Correct answer not found",
-        requestId,
-        404
-      );
-    }
-
-    // Determine if answer is correct
-    const isCorrect = !isTimeout && selected_choice_id === correctChoiceId;
+    // Determine if answer is correct (from is_correct field per Notion plan)
+    const isCorrect = !isTimeout && selectedAnswer.is_correct;
 
     // Calculate score
     const score = calculateQuestionScore(isCorrect, elapsedMs, isTimeout);
@@ -254,7 +243,7 @@ Deno.serve(async (req) => {
         attempt_id,
         question_id,
         answer_kind: isTimeout ? "timeout" : "selected",
-        selected_answer_id: isTimeout ? null : selected_choice_id,
+        selected_answer_id: isTimeout ? null : selected_answer_id,
         is_correct: isCorrect,
         time_ms: score.elapsedMs,
         base_points: score.basePoints,

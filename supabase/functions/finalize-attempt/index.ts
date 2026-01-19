@@ -1,6 +1,6 @@
 /**
  * Finalize Attempt Edge Function
- * Validates all 10 questions answered, writes to daily_results, makes attempt immutable
+ * Validates all 10 questions answered, writes to daily_scores, makes attempt immutable
  */
 
 import { corsHeaders } from "../_shared/cors.ts";
@@ -69,9 +69,9 @@ Deno.serve(async (req) => {
 
     // Check if already finalized
     if (attempt.finalized_at) {
-      // Return existing results
-      const { data: dailyResult } = await supabase
-        .from("daily_results")
+      // Return existing results (Notion plan: daily_scores table)
+      const { data: dailyScore } = await supabase
+        .from("daily_scores")
         .select("*")
         .eq("quiz_id", attempt.quiz_id)
         .eq("player_id", userId)
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
           finalized_at: attempt.finalized_at,
           total_score: attempt.total_score,
           total_time_ms: attempt.total_time_ms,
-          daily_result: dailyResult,
+          daily_score: dailyScore,
         },
         requestId
       );
@@ -108,9 +108,41 @@ Deno.serve(async (req) => {
     }
 
     if (!answers || answers.length < 10) {
+      // Get which question indices are missing (if possible)
+      let missingIndices: number[] = [];
+      try {
+        const { data: allQuizQuestions } = await supabase
+          .from("quiz_questions")
+          .select("question_id, order_index")
+          .eq("quiz_id", attempt.quiz_id)
+          .order("order_index");
+        
+        if (allQuizQuestions && allQuizQuestions.length > 0) {
+          const answeredQuestionIds = new Set(answers?.map(a => a.question_id) || []);
+          missingIndices = allQuizQuestions
+            .filter(qq => !answeredQuestionIds.has(qq.question_id))
+            .map(qq => qq.order_index)
+            .sort((a, b) => a - b);
+        }
+      } catch (queryError) {
+        // If query fails, just log it and continue without missing indices
+        logStructured(requestId, "finalize_attempt_missing_questions_query_error", {
+          error: queryError?.message || String(queryError),
+        });
+      }
+      
+      logStructured(requestId, "finalize_attempt_incomplete", {
+        answer_count: answers?.length || 0,
+        missing_question_indices: missingIndices,
+      });
+      
+      const errorMessage = missingIndices.length > 0
+        ? `Attempt incomplete: ${answers?.length || 0}/10 questions answered. Missing questions: ${missingIndices.join(', ')}`
+        : `Attempt incomplete: ${answers?.length || 0}/10 questions answered`;
+      
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
-        `Attempt incomplete: ${answers?.length || 0}/10 questions answered`,
+        errorMessage,
         requestId,
         400
       );
@@ -146,27 +178,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Write to daily_results (immutable, append-only)
-    const { data: dailyResult, error: dailyResultError } = await supabase
-      .from("daily_results")
-      .insert({
+    // Write to daily_scores (upsert in case it already exists due to retake)
+    const { data: dailyScore, error: dailyScoreError } = await supabase
+      .from("daily_scores")
+      .upsert({
         quiz_id: attempt.quiz_id,
         player_id: userId,
         completed_at: now.toISOString(),
         score: attempt.total_score,
         total_time_ms: attempt.total_time_ms,
         correct_count: correctCount,
+      }, {
+        onConflict: 'quiz_id,player_id',
       })
       .select("*")
       .single();
 
-    if (dailyResultError) {
-      logStructured(requestId, "finalize_attempt_daily_result_error", {
-        error: dailyResultError.message,
+    if (dailyScoreError) {
+      logStructured(requestId, "finalize_attempt_daily_score_error", {
+        error: dailyScoreError.message,
       });
       return errorResponse(
         ErrorCodes.SERVICE_UNAVAILABLE,
-        "Failed to create daily result",
+        "Failed to create daily score",
         requestId,
         500
       );
@@ -202,7 +236,7 @@ Deno.serve(async (req) => {
         total_score: attempt.total_score,
         total_time_ms: attempt.total_time_ms,
         correct_count: correctCount,
-        daily_result: dailyResult,
+        daily_score: dailyScore,
       },
       requestId
     );

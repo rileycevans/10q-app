@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
         player_id,
         role,
         created_at,
-        profiles!inner (
+        players!inner (
           handle_display
         )
       `)
@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     const memberList = (members || []).map((m: any) => ({
       player_id: m.player_id,
-      handle_display: m.profiles?.handle_display || "Unknown",
+      handle_display: m.players?.handle_display || "Unknown",
       role: m.role,
       created_at: m.created_at,
     }));

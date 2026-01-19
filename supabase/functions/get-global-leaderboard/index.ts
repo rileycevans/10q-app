@@ -94,16 +94,15 @@ Deno.serve(async (req) => {
       currentQuizId = currentQuiz.id;
     }
 
-    // Query daily_results with time filter
+    // Query daily_scores with time filter
     let query = supabase
-      .from("daily_results")
+      .from("daily_scores")
       .select(`
         player_id,
         quiz_id,
         score,
         total_time_ms,
-        completed_at,
-        profiles!inner(handle_display)
+        completed_at
       `);
 
     // Apply time window filter
@@ -148,11 +147,26 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get unique player IDs and fetch their handles
+    const playerIds = [...new Set(dailyResults.map((r) => r.player_id))];
+    const { data: playersData } = await supabase
+      .from("players")
+      .select("id, handle_display")
+      .in("id", playerIds);
+
+    // Create a map of player_id -> handle_display
+    const playerHandleMap = new Map();
+    if (playersData) {
+      for (const player of playersData) {
+        playerHandleMap.set(player.id, player.handle_display || "Unknown");
+      }
+    }
+
     // Aggregate by player
     const playerMap = new Map();
     for (const result of dailyResults) {
       const playerId = result.player_id;
-      const handleDisplay = (result.profiles as any)?.handle_display || "Unknown";
+      const handleDisplay = playerHandleMap.get(playerId) || "Unknown";
       
       if (!playerMap.has(playerId)) {
         playerMap.set(playerId, {

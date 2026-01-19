@@ -8,7 +8,6 @@ import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HUD } from '@/components/HUD';
 import { QuestionCard } from '@/components/QuestionCard';
 import { AnswerButton } from '@/components/AnswerButton';
-import { BottomDock } from '@/components/BottomDock';
 import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
 
@@ -23,10 +22,9 @@ export default function QuestionPage() {
   const [attempt, setAttempt] = useState<AttemptState | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
-  const [selectedChoiceId, setSelectedChoiceId] = useState<string | null>(null);
+  const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [answerFeedback, setAnswerFeedback] = useState<{ isCorrect: boolean; points: number } | null>(null);
 
   useEffect(() => {
     async function initialize() {
@@ -85,6 +83,16 @@ export default function QuestionPage() {
           const now = Date.now();
           const remaining = Math.max(0, expiresAt - now);
           setTimeRemaining(remaining);
+        } else if (attemptState.current_question_started_at) {
+          // Fallback: calculate from start time if expires_at is missing
+          const startedAt = new Date(attemptState.current_question_started_at).getTime();
+          const now = Date.now();
+          const elapsed = now - startedAt;
+          const remaining = Math.max(0, 16000 - elapsed);
+          setTimeRemaining(remaining);
+        } else {
+          // Default to full time if nothing is set
+          setTimeRemaining(16000);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load question');
@@ -128,33 +136,25 @@ export default function QuestionPage() {
     }
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router]);
 
-  const handleAnswerClick = async (choiceId: string) => {
+  const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
-    setSelectedChoiceId(choiceId);
+    setSelectedAnswerId(answerId);
     setIsSubmitting(true);
 
     try {
-      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, choiceId);
+      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
 
-      // Show feedback
-      setAnswerFeedback({
-        isCorrect: result.is_correct,
-        points: result.total_points,
-      });
-
-      // Advance after brief delay
-      setTimeout(() => {
-        if (result.next_index <= 10) {
-          router.push(`/play/q/${result.next_index}`);
-        } else {
-          router.push('/play/finalize');
-        }
-      }, 1500);
+      // Advance immediately
+      if (result.current_index <= 10) {
+        router.push(`/play/q/${result.current_index}`);
+      } else {
+        router.push('/play/finalize');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit answer');
       setIsSubmitting(false);
-      setSelectedChoiceId(null);
+      setSelectedAnswerId(null);
     }
   };
 
@@ -192,7 +192,6 @@ export default function QuestionPage() {
     return null;
   }
 
-  const tags = currentQuestion.tags || [];
   const totalScore = 0; // TODO: Calculate from attempt answers
 
   return (
@@ -200,48 +199,45 @@ export default function QuestionPage() {
       <div className="flex flex-col min-h-screen">
         <HUD
           progress={questionIndex}
-          timeRemaining={timeRemaining || undefined}
-          category={tags[0]}
-          score={totalScore}
         />
 
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-6">
-          <QuestionCard
-            questionText={currentQuestion.prompt}
-            questionNumber={questionIndex}
-            tags={tags}
-          />
-
-          {answerFeedback && (
-            <div className={`bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-4 ${
-              answerFeedback.isCorrect ? 'bg-green' : 'bg-red'
-            }`}>
-              <p className="font-bold text-lg text-ink text-center">
-                {answerFeedback.isCorrect ? '✓ Correct!' : '✗ Incorrect'}
-              </p>
-              <p className="font-body text-sm text-ink text-center">
-                +{answerFeedback.points} points
-              </p>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4">
+          {/* Time Remaining Progress Bar */}
+          {currentQuestion && attempt && (
+            <div className="w-full max-w-md px-4 mb-2">
+              <div className="w-full h-10 bg-paper border-[4px] border-ink rounded-full shadow-sticker overflow-hidden relative">
+                <div
+                  className="h-full bg-cyanA transition-all duration-100 ease-linear"
+                  style={{
+                    width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / 16000) * 100))}%`,
+                  }}
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-base font-bold uppercase tracking-wide text-ink pointer-events-none z-10">
+                  {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : '16.0'}s
+                </span>
+              </div>
             </div>
           )}
 
-          <div className="w-full max-w-md space-y-3">
-            {currentQuestion.choices
-              .sort((a, b) => a.order_index - b.order_index)
-              .map((choice) => (
+          <QuestionCard
+            questionText={currentQuestion.body}
+            questionNumber={questionIndex}
+          />
+
+          <div className="w-full max-w-md space-y-1.5">
+            {currentQuestion.answers
+              .sort((a, b) => a.sort_index - b.sort_index)
+              .map((answer) => (
                 <AnswerButton
-                  key={choice.choice_id}
-                  text={choice.text}
-                  isSelected={selectedChoiceId === choice.choice_id}
-                  isCorrect={answerFeedback ? answerFeedback.isCorrect : null}
-                  onClick={() => handleAnswerClick(choice.choice_id)}
-                  disabled={isSubmitting || selectedChoiceId !== null}
+                  key={answer.answer_id}
+                  text={answer.body}
+                  isSelected={selectedAnswerId === answer.answer_id}
+                  onClick={() => handleAnswerClick(answer.answer_id)}
+                  disabled={isSubmitting || selectedAnswerId !== null}
                 />
               ))}
           </div>
         </div>
-
-        <BottomDock />
       </div>
     </ArcadeBackground>
   );

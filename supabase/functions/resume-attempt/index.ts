@@ -93,12 +93,15 @@ Deno.serve(async (req) => {
 
       if (elapsedMs >= QUESTION_TIME_LIMIT_MS) {
         // Question expired - mark as timeout and advance
-        const { data: question } = await supabase
-          .from("questions")
-          .select("id")
+        // Query via quiz_questions junction (Notion plan)
+        const { data: quizQuestion } = await supabase
+          .from("quiz_questions")
+          .select("question_id")
           .eq("quiz_id", currentAttempt.quiz_id)
           .eq("order_index", currentIndex)
           .single();
+
+        const question = quizQuestion ? { id: quizQuestion.question_id } : null;
 
         if (question) {
           // Check if already answered

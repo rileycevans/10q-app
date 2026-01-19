@@ -15,82 +15,101 @@ const MIN_TAGS_PER_QUESTION = 1;
 const MAX_TAGS_PER_QUESTION = 5;
 
 /**
- * Validate quiz before publishing
+ * Validate quiz before publishing (Notion plan: quiz_questions junction, question_answers with is_correct)
  */
 async function validateQuiz(
   supabase: ReturnType<typeof createServiceClient>,
   quizId: string
 ): Promise<{ valid: boolean; error?: string }> {
-  // Check quiz has exactly 10 questions
-  const { data: questions, error: questionsError } = await supabase
-    .from("questions")
-    .select("id")
+  // Check quiz has exactly 10 questions via quiz_questions junction
+  const { data: quizQuestions, error: questionsError } = await supabase
+    .from("quiz_questions")
+    .select("question_id, order_index")
     .eq("quiz_id", quizId);
 
   if (questionsError) {
-    return { valid: false, error: `Failed to fetch questions: ${questionsError.message}` };
+    return { valid: false, error: `Failed to fetch quiz questions: ${questionsError.message}` };
   }
 
-  if (!questions || questions.length !== MAX_QUESTIONS_PER_QUIZ) {
+  if (!quizQuestions || quizQuestions.length !== MAX_QUESTIONS_PER_QUIZ) {
     return {
       valid: false,
-      error: `Quiz must have exactly ${MAX_QUESTIONS_PER_QUIZ} questions, found ${questions?.length || 0}`,
+      error: `Quiz must have exactly ${MAX_QUESTIONS_PER_QUIZ} questions, found ${quizQuestions?.length || 0}`,
     };
   }
 
+  // Verify order_index is 1-10 with no gaps
+  const orderIndexes = quizQuestions.map(qq => qq.order_index).sort((a, b) => a - b);
+  for (let i = 0; i < MAX_QUESTIONS_PER_QUIZ; i++) {
+    if (orderIndexes[i] !== i + 1) {
+      return {
+        valid: false,
+        error: `Quiz questions must have order_index 1-10, found gap or duplicate`,
+      };
+    }
+  }
+
   // Validate each question
-  for (const question of questions) {
-    // Check question has exactly 4 choices
-    const { data: choices, error: choicesError } = await supabase
-      .from("question_choices")
-      .select("id")
-      .eq("question_id", question.id);
+  for (const quizQuestion of quizQuestions) {
+    const questionId = quizQuestion.question_id;
 
-    if (choicesError) {
+    // Check question has exactly 4 answers (Notion plan: question_answers)
+    const { data: answers, error: answersError } = await supabase
+      .from("question_answers")
+      .select("id, is_correct, sort_index")
+      .eq("question_id", questionId);
+
+    if (answersError) {
       return {
         valid: false,
-        error: `Failed to fetch choices for question ${question.id}: ${choicesError.message}`,
+        error: `Failed to fetch answers for question ${questionId}: ${answersError.message}`,
       };
     }
 
-    if (!choices || choices.length !== CHOICES_PER_QUESTION) {
+    if (!answers || answers.length !== CHOICES_PER_QUESTION) {
       return {
         valid: false,
-        error: `Question ${question.id} must have exactly ${CHOICES_PER_QUESTION} choices, found ${choices?.length || 0}`,
+        error: `Question ${questionId} must have exactly ${CHOICES_PER_QUESTION} answers, found ${answers?.length || 0}`,
       };
     }
 
-    // Check question has 1-5 tags
+    // Verify sort_index is 0-3 with no gaps (Notion plan: sort_index 0-3)
+    const sortIndexes = answers.map(a => a.sort_index).sort((a, b) => a - b);
+    for (let i = 0; i < CHOICES_PER_QUESTION; i++) {
+      if (sortIndexes[i] !== i) {
+        return {
+          valid: false,
+          error: `Question ${questionId} answers must have sort_index 0-3, found gap or duplicate`,
+        };
+      }
+    }
+
+    // Check exactly one answer is correct (Notion plan: is_correct on question_answers)
+    const correctAnswers = answers.filter(a => a.is_correct);
+    if (correctAnswers.length !== 1) {
+      return {
+        valid: false,
+        error: `Question ${questionId} must have exactly 1 correct answer, found ${correctAnswers.length}`,
+      };
+    }
+
+    // Check question has 1-5 tags (Notion plan: question_tags with tag_id)
     const { data: tags, error: tagsError } = await supabase
       .from("question_tags")
-      .select("tag")
-      .eq("question_id", question.id);
+      .select("tag_id")
+      .eq("question_id", questionId);
 
     if (tagsError) {
       return {
         valid: false,
-        error: `Failed to fetch tags for question ${question.id}: ${tagsError.message}`,
+        error: `Failed to fetch tags for question ${questionId}: ${tagsError.message}`,
       };
     }
 
     if (!tags || tags.length < MIN_TAGS_PER_QUESTION || tags.length > MAX_TAGS_PER_QUESTION) {
       return {
         valid: false,
-        error: `Question ${question.id} must have ${MIN_TAGS_PER_QUESTION}-${MAX_TAGS_PER_QUESTION} tags, found ${tags?.length || 0}`,
-      };
-    }
-
-    // Check correct answer exists
-    const { data: correctAnswer, error: correctError } = await supabase
-      .from("private.correct_answers")
-      .select("correct_choice_id")
-      .eq("question_id", question.id)
-      .single();
-
-    if (correctError || !correctAnswer) {
-      return {
-        valid: false,
-        error: `Question ${question.id} is missing correct answer`,
+        error: `Question ${questionId} must have ${MIN_TAGS_PER_QUESTION}-${MAX_TAGS_PER_QUESTION} tags, found ${tags?.length || 0}`,
       };
     }
   }
