@@ -231,14 +231,14 @@ Deno.serve(async (req) => {
     }
 
     let query = supabase
-      .from("daily_results")
+      .from("daily_scores")
       .select(`
         player_id,
         quiz_id,
         score,
         total_time_ms,
         completed_at,
-        profiles!inner(handle_display)
+        players!inner(handle_display)
       `);
 
     if (window === "today") {
@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
     const playerMap = new Map();
     for (const result of dailyResults) {
       const playerId = result.player_id;
-      const handleDisplay = (result.profiles as any)?.handle_display || "Unknown";
+      const handleDisplay = (result.players as any)?.handle_display || "Unknown";
       
       if (!playerMap.has(playerId)) {
         playerMap.set(playerId, {

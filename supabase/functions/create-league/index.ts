@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
 
     // Ensure profile exists
     const { data: profile } = await supabase
-      .from("profiles")
+      .from("players")
       .select("id")
       .eq("id", userId)
       .single();
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       const handleCanonical = handleDisplay.toLowerCase();
 
       const { error: createError } = await supabase
-        .from("profiles")
+        .from("players")
         .insert({
           id: userId,
           handle_display: handleDisplay,

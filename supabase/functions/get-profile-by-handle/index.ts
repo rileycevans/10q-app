@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
 
     // Get profile by handle
     const { data: profile, error: profileError } = await supabase
-      .from("profiles")
+      .from("players")
       .select("id, handle_display, handle_canonical, created_at")
       .eq("handle_canonical", handleCanonical)
       .single();
@@ -136,9 +136,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get stats from daily_results
+    // Get stats from daily_scores
     const { data: results, error: resultsError } = await supabase
-      .from("daily_results")
+      .from("daily_scores")
       .select("score, correct_count, completed_at")
       .eq("player_id", profile.id)
       .order("completed_at", { ascending: false });

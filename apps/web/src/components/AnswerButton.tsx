@@ -16,19 +16,8 @@ export function AnswerButton({
   disabled = false,
 }: AnswerButtonProps) {
   // Determine background color based on state
-  let bgColor = 'bg-white';
-  if (isSelected) {
-    if (isCorrect === true) {
-      bgColor = 'bg-green';
-    } else if (isCorrect === false) {
-      bgColor = 'bg-red';
-    } else {
-      bgColor = 'bg-cyanA';
-    }
-  }
-
-  // Text color: ink for contrast, or white if needed
-  const textColor = isSelected && (isCorrect === true || isCorrect === false) ? 'text-ink' : 'text-ink';
+  const bgColor = isSelected ? 'bg-cyanA' : 'bg-white';
+  const textColor = 'text-ink';
 
   return (
     <button
@@ -48,11 +37,7 @@ export function AnswerButton({
       aria-pressed={isSelected}
     >
       {text}
-      {isSelected && (
-        <span className="sr-only">
-          {isCorrect === true ? 'Correct' : isCorrect === false ? 'Incorrect' : 'Selected'}
-        </span>
-      )}
+      {isSelected && <span className="sr-only">Selected</span>}
     </button>
   );
 }

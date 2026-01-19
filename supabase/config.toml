@@ -1,7 +1,5 @@
 # Supabase local development configuration
-
-[project]
-name = "10q"
+# Project: 10Q
 
 [api]
 enabled = true

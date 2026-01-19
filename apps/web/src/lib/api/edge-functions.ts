@@ -300,7 +300,7 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
-  submitAnswer: (attemptId: string, questionId: string, selectedChoiceId: string) =>
+  submitAnswer: (attemptId: string, questionId: string, selectedAnswerId: string) =>
     callEdgeFunction<{
       attempt_id: string;
       current_index: number;
@@ -310,13 +310,16 @@ export const edgeFunctions = {
       base_points: number;
       bonus_points: number;
       total_points: number;
+      time_ms: number;
       state: string;
+      question_started_at: string | null;
+      question_expires_at: string | null;
     }>('submit-answer', {
       method: 'POST',
       body: {
         attempt_id: attemptId,
         question_id: questionId,
-        selected_choice_id: selectedChoiceId,
+        selected_answer_id: selectedAnswerId, // Notion plan: answer instead of choice
       },
       requireAuth: true,
     }),
@@ -343,15 +346,15 @@ export const edgeFunctions = {
       questions: Array<{
         question_id: string;
         order_index: number;
-        prompt: string;
+        body: string; // Notion plan: body instead of prompt
         tags: string[];
-        choices: Array<{
+        answers: Array<{ // Notion plan: answers instead of choices
           id: string;
-          text: string;
-          order_index: number;
+          body: string; // Notion plan: body instead of text
+          sort_index: number; // Notion plan: sort_index instead of order_index
         }>;
-        selected_choice_id: string | null;
-        selected_choice_text: string | null;
+        selected_answer_id: string | null; // Notion plan: answer instead of choice
+        selected_answer_body: string | null;
         answer_kind: 'selected' | 'timeout';
         is_correct: boolean;
         time_ms: number;
@@ -359,7 +362,7 @@ export const edgeFunctions = {
         bonus_points: number;
         total_points: number;
       }>;
-      daily_result: {
+      daily_score: { // Notion plan: daily_score instead of daily_result
         quiz_id: string;
         player_id: string;
         completed_at: string;
@@ -577,6 +580,18 @@ export const edgeFunctions = {
     }>(`get-profile-by-handle?handle=${encodeURIComponent(handle)}`, {
       method: 'GET',
       requireAuth: false, // Public profile page
+    }),
+
+  deleteAttempt: (quizId: string) =>
+    callEdgeFunction<{
+      deleted: boolean;
+      attempt_id?: string;
+      quiz_id?: string;
+      message?: string;
+    }>('delete-attempt', {
+      method: 'POST',
+      body: { quiz_id: quizId },
+      requireAuth: true,
     }),
 };
 

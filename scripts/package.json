@@ -7,11 +7,15 @@
     "test:phase1": "tsx test-phase1.ts",
     "test:phase2": "tsx test-phase2.ts",
     "test:full-lifecycle": "tsx test-full-lifecycle.ts",
-    "create-test-quiz": "tsx create-test-quiz.ts"
+    "create-test-quiz": "tsx create-test-quiz.ts",
+    "create-test-quiz:notion": "tsx create-test-quiz-notion.ts",
+    "check-quiz": "tsx check-and-publish-quiz.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "tsx": "^4.7.0"
+  },
+  "devDependencies": {
+    "pg": "^8.17.1"
   }
 }
-

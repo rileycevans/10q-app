@@ -1,254 +1,115 @@
 /**
- * Error handling utilities with retry logic
- * Implements exponential backoff for network failures
+ * Error Handling Utilities
  */
 
 import type { ErrorCode } from '@10q/contracts';
-import { logger } from './logger';
 
-export interface RetryOptions {
-  maxRetries?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  backoffMultiplier?: number;
-  retryableStatusCodes?: number[];
-  retryableErrorCodes?: ErrorCode[];
+interface ErrorInfo {
+  code?: ErrorCode | string;
+  message?: string;
 }
 
-const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 3,
-  initialDelay: 1000, // 1 second
-  maxDelay: 10000, // 10 seconds
-  backoffMultiplier: 2,
-  retryableStatusCodes: [408, 429, 500, 502, 503, 504], // Timeout, rate limit, server errors
-  retryableErrorCodes: ['SERVICE_UNAVAILABLE'],
+// User-friendly error messages
+const ERROR_MESSAGES: Record<string, string> = {
+  AUTHENTICATION_REQUIRED: 'Please sign in to continue',
+  NOT_AUTHORIZED: 'Please sign in to continue',
+  QUIZ_NOT_FOUND: 'Quiz not found. Please try again.',
+  ATTEMPT_NOT_FOUND: 'Quiz attempt not found.',
+  ATTEMPT_ALREADY_COMPLETED: 'You have already completed this quiz.',
+  QUESTION_NOT_FOUND: 'Question not found.',
+  INVALID_STATE_TRANSITION: 'Invalid operation. Please refresh and try again.',
+  INVALID_ANSWER: 'Invalid answer selection.',
+  VALIDATION_ERROR: 'Invalid input. Please check your data.',
+  SERVICE_UNAVAILABLE: 'Service temporarily unavailable. Please try again.',
+  RATE_LIMITED: 'Too many requests. Please wait a moment.',
+  NETWORK_ERROR: 'Network error. Please check your connection.',
 };
 
-/**
- * Check if an error is retryable
- */
-function isRetryableError(
-  error: { code?: ErrorCode; message?: string },
-  statusCode?: number,
-  retryableStatusCodes: number[],
-  retryableErrorCodes: ErrorCode[]
-): boolean {
-  // Check status code
-  if (statusCode && retryableStatusCodes.includes(statusCode)) {
-    return true;
-  }
+// Status code messages
+const STATUS_MESSAGES: Record<number, string> = {
+  401: 'Please sign in to continue.',
+  403: 'You do not have permission to perform this action.',
+  404: 'The requested resource was not found.',
+  429: 'Too many requests. Please wait a moment.',
+  500: 'Server error. Please try again.',
+  502: 'Service temporarily unavailable.',
+  503: 'Service temporarily unavailable.',
+  504: 'Request timed out. Please try again.',
+};
 
-  // Check error code
-  if (error.code && retryableErrorCodes.includes(error.code)) {
-    return true;
+export function getUserFriendlyErrorMessage(error?: ErrorInfo, status?: number): string {
+  // First check error code
+  if (error?.code && ERROR_MESSAGES[error.code]) {
+    return ERROR_MESSAGES[error.code];
   }
-
-  // Check for network errors (no status code usually means network failure)
-  if (!statusCode && error.message) {
-    const networkErrorPatterns = [
-      /network/i,
-      /fetch/i,
-      /connection/i,
-      /timeout/i,
-      /failed to fetch/i,
-    ];
-    return networkErrorPatterns.some((pattern) => pattern.test(error.message!));
+  
+  // Then check status code
+  if (status && STATUS_MESSAGES[status]) {
+    return STATUS_MESSAGES[status];
   }
+  
+  // Use error message if provided
+  if (error?.message) {
+    return error.message;
+  }
+  
+  return 'An unexpected error occurred. Please try again.';
+}
 
-  return false;
+interface RetryOptions {
+  maxRetries?: number;
+  initialDelayMs?: number;
+  maxDelayMs?: number;
+  retryableStatusCodes?: number[];
+  retryableErrorCodes?: string[];
 }
 
 /**
- * Calculate delay for exponential backoff
- */
-function calculateDelay(
-  attempt: number,
-  initialDelay: number,
-  maxDelay: number,
-  backoffMultiplier: number
-): number {
-  const delay = initialDelay * Math.pow(backoffMultiplier, attempt);
-  return Math.min(delay, maxDelay);
-}
-
-/**
- * Sleep for specified milliseconds
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Retry a function with exponential backoff
+ * Retry wrapper for async functions with exponential backoff
  */
 export async function withRetry<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {}
 ): Promise<T> {
-  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
+  const {
+    maxRetries = 3,
+    initialDelayMs = 1000,
+    maxDelayMs = 10000,
+    retryableStatusCodes = [408, 429, 500, 502, 503, 504],
+    retryableErrorCodes = ['SERVICE_UNAVAILABLE', 'NETWORK_ERROR'],
+  } = options;
+  
   let lastError: any;
-
-  for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error: any) {
       lastError = error;
-
-      // Don't retry on last attempt
-      if (attempt >= opts.maxRetries) {
-        break;
-      }
-
-      // Check if error is retryable
-      const statusCode = error.status || error.statusCode;
-      const errorObj = error.error || error;
       
-      if (!isRetryableError(errorObj, statusCode, opts.retryableStatusCodes, opts.retryableErrorCodes)) {
-        // Not retryable, throw immediately
+      // Check if we should retry
+      const shouldRetry = attempt < maxRetries && (
+        // Network error (no response)
+        !error.status ||
+        // Retryable status code
+        retryableStatusCodes.includes(error.status) ||
+        // Retryable error code
+        (error.error?.code && retryableErrorCodes.includes(error.error.code))
+      );
+      
+      if (!shouldRetry) {
         throw error;
       }
-
-      // Calculate delay and wait
-      const delay = calculateDelay(
-        attempt,
-        opts.initialDelay,
-        opts.maxDelay,
-        opts.backoffMultiplier
-      );
-
-      const statusCode = error.status || error.statusCode;
-      const errorObj = error.error || error;
-
-      logger.warn({
-        event: 'NETWORK_RETRY',
-        scope: 'network',
-        attempt: attempt + 1,
-        max_retries: opts.maxRetries,
-        delay_ms: delay,
-        error_code: errorObj.code,
-        status_code: statusCode,
-        error_message: errorObj.message,
-      });
-
-      await sleep(delay);
+      
+      // Calculate delay with exponential backoff
+      const delay = Math.min(initialDelayMs * Math.pow(2, attempt), maxDelayMs);
+      
+      // Add jitter (±20%)
+      const jitter = delay * 0.2 * (Math.random() - 0.5);
+      
+      await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
   }
-
-  // All retries exhausted
+  
   throw lastError;
 }
-
-/**
- * Get user-friendly error message
- */
-export function getUserFriendlyErrorMessage(
-  error: { code?: ErrorCode; message?: string },
-  statusCode?: number
-): string {
-  // Handle specific error codes
-  if (error.code) {
-    switch (error.code) {
-      case 'NOT_AUTHORIZED':
-        return 'Please sign in to continue.';
-      case 'QUIZ_NOT_AVAILABLE':
-        return 'No quiz available right now. Check back at 11:30 UTC!';
-      case 'ATTEMPT_NOT_FOUND':
-        return 'Attempt not found. Please start a new quiz.';
-      case 'ATTEMPT_ALREADY_COMPLETED':
-        return 'This quiz has already been completed.';
-      case 'QUESTION_EXPIRED':
-        return 'Time ran out for this question.';
-      case 'VALIDATION_ERROR':
-        return error.message || 'Invalid input. Please check your data.';
-      case 'SERVICE_UNAVAILABLE':
-        return 'Service temporarily unavailable. Please try again in a moment.';
-      default:
-        return error.message || 'An error occurred. Please try again.';
-    }
-  }
-
-  // Handle HTTP status codes
-  if (statusCode) {
-    switch (statusCode) {
-      case 401:
-        return 'Please sign in to continue.';
-      case 403:
-        return 'You do not have permission to perform this action.';
-      case 404:
-        return 'Resource not found.';
-      case 408:
-        return 'Request timed out. Please try again.';
-      case 429:
-        return 'Too many requests. Please wait a moment and try again.';
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        return 'Server error. Please try again in a moment.';
-      default:
-        return error.message || `Error: ${statusCode}`;
-    }
-  }
-
-  // Generic error
-  return error.message || 'An unexpected error occurred. Please try again.';
-}
-
-/**
- * Check if error is a network error
- */
-export function isNetworkError(error: any): boolean {
-  if (!error) return false;
-  
-  // Check for fetch network errors
-  if (error.message) {
-    const networkPatterns = [
-      /failed to fetch/i,
-      /network error/i,
-      /network request failed/i,
-      /fetch failed/i,
-      /connection/i,
-    ];
-    return networkPatterns.some((pattern) => pattern.test(error.message));
-  }
-
-  // Check for no response (usually network error)
-  if (!error.status && !error.statusCode && !error.code) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Check if error is an authentication error
- */
-export function isAuthError(error: any): boolean {
-  if (!error) return false;
-  
-  const errorObj = error.error || error;
-  
-  if (errorObj.code === 'NOT_AUTHORIZED') {
-    return true;
-  }
-
-  const statusCode = error.status || error.statusCode;
-  if (statusCode === 401 || statusCode === 403) {
-    return true;
-  }
-
-  if (errorObj.message) {
-    const authPatterns = [
-      /authentication/i,
-      /authorization/i,
-      /sign in/i,
-      /sign-in/i,
-      /unauthorized/i,
-      /forbidden/i,
-    ];
-    return authPatterns.some((pattern) => pattern.test(errorObj.message));
-  }
-
-  return false;
-}
-

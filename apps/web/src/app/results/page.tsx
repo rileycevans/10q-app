@@ -39,15 +39,15 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         </div>
       </div>
 
-      {/* Question Prompt */}
+      {/* Question Body (Notion plan: body instead of prompt) */}
       <p className="font-bold text-[20px] text-left leading-relaxed text-ink mb-4">
-        {question.prompt}
+        {question.body}
       </p>
 
-      {/* Answer Choices */}
+      {/* Answers (Notion plan: answers instead of choices) */}
       <div className="space-y-2 mb-4">
-        {question.choices.map((choice) => {
-          const isSelected = choice.id === question.selected_choice_id;
+        {question.answers.map((answer) => {
+          const isSelected = answer.id === question.selected_answer_id;
           const bgColor = isSelected
             ? question.is_correct
               ? 'bg-green'
@@ -56,14 +56,14 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
           
           return (
             <div
-              key={choice.id}
+              key={answer.id}
               className={`
                 h-12 w-full border-[3px] border-ink rounded-[14px]
                 ${bgColor} flex items-center px-4
                 ${isSelected ? 'font-bold' : 'font-normal'}
               `}
             >
-              <span className="text-ink text-base">{choice.text}</span>
+              <span className="text-ink text-base">{answer.body}</span>
               {isSelected && (
                 <span className="ml-auto text-ink font-bold">← YOUR ANSWER</span>
               )}

@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
 
     // Get current profile
     const { data: profile, error: profileError } = await supabase
-      .from("profiles")
+      .from("players")
       .select("handle_display, handle_canonical, handle_last_changed_at")
       .eq("id", userId)
       .single();
@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
     // Check if handle is already taken (unless it's the same user)
     if (handleCanonical !== profile.handle_canonical) {
       const { data: existingProfile } = await supabase
-        .from("profiles")
+        .from("players")
         .select("id")
         .eq("handle_canonical", handleCanonical)
         .single();
@@ -260,7 +260,7 @@ Deno.serve(async (req) => {
 
     // Update handle
     const { data: updatedProfile, error: updateError } = await supabase
-      .from("profiles")
+      .from("players")
       .update({
         handle_display: handleDisplay,
         handle_canonical: handleCanonical,
