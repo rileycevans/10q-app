@@ -36,11 +36,18 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 
 ### Bonus Points Formula
 
-- Bonus is linear from 0–10 seconds, 0 after 10 seconds.
-- Formula: `bonus = MAX_BONUS_POINTS * (1 - (clamped_time_ms / BONUS_WINDOW_MS))`.
+- Bonus uses step-based tiers from 0–10 seconds, 0 after 10 seconds.
+- Step-based bonus tiers:
+  - 0–2s: 5 bonus points
+  - 2–4s: 4 bonus points
+  - 4–6s: 3 bonus points
+  - 6–8s: 2 bonus points
+  - 8–10s: 1 bonus point
+  - 10s+: 0 bonus points
 - `clamped_time_ms = min(max(elapsed_ms, 0), BONUS_WINDOW_MS)`.
-- Round bonus to nearest 0.5 using HALF_UP rounding.
-- Final bonus must be in set: `{0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0}`.
+- Convert to seconds: `elapsed_seconds = clamped_time_ms / 1000`.
+- Bonus is an integer value (no rounding needed).
+- Final bonus must be in set: `{0, 1, 2, 3, 4, 5}`.
 
 ### Timeout Behavior
 
@@ -71,8 +78,14 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
   // packages/contracts/scoring.ts
   export function calculateBonus(elapsed_ms: number): number {
     const clamped = Math.min(Math.max(elapsed_ms, 0), BONUS_WINDOW_MS);
-    const bonus = MAX_BONUS_POINTS * (1 - (clamped / BONUS_WINDOW_MS));
-    return Math.round(bonus * 2) / 2; // Round to nearest 0.5
+    const elapsedSeconds = clamped / 1000;
+    
+    if (elapsedSeconds < 2) return 5;
+    else if (elapsedSeconds < 4) return 4;
+    else if (elapsedSeconds < 6) return 3;
+    else if (elapsedSeconds < 8) return 2;
+    else if (elapsedSeconds < 10) return 1;
+    else return 0;
   }
   ```
   - Edge Function imports and uses this function

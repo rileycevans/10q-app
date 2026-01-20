@@ -11,6 +11,7 @@
   --green: #29F724;
   --red: #FE3F3B;
   --yellow: #DEFD4E;
+  --orange: #FF8C42;
 
   /* Design Tokens - Spacing */
   --gutter: 16px;
@@ -42,6 +43,7 @@
   --color-green: var(--green);
   --color-red: var(--red);
   --color-yellow: var(--yellow);
+  --color-orange: var(--orange);
 }
 
 /* Custom Utility Classes */

@@ -20,9 +20,39 @@ import {
 } from "./constants.js";
 
 describe("calculateBonus", () => {
-  it("returns max bonus at 0ms", () => {
+  it("returns max bonus (5) at 0ms", () => {
     const bonus = calculateBonus(0);
-    expect(bonus).toBe(MAX_BONUS_POINTS);
+    expect(bonus).toBe(5);
+  });
+
+  it("returns 5 bonus in 0-2s tier", () => {
+    expect(calculateBonus(0)).toBe(5);
+    expect(calculateBonus(1000)).toBe(5); // 1 second
+    expect(calculateBonus(1999)).toBe(5); // Just under 2 seconds
+  });
+
+  it("returns 4 bonus in 2-4s tier", () => {
+    expect(calculateBonus(2000)).toBe(4); // Exactly 2 seconds
+    expect(calculateBonus(3000)).toBe(4); // 3 seconds
+    expect(calculateBonus(3999)).toBe(4); // Just under 4 seconds
+  });
+
+  it("returns 3 bonus in 4-6s tier", () => {
+    expect(calculateBonus(4000)).toBe(3); // Exactly 4 seconds
+    expect(calculateBonus(5000)).toBe(3); // 5 seconds
+    expect(calculateBonus(5999)).toBe(3); // Just under 6 seconds
+  });
+
+  it("returns 2 bonus in 6-8s tier", () => {
+    expect(calculateBonus(6000)).toBe(2); // Exactly 6 seconds
+    expect(calculateBonus(7000)).toBe(2); // 7 seconds
+    expect(calculateBonus(7999)).toBe(2); // Just under 8 seconds
+  });
+
+  it("returns 1 bonus in 8-10s tier", () => {
+    expect(calculateBonus(8000)).toBe(1); // Exactly 8 seconds
+    expect(calculateBonus(9000)).toBe(1); // 9 seconds
+    expect(calculateBonus(9999)).toBe(1); // Just under 10 seconds
   });
 
   it("returns 0 bonus at 10s (bonus window end)", () => {
@@ -35,23 +65,12 @@ describe("calculateBonus", () => {
     expect(bonus).toBe(0);
   });
 
-  it("returns half bonus at 5s (midpoint)", () => {
-    const bonus = calculateBonus(5000);
-    expect(bonus).toBe(2.5);
-  });
-
-  it("rounds to nearest 0.5", () => {
-    // At 1 second: 5 * (1 - 1000/10000) = 5 * 0.9 = 4.5
-    const bonus = calculateBonus(1000);
-    expect(bonus).toBe(4.5);
-  });
-
-  it("clamps negative values to 0", () => {
+  it("clamps negative values to max bonus", () => {
     const bonus = calculateBonus(-1000);
-    expect(bonus).toBe(MAX_BONUS_POINTS);
+    expect(bonus).toBe(5);
   });
 
-  it("clamps values above bonus window", () => {
+  it("clamps values above bonus window to 0", () => {
     const bonus = calculateBonus(20000);
     expect(bonus).toBe(0);
   });
@@ -68,11 +87,11 @@ describe("calculateQuestionScore", () => {
       expect(result.isTimeout).toBe(false);
     });
 
-    it("calculates score at 5s (half bonus)", () => {
+    it("calculates score at 5s (3 bonus in 4-6s tier)", () => {
       const result = calculateQuestionScore(true, 5000);
       expect(result.basePoints).toBe(BASE_POINTS_CORRECT);
-      expect(result.bonusPoints).toBe(2.5);
-      expect(result.totalPoints).toBe(7.5);
+      expect(result.bonusPoints).toBe(3);
+      expect(result.totalPoints).toBe(8);
     });
 
     it("calculates score at 10s (no bonus)", () => {

@@ -25,7 +25,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
             {question.tags.map((tag, idx) => (
               <span
                 key={idx}
-                className="bg-cyanA border-[3px] border-ink rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink"
+                className="bg-yellow border-[3px] border-ink rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink"
               >
                 {tag}
               </span>
@@ -48,11 +48,15 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
       <div className="space-y-2 mb-4">
         {question.answers.map((answer) => {
           const isSelected = answer.id === question.selected_answer_id;
-          const bgColor = isSelected
-            ? question.is_correct
-              ? 'bg-green'
-              : 'bg-red'
-            : 'bg-paper';
+          const isCorrectAnswer = answer.is_correct;
+          
+          let bgColor = 'bg-paper';
+          if (isSelected) {
+            bgColor = question.is_correct ? 'bg-green' : 'bg-red';
+          } else if (!question.is_correct && isCorrectAnswer) {
+            // Highlight correct answer in cyan when question was answered incorrectly
+            bgColor = 'bg-cyanA';
+          }
           
           return (
             <div
@@ -60,12 +64,15 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
               className={`
                 h-12 w-full border-[3px] border-ink rounded-[14px]
                 ${bgColor} flex items-center px-4
-                ${isSelected ? 'font-bold' : 'font-normal'}
+                ${isSelected || (!question.is_correct && isCorrectAnswer) ? 'font-bold' : 'font-normal'}
               `}
             >
               <span className="text-ink text-base">{answer.body}</span>
               {isSelected && (
                 <span className="ml-auto text-ink font-bold">← YOUR ANSWER</span>
+              )}
+              {!isSelected && !question.is_correct && isCorrectAnswer && (
+                <span className="ml-auto text-ink font-bold">← CORRECT</span>
               )}
             </div>
           );

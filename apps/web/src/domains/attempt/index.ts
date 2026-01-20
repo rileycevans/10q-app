@@ -38,6 +38,7 @@ export interface QuestionResult {
     id: string;
     body: string; // Notion plan: body instead of text
     sort_index: number; // Notion plan: sort_index
+    is_correct: boolean;
   }>;
   selected_answer_id: string | null; // Notion plan: answer instead of choice
   selected_answer_body: string | null;

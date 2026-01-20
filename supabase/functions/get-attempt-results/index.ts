@@ -116,7 +116,8 @@ Deno.serve(async (req) => {
         question_answers (
           id,
           body,
-          sort_index
+          sort_index,
+          is_correct
         ),
         question_tags (
           tag_id,
@@ -180,6 +181,7 @@ Deno.serve(async (req) => {
               id: a.id,
               body: a.body,
               sort_index: a.sort_index,
+              is_correct: a.is_correct,
             })) || [],
           selected_answer_id: answer.selected_answer_id,
           selected_answer_body: selectedAnswer?.body || null,

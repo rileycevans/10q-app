@@ -27,9 +27,66 @@ export default function QuestionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    // Prefetch next question route for instant navigation
+    if (questionIndex < 10) {
+      router.prefetch(`/play/q/${questionIndex + 1}`);
+    } else if (questionIndex === 10) {
+      router.prefetch('/play/finalize');
+    }
+
+    // Check cache synchronously first - if we have everything, skip loading screen
+    const cachedQuestions = sessionStorage.getItem('quiz_questions');
+    const cachedAttempt = sessionStorage.getItem('attempt_state');
+    const cachedQuizId = sessionStorage.getItem('quiz_id');
+
+    if (cachedQuestions && cachedAttempt && cachedQuizId) {
+      try {
+        const parsedAttempt = JSON.parse(cachedAttempt);
+        // If cache matches current index, we can render immediately
+        if (parsedAttempt.current_index === questionIndex) {
+          const parsedQuestions = JSON.parse(cachedQuestions);
+          const question = parsedQuestions.find((q: QuizQuestion) => q.order_index === questionIndex);
+          if (question) {
+            // We have everything cached - render immediately
+            setQuestions(parsedQuestions);
+            setAttempt(parsedAttempt);
+            setCurrentQuestion(question);
+            setQuizId(cachedQuizId);
+            setLoading(false);
+            
+            // Calculate time remaining
+            if (parsedAttempt.current_question_expires_at) {
+              const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
+              const now = Date.now();
+              const remaining = Math.max(0, expiresAt - now);
+              setTimeRemaining(remaining);
+            } else if (parsedAttempt.current_question_started_at) {
+              const startedAt = new Date(parsedAttempt.current_question_started_at).getTime();
+              const now = Date.now();
+              const elapsed = now - startedAt;
+              const remaining = Math.max(0, 16000 - elapsed);
+              setTimeRemaining(remaining);
+            } else {
+              setTimeRemaining(16000);
+            }
+            
+            // Still validate in background, but don't block UI
+            initialize();
+            return;
+          }
+        }
+      } catch {
+        // Invalid cache, continue with normal initialization
+      }
+    }
+
     async function initialize() {
       try {
-        // Get current quiz
+        let quizQuestions: QuizQuestion[] = [];
+        let attemptState: AttemptState | null = null;
+        let currentQuizId: string;
+
+        // Get current quiz (always needed)
         const currentQuiz = await getCurrentQuiz();
         if (!currentQuiz) {
           setError('No quiz available');
@@ -37,16 +94,52 @@ export default function QuestionPage() {
           return;
         }
 
-        setQuizId(currentQuiz.quiz_id);
+        currentQuizId = currentQuiz.quiz_id;
+        setQuizId(currentQuizId);
 
-        // Get quiz questions
-        const quizQuestions = await getQuizQuestions(currentQuiz.quiz_id);
-        setQuestions(quizQuestions);
+        // Use cached questions if available and quiz ID matches
+        if (cachedQuestions && cachedQuizId === currentQuizId) {
+          try {
+            quizQuestions = JSON.parse(cachedQuestions);
+            setQuestions(quizQuestions);
+          } catch {
+            // Invalid cache, fetch fresh
+            quizQuestions = await getQuizQuestions(currentQuizId);
+            setQuestions(quizQuestions);
+            sessionStorage.setItem('quiz_questions', JSON.stringify(quizQuestions));
+            sessionStorage.setItem('quiz_id', currentQuizId);
+          }
+        } else {
+          // Fetch questions and cache them
+          quizQuestions = await getQuizQuestions(currentQuizId);
+          setQuestions(quizQuestions);
+          sessionStorage.setItem('quiz_questions', JSON.stringify(quizQuestions));
+          sessionStorage.setItem('quiz_id', currentQuizId);
+        }
 
-        // Resume attempt to get current state (handles expiry automatically)
-        const { startAttempt } = await import('@/domains/attempt');
-        const attemptState = await startAttempt(currentQuiz.quiz_id);
-        setAttempt(attemptState);
+        // Use cached attempt state if available and matches current index (allow optimistic ahead-by-1)
+        if (cachedAttempt) {
+          try {
+            const parsed = JSON.parse(cachedAttempt);
+            // Use cache if it matches requested index, or is 1 ahead (optimistic navigation), or 1 behind (catching up)
+            if (parsed.current_index === questionIndex || 
+                parsed.current_index === questionIndex - 1 || 
+                parsed.current_index === questionIndex + 1) {
+              attemptState = parsed;
+              setAttempt(attemptState);
+            }
+          } catch {
+            // Invalid cache, fetch fresh
+          }
+        }
+
+        // Fetch fresh attempt state if not cached or cache doesn't match
+        if (!attemptState) {
+          const { startAttempt } = await import('@/domains/attempt');
+          attemptState = await startAttempt(currentQuizId);
+          setAttempt(attemptState);
+          sessionStorage.setItem('attempt_state', JSON.stringify(attemptState));
+        }
 
         // Check if requested index matches server index
         if (attemptState.current_index !== questionIndex) {
@@ -94,9 +187,12 @@ export default function QuestionPage() {
           // Default to full time if nothing is set
           setTimeRemaining(16000);
         }
+
+        // If we got here with cached data, we can skip the loading screen
+        // Otherwise it will show briefly while data loads
+        setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load question');
-      } finally {
         setLoading(false);
       }
     }
@@ -104,13 +200,13 @@ export default function QuestionPage() {
     initialize();
   }, [questionIndex, router]);
 
-  // Update timer
+  // Update timer (stop when submitting)
   useEffect(() => {
-    if (!timeRemaining || timeRemaining <= 0) return;
+    if (!timeRemaining || timeRemaining <= 0 || isSubmitting) return;
 
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
-        if (!prev || prev <= 0) {
+        if (!prev || prev <= 0 || isSubmitting) {
           // Timeout - auto-advance will happen on next resume
           return 0;
         }
@@ -119,7 +215,7 @@ export default function QuestionPage() {
     }, 100);
 
     return () => clearInterval(interval);
-  }, [timeRemaining]);
+  }, [timeRemaining, isSubmitting]);
 
   // Auto-advance on timeout
   useEffect(() => {
@@ -141,21 +237,58 @@ export default function QuestionPage() {
 
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
+    // Stop timer immediately when answer is clicked
+    setTimeRemaining(null);
 
-    try {
-      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
+    // Calculate next index optimistically
+    const nextIndex = questionIndex + 1;
+    const nextState: AttemptState = {
+      attempt_id: attempt.attempt_id,
+      quiz_id: attempt.quiz_id,
+      current_index: nextIndex,
+      current_question_started_at: new Date().toISOString(),
+      current_question_expires_at: new Date(Date.now() + 16000).toISOString(),
+      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+    };
 
-      // Advance immediately
-      if (result.current_index <= 10) {
-        router.push(`/play/q/${result.current_index}`);
-      } else {
-        router.push('/play/finalize');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit answer');
-      setIsSubmitting(false);
-      setSelectedAnswerId(null);
+    // Update cache optimistically for instant navigation
+    sessionStorage.setItem('attempt_state', JSON.stringify(nextState));
+
+    // Navigate immediately (questions are already cached, so this is instant)
+    if (nextIndex <= 10) {
+      router.push(`/play/q/${nextIndex}`);
+    } else {
+      router.push('/play/finalize');
     }
+
+    // Submit answer in the background (don't await - let it complete async)
+    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
+      .then((result) => {
+        // Update cache with actual server response (corrects any timing issues)
+        const actualState: AttemptState = {
+          attempt_id: result.attempt_id,
+          quiz_id: attempt.quiz_id,
+          current_index: result.current_index,
+          current_question_started_at: result.question_started_at,
+          current_question_expires_at: result.question_expires_at,
+          state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+        };
+        sessionStorage.setItem('attempt_state', JSON.stringify(actualState));
+
+        // If server says we're on a different index, redirect to correct one
+        if (result.current_index !== nextIndex) {
+          if (result.current_index <= 10) {
+            router.push(`/play/q/${result.current_index}`);
+          } else {
+            router.push('/play/finalize');
+          }
+        }
+      })
+      .catch((err) => {
+        // Log error but don't block UI - server will correct on next page load
+        console.error('Failed to submit answer:', err);
+        // The next page will detect the mismatch and redirect if needed
+      });
   };
 
   if (loading) {
@@ -196,14 +329,14 @@ export default function QuestionPage() {
 
   return (
     <ArcadeBackground>
-      <div className="flex flex-col min-h-screen">
+      <div className="flex flex-col min-h-screen relative">
         <HUD
           progress={questionIndex}
         />
 
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4">
           {/* Time Remaining Progress Bar */}
-          {currentQuestion && attempt && (
+          {currentQuestion && attempt && !isSubmitting && (
             <div className="w-full max-w-md px-4 mb-2">
               <div className="w-full h-10 bg-paper border-[4px] border-ink rounded-full shadow-sticker overflow-hidden relative">
                 <div
@@ -238,6 +371,7 @@ export default function QuestionPage() {
               ))}
           </div>
         </div>
+
       </div>
     </ArcadeBackground>
   );
