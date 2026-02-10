@@ -29,7 +29,7 @@ async function callEdgeFunction<T>(
   const performRequest = async (): Promise<ApiResponse<T>> => {
     const requestId = logger.generateRequestId();
     const startTime = Date.now();
-    
+
     logger.info({
       event: 'NETWORK_REQUEST_START',
       scope: 'network',
@@ -45,7 +45,7 @@ async function callEdgeFunction<T>(
     if (requireAuth) {
       // Get session - Supabase client auto-refreshes expired tokens
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
+
       if (sessionError) {
         logger.error({
           event: 'ERROR',
@@ -64,7 +64,7 @@ async function callEdgeFunction<T>(
           request_id: requestId,
         };
       }
-      
+
       if (!session) {
         logger.warn({
           event: 'AUTH_REQUIRED',
@@ -82,7 +82,7 @@ async function callEdgeFunction<T>(
           request_id: requestId,
         };
       }
-      
+
       if (!session.access_token) {
         logger.warn({
           event: 'AUTH_REQUIRED',
@@ -100,13 +100,13 @@ async function callEdgeFunction<T>(
           request_id: requestId,
         };
       }
-      
+
       // Check if token is expired (expires_at is in seconds since epoch)
       if (session.expires_at) {
         const expiresAt = session.expires_at * 1000; // Convert to milliseconds
         const now = Date.now();
         const expiresIn = expiresAt - now;
-        
+
         if (expiresIn <= 0) {
           // Token is expired, try to refresh
           logger.info({
@@ -115,9 +115,9 @@ async function callEdgeFunction<T>(
             request_id: requestId,
             reason: 'token_expired',
           });
-          
+
           const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-          
+
           if (refreshError || !refreshedSession?.access_token) {
             logger.error({
               event: 'TOKEN_REFRESH_FAILED',
@@ -135,7 +135,7 @@ async function callEdgeFunction<T>(
               request_id: requestId,
             };
           }
-          
+
           headers['Authorization'] = `Bearer ${refreshedSession.access_token}`;
           logger.debug({
             event: 'TOKEN_REFRESHED',
@@ -178,7 +178,7 @@ async function callEdgeFunction<T>(
       const errorData = responseData as ApiResponse<T>;
       const errorCode = errorData.error?.code || 'SERVICE_UNAVAILABLE';
       const errorMessage = errorData.error?.message || response.statusText;
-      
+
       // Classify error type
       let errorClassification = 'unknown';
       if (response.status === 401 || response.status === 403) {
@@ -219,12 +219,12 @@ async function callEdgeFunction<T>(
           request_id: errorData.request_id || requestId,
         };
         // Add status for retry logic
-        (error as any).status = response.status;
+        (error as ApiResponse<T> & { status?: number }).status = response.status;
         throw error;
       }
-      
+
       const error: ApiResponse<T> = errorData;
-      (error as any).status = response.status;
+      (error as ApiResponse<T> & { status?: number }).status = response.status;
       throw error;
     }
 
@@ -248,22 +248,23 @@ async function callEdgeFunction<T>(
         retryableStatusCodes: [408, 429, 500, 502, 503, 504],
         retryableErrorCodes: ['SERVICE_UNAVAILABLE'],
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If retry exhausted, enhance error message
-      if (error.error) {
-        error.error.message = getUserFriendlyErrorMessage(error.error, error.status);
+      const apiError = error as ApiResponse<T> & { status?: number };
+      if (apiError.error) {
+        apiError.error.message = getUserFriendlyErrorMessage(apiError.error, apiError.status);
       }
-      
+
       // Log retry exhaustion
       logger.error({
         event: 'NETWORK_RETRY_EXHAUSTED',
         scope: 'network',
-        request_id: error.request_id,
+        request_id: apiError.request_id,
         endpoint: functionName,
-        error_code: error.error?.code,
-        status: error.status,
+        error_code: apiError.error?.code,
+        status: apiError.status,
       });
-      
+
       throw error;
     }
   }

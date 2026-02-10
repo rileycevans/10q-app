@@ -90,7 +90,6 @@ export default function QuestionPage() {
       try {
         let quizQuestions: QuizQuestion[] = [];
         let attemptState: AttemptState | null = null;
-        const currentQuizId = currentQuiz.quiz_id;
 
         // Get current quiz (always needed)
         const currentQuiz = await getCurrentQuiz();
@@ -100,7 +99,7 @@ export default function QuestionPage() {
           return;
         }
 
-        currentQuizId = currentQuiz.quiz_id;
+        const currentQuizId = currentQuiz.quiz_id;
         setQuizId(currentQuizId);
 
         // Use cached questions if available and quiz ID matches

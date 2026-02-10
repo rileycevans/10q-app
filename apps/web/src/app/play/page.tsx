@@ -97,7 +97,7 @@ export default function PlayPage() {
         clearInterval(countdownInterval);
       }
     };
-  }, [router]);
+  }, [router, error]);
 
   if (loading) {
     return (

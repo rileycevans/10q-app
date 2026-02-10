@@ -5,7 +5,7 @@ interface HUDProps {
   category?: string;
 }
 
-export function HUD({ progress = 0, score = 0, timeRemaining, category }: HUDProps) {
+export function HUD({ progress = 0, score: _score = 0, timeRemaining: _timeRemaining, category: _category }: HUDProps) {
   return (
     <div className="flex items-center justify-center w-full px-4 py-2">
       {/* Center: Progress */}

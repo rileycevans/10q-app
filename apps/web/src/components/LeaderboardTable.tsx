@@ -11,7 +11,7 @@ interface LeaderboardTableProps {
 
 export function LeaderboardTable({
   entries,
-  userRank,
+  userRank: _userRank,
   userPlayerId,
   scoreType,
 }: LeaderboardTableProps) {
@@ -45,11 +45,10 @@ export function LeaderboardTable({
           return (
             <div
               key={entry.player_id}
-              className={`grid grid-cols-[60px_1fr_120px_80px] gap-4 py-3 px-2 rounded-lg border-[3px] border-ink transition-all ${
-                isUser
+              className={`grid grid-cols-[60px_1fr_120px_80px] gap-4 py-3 px-2 rounded-lg border-[3px] border-ink transition-all ${isUser
                   ? 'bg-cyanA shadow-sticker-sm'
                   : 'bg-paper hover:bg-cyanA/20'
-              }`}
+                }`}
             >
               <div className="font-display font-bold text-lg text-ink flex items-center">
                 {entry.rank}
