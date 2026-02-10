@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { getProfileByHandle, type Profile } from '@/domains/profile';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
-import Link from 'next/link';
 import dynamic from 'next/dynamic';
 
 const AuthButton = dynamic(

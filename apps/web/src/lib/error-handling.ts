@@ -42,17 +42,17 @@ export function getUserFriendlyErrorMessage(error?: ErrorInfo, status?: number):
   if (error?.code && ERROR_MESSAGES[error.code]) {
     return ERROR_MESSAGES[error.code];
   }
-  
+
   // Then check status code
   if (status && STATUS_MESSAGES[status]) {
     return STATUS_MESSAGES[status];
   }
-  
+
   // Use error message if provided
   if (error?.message) {
     return error.message;
   }
-  
+
   return 'An unexpected error occurred. Please try again.';
 }
 
@@ -78,38 +78,39 @@ export async function withRetry<T>(
     retryableStatusCodes = [408, 429, 500, 502, 503, 504],
     retryableErrorCodes = ['SERVICE_UNAVAILABLE', 'NETWORK_ERROR'],
   } = options;
-  
-  let lastError: any;
-  
+
+  let lastError: unknown;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
-      
+
       // Check if we should retry
+      const errorObj = error as { status?: number; error?: { code?: string } };
       const shouldRetry = attempt < maxRetries && (
         // Network error (no response)
-        !error.status ||
+        !errorObj.status ||
         // Retryable status code
-        retryableStatusCodes.includes(error.status) ||
+        retryableStatusCodes.includes(errorObj.status) ||
         // Retryable error code
-        (error.error?.code && retryableErrorCodes.includes(error.error.code))
+        (errorObj.error?.code && retryableErrorCodes.includes(errorObj.error.code))
       );
-      
+
       if (!shouldRetry) {
         throw error;
       }
-      
+
       // Calculate delay with exponential backoff
       const delay = Math.min(initialDelayMs * Math.pow(2, attempt), maxDelayMs);
-      
+
       // Add jitter (±20%)
       const jitter = delay * 0.2 * (Math.random() - 0.5);
-      
+
       await new Promise(resolve => setTimeout(resolve, delay + jitter));
     }
   }
-  
+
   throw lastError;
 }

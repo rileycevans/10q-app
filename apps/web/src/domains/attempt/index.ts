@@ -23,7 +23,7 @@ export interface AnswerResult {
   bonus_points: number;
   total_points: number;
   time_ms: number;
-  next_question: any | null;
+  next_question: Record<string, unknown> | null;
   current_index: number;
   question_started_at: string | null;
   question_expires_at: string | null;
@@ -73,13 +73,13 @@ export interface AttemptResults {
  */
 export async function startAttempt(quizId: string): Promise<AttemptState> {
   const response = await edgeFunctions.startAttempt(quizId);
-  
+
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to start attempt');
   }
-  
+
   const data = response.data;
-  
+
   // Determine state based on current_index
   let state: AttemptState['state'] = 'IN_PROGRESS';
   if (data.state === 'FINALIZED') {
@@ -87,7 +87,7 @@ export async function startAttempt(quizId: string): Promise<AttemptState> {
   } else if (data.current_index > 10) {
     state = 'READY_TO_FINALIZE';
   }
-  
+
   return {
     attempt_id: data.attempt_id,
     quiz_id: data.quiz_id,
@@ -103,13 +103,13 @@ export async function startAttempt(quizId: string): Promise<AttemptState> {
  */
 export async function resumeAttempt(attemptId: string): Promise<AttemptState> {
   const response = await edgeFunctions.resumeAttempt(attemptId);
-  
+
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to resume attempt');
   }
-  
+
   const data = response.data;
-  
+
   // Determine state
   let state: AttemptState['state'] = 'IN_PROGRESS';
   if (data.state === 'FINALIZED') {
@@ -117,7 +117,7 @@ export async function resumeAttempt(attemptId: string): Promise<AttemptState> {
   } else if (data.current_index > 10) {
     state = 'READY_TO_FINALIZE';
   }
-  
+
   return {
     attempt_id: data.attempt_id,
     quiz_id: '', // Not returned by resume
@@ -138,11 +138,11 @@ export async function submitAnswer(
   selectedAnswerId: string
 ): Promise<AnswerResult> {
   const response = await edgeFunctions.submitAnswer(attemptId, questionId, selectedAnswerId);
-  
+
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to submit answer');
   }
-  
+
   return {
     attempt_id: response.data.attempt_id,
     question_id: questionId,
@@ -167,11 +167,11 @@ export async function finalizeAttempt(attemptId: string): Promise<{
   finalized_at: string;
 }> {
   const response = await edgeFunctions.finalizeAttempt(attemptId);
-  
+
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to finalize attempt');
   }
-  
+
   return {
     attempt_id: response.data.attempt_id,
     total_score: response.data.total_score,
@@ -184,10 +184,10 @@ export async function finalizeAttempt(attemptId: string): Promise<{
  */
 export async function getAttemptResults(attemptId: string): Promise<AttemptResults> {
   const response = await edgeFunctions.getAttemptResults(attemptId);
-  
+
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to get attempt results');
   }
-  
+
   return response.data as AttemptResults;
 }

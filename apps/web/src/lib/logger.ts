@@ -14,14 +14,14 @@ interface LogContext {
 
 class Logger {
   private isDev = process.env.NODE_ENV === 'development';
-  
+
   generateRequestId(): string {
     return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
-  
+
   private log(level: LogLevel, context: LogContext | string) {
-    const timestamp = new Date().toISOString();
-    
+    const _timestamp = new Date().toISOString();
+
     if (this.isDev) {
       const style = this.getStyle(level);
       if (typeof context === 'string') {
@@ -31,7 +31,7 @@ class Logger {
       }
     }
   }
-  
+
   private getStyle(level: LogLevel): string {
     switch (level) {
       case 'debug': return 'color: gray';
@@ -40,19 +40,19 @@ class Logger {
       case 'error': return 'color: red; font-weight: bold';
     }
   }
-  
+
   debug(context: LogContext | string) {
     this.log('debug', context);
   }
-  
+
   info(context: LogContext | string) {
     this.log('info', context);
   }
-  
+
   warn(context: LogContext | string) {
     this.log('warn', context);
   }
-  
+
   error(context: LogContext | string) {
     this.log('error', context);
   }
