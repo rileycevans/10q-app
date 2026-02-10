@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { updateHandle } from '@/domains/profile';
 import { getSession } from '@/lib/auth';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { validateHandle, canonicalizeHandle } from '@10q/contracts';
+import { validateHandle } from '@10q/contracts';
 import dynamic from 'next/dynamic';
 
 const AuthButton = dynamic(
@@ -102,7 +102,7 @@ export default function SettingsPage() {
       setSuccess(true);
       setCurrentHandle(handle.trim());
       setHandle('');
-      
+
       // Refresh after 2 seconds
       setTimeout(() => {
         router.refresh();
@@ -161,7 +161,7 @@ export default function SettingsPage() {
           {/* Handle Customization */}
           <div className="mb-6">
             <h2 className="font-display text-xl font-bold text-ink mb-4">Customize Handle</h2>
-            
+
             {currentHandle && (
               <div className="mb-4 p-3 bg-cyanA border-[3px] border-ink rounded-lg">
                 <p className="font-body text-sm text-ink/80 mb-1">Current Handle:</p>

@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "type": "module",
   "scripts": {
+    "lint": "echo 'No lint configured for contracts'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -15,4 +16,3 @@
     "vitest": "^1.2.0"
   }
 }
-

@@ -22,6 +22,7 @@ const AuthButton = dynamic(() => import('@/components/AuthButton').then(mod => (
 export default function HomePage() {
   const router = useRouter();
   const [isResetting, setIsResetting] = useState(false);
+  const [showScoringModal, setShowScoringModal] = useState(false);
   const isDevelopment = process.env.NODE_ENV === 'development';
 
   const handleResetQuiz = async () => {
@@ -83,6 +84,12 @@ export default function HomePage() {
               >
                 LEAGUES
               </Link>
+              <button
+                onClick={() => setShowScoringModal(true)}
+                className="w-full text-xs text-ink/60 hover:text-ink underline font-bold transition-colors mt-2"
+              >
+                How is my score calculated?
+              </button>
               {isDevelopment && (
                 <button
                   onClick={handleResetQuiz}
@@ -102,6 +109,78 @@ export default function HomePage() {
           onSettingsClick={() => router.push('/settings')}
         />
       </div>
+
+      {/* Scoring Modal */}
+      {showScoringModal && (
+        <div 
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowScoringModal(false)}
+        >
+          <div 
+            className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-2xl font-bold text-ink">SCORING SYSTEM</h2>
+              <button
+                onClick={() => setShowScoringModal(false)}
+                className="w-8 h-8 bg-ink text-paper rounded-full flex items-center justify-center font-bold text-lg hover:bg-ink/80 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="space-y-3 mb-4">
+              <div className="bg-cyanA/20 border-[3px] border-ink rounded-[14px] p-3">
+                <div className="font-bold text-sm text-ink mb-2">BASE POINTS</div>
+                <div className="text-base text-ink">5 points for each correct answer</div>
+              </div>
+              
+              <div className="bg-yellow/20 border-[3px] border-ink rounded-[14px] p-3">
+                <div className="font-bold text-sm text-ink mb-2">SPEED BONUS</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">0 - 2 seconds</span>
+                    <span className="font-bold text-ink">+5 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">2 - 4 seconds</span>
+                    <span className="font-bold text-ink">+4 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">4 - 6 seconds</span>
+                    <span className="font-bold text-ink">+3 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">6 - 8 seconds</span>
+                    <span className="font-bold text-ink">+2 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">8 - 10 seconds</span>
+                    <span className="font-bold text-ink">+1 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">10+ seconds</span>
+                    <span className="font-bold text-ink">+0 bonus</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green/20 border-[3px] border-ink rounded-[14px] p-3 mb-4">
+              <div className="font-bold text-sm text-ink mb-1">MAXIMUM SCORE</div>
+              <div className="text-base text-ink">10 points per question × 10 questions = 100 points</div>
+            </div>
+
+            <button
+              onClick={() => setShowScoringModal(false)}
+              className="w-full h-12 bg-cyanA border-[3px] border-ink rounded-[14px] shadow-sticker-sm font-bold text-base text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
+            >
+              GOT IT
+            </button>
+          </div>
+        </div>
+      )}
     </ArcadeBackground>
   );
 }

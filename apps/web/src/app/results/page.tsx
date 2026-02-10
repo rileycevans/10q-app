@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { QuestionCard } from '@/components/QuestionCard';
+
 import Link from 'next/link';
 
 function formatTime(ms: number): string {
@@ -25,16 +25,15 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
             {question.tags.map((tag, idx) => (
               <span
                 key={idx}
-                className="bg-cyanA border-[3px] border-ink rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink"
+                className="bg-yellow border-[3px] border-ink rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink"
               >
                 {tag}
               </span>
             ))}
           </div>
         </div>
-        <div className={`px-3 py-1 rounded-full border-[3px] border-ink font-bold text-sm ${
-          question.is_correct ? 'bg-green text-ink' : 'bg-red text-ink'
-        }`}>
+        <div className={`px-3 py-1 rounded-full border-[3px] border-ink font-bold text-sm ${question.is_correct ? 'bg-green text-ink' : 'bg-red text-ink'
+          }`}>
           {question.is_correct ? '✓ CORRECT' : '✗ WRONG'}
         </div>
       </div>
@@ -48,24 +47,31 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
       <div className="space-y-2 mb-4">
         {question.answers.map((answer) => {
           const isSelected = answer.id === question.selected_answer_id;
-          const bgColor = isSelected
-            ? question.is_correct
-              ? 'bg-green'
-              : 'bg-red'
-            : 'bg-paper';
-          
+          const isCorrectAnswer = answer.is_correct;
+
+          let bgColor = 'bg-paper';
+          if (isSelected) {
+            bgColor = question.is_correct ? 'bg-green' : 'bg-red';
+          } else if (!question.is_correct && isCorrectAnswer) {
+            // Highlight correct answer in cyan when question was answered incorrectly
+            bgColor = 'bg-cyanA';
+          }
+
           return (
             <div
               key={answer.id}
               className={`
                 h-12 w-full border-[3px] border-ink rounded-[14px]
                 ${bgColor} flex items-center px-4
-                ${isSelected ? 'font-bold' : 'font-normal'}
+                ${isSelected || (!question.is_correct && isCorrectAnswer) ? 'font-bold' : 'font-normal'}
               `}
             >
               <span className="text-ink text-base">{answer.body}</span>
               {isSelected && (
                 <span className="ml-auto text-ink font-bold">← YOUR ANSWER</span>
+              )}
+              {!isSelected && !question.is_correct && isCorrectAnswer && (
+                <span className="ml-auto text-ink font-bold">← CORRECT</span>
               )}
             </div>
           );
@@ -99,22 +105,23 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
 }
 
 export default function ResultsPage() {
-  const router = useRouter();
+  useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AttemptResults | null>(null);
+  const [showScoringModal, setShowScoringModal] = useState(false);
 
   useEffect(() => {
     async function loadResults() {
       try {
         const attemptId = searchParams.get('attempt_id');
-        
+
         if (!attemptId) {
           // Try to get attempt from current quiz
           const { getCurrentQuiz } = await import('@/domains/quiz');
           const { startAttempt } = await import('@/domains/attempt');
-          
+
           const currentQuiz = await getCurrentQuiz();
           if (!currentQuiz) {
             setError('No quiz available');
@@ -193,6 +200,12 @@ export default function ResultsPage() {
                 {results.total_score}
               </div>
               <div className="text-sm text-ink/80 font-bold">TOTAL POINTS</div>
+              <button
+                onClick={() => setShowScoringModal(true)}
+                className="mt-2 text-xs text-ink/60 hover:text-ink underline font-bold transition-colors"
+              >
+                How is my score calculated?
+              </button>
             </div>
             <div className="grid grid-cols-2 gap-4 mt-6">
               <div className="bg-cyanA/20 border-[3px] border-ink rounded-[18px] p-4">
@@ -237,6 +250,78 @@ export default function ResultsPage() {
           </div>
         </div>
       </div>
+
+      {/* Scoring Modal */}
+      {showScoringModal && (
+        <div
+          className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setShowScoringModal(false)}
+        >
+          <div
+            className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display text-2xl font-bold text-ink">SCORING SYSTEM</h2>
+              <button
+                onClick={() => setShowScoringModal(false)}
+                className="w-8 h-8 bg-ink text-paper rounded-full flex items-center justify-center font-bold text-lg hover:bg-ink/80 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <div className="bg-cyanA/20 border-[3px] border-ink rounded-[14px] p-3">
+                <div className="font-bold text-sm text-ink mb-2">BASE POINTS</div>
+                <div className="text-base text-ink">5 points for each correct answer</div>
+              </div>
+
+              <div className="bg-yellow/20 border-[3px] border-ink rounded-[14px] p-3">
+                <div className="font-bold text-sm text-ink mb-2">SPEED BONUS</div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">0 - 2 seconds</span>
+                    <span className="font-bold text-ink">+5 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">2 - 4 seconds</span>
+                    <span className="font-bold text-ink">+4 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">4 - 6 seconds</span>
+                    <span className="font-bold text-ink">+3 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">6 - 8 seconds</span>
+                    <span className="font-bold text-ink">+2 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">8 - 10 seconds</span>
+                    <span className="font-bold text-ink">+1 bonus</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-ink">10+ seconds</span>
+                    <span className="font-bold text-ink">+0 bonus</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-green/20 border-[3px] border-ink rounded-[14px] p-3 mb-4">
+              <div className="font-bold text-sm text-ink mb-1">MAXIMUM SCORE</div>
+              <div className="text-base text-ink">10 points per question × 10 questions = 100 points</div>
+            </div>
+
+            <button
+              onClick={() => setShowScoringModal(false)}
+              className="w-full h-12 bg-cyanA border-[3px] border-ink rounded-[14px] shadow-sticker-sm font-bold text-base text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
+            >
+              GOT IT
+            </button>
+          </div>
+        </div>
+      )}
     </ArcadeBackground>
   );
 }

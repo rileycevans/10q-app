@@ -107,7 +107,7 @@ export default function LeaderboardPage() {
             {isAuthError && (
               <div className="mb-6">
                 <p className="font-body text-sm mb-4 text-ink/80">
-                  Click the "Sign In" button in the top-right corner, then refresh this page.
+                  Click the &quot;Sign In&quot; button in the top-right corner, then refresh this page.
                 </p>
               </div>
             )}
@@ -146,11 +146,10 @@ export default function LeaderboardPage() {
                   <button
                     key={w}
                     onClick={() => setWindow(w)}
-                    className={`h-10 px-4 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${
-                      window === w
+                    className={`h-10 px-4 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${window === w
                         ? 'bg-cyanA text-ink'
                         : 'bg-paper text-ink hover:bg-cyanA/20'
-                    }`}
+                      }`}
                   >
                     {w === 'today' ? 'Today' : w === '7d' ? 'Week' : w === '30d' ? 'Month' : 'Year'}
                   </button>
@@ -168,11 +167,10 @@ export default function LeaderboardPage() {
                   <button
                     key={st}
                     onClick={() => setScoreType(st)}
-                    className={`h-10 px-6 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${
-                      scoreType === st
+                    className={`h-10 px-6 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${scoreType === st
                         ? 'bg-green text-ink'
                         : 'bg-paper text-ink hover:bg-green/20'
-                    }`}
+                      }`}
                   >
                     {st === 'cumulative' ? 'Cumulative' : 'Average'}
                   </button>
@@ -190,11 +188,10 @@ export default function LeaderboardPage() {
                   <button
                     key={m}
                     onClick={() => setMode(m)}
-                    className={`h-10 px-6 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${
-                      mode === m
+                    className={`h-10 px-6 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${mode === m
                         ? 'bg-yellow text-ink'
                         : 'bg-paper text-ink hover:bg-yellow/20'
-                    }`}
+                      }`}
                   >
                     {m === 'top' ? 'Top Players' : 'Around Me'}
                   </button>

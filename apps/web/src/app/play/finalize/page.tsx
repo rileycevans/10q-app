@@ -41,6 +41,9 @@ export default function FinalizePage() {
         const result = await finalizeAttempt(attemptState.attempt_id);
         setTotalScore(result.total_score);
         
+        // Clear cached attempt state since attempt is finalized
+        sessionStorage.removeItem('attempt_state');
+        
         // Redirect to results after brief delay with attempt_id
         setTimeout(() => {
           router.push(`/results?attempt_id=${attemptState.attempt_id}`);

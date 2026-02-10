@@ -24,19 +24,36 @@ export interface ScoreCalculation {
 }
 
 /**
- * Calculate bonus points based on elapsed time.
- * Linear bonus from 0-10 seconds, 0 after 10 seconds.
- * Rounded to nearest 0.5 using HALF_UP rounding.
+ * Calculate bonus points based on elapsed time using step-based tiers.
+ * Step-based bonus tiers:
+ * - 0–2s: 5 bonus
+ * - 2–4s: 4 bonus
+ * - 4–6s: 3 bonus
+ * - 6–8s: 2 bonus
+ * - 8–10s: 1 bonus
+ * - 10s+: 0 bonus
  */
 export function calculateBonus(elapsedMs: number): number {
   // Clamp elapsed time to bonus window
   const clamped = Math.min(Math.max(elapsedMs, 0), BONUS_WINDOW_MS);
   
-  // Linear bonus: max at 0s, 0 at 10s
-  const bonus = MAX_BONUS_POINTS * (1 - clamped / BONUS_WINDOW_MS);
+  // Convert to seconds
+  const elapsedSeconds = clamped / 1000;
   
-  // Round to nearest 0.5 (HALF_UP)
-  return Math.round(bonus * 2) / 2;
+  // Step-based tiers
+  if (elapsedSeconds < 2) {
+    return 5;
+  } else if (elapsedSeconds < 4) {
+    return 4;
+  } else if (elapsedSeconds < 6) {
+    return 3;
+  } else if (elapsedSeconds < 8) {
+    return 2;
+  } else if (elapsedSeconds < 10) {
+    return 1;
+  } else {
+    return 0;
+  }
 }
 
 /**
@@ -70,7 +87,7 @@ export function calculateQuestionScore(
   // Base points: 5 if correct, 0 if incorrect
   const basePoints = isCorrect ? BASE_POINTS_CORRECT : BASE_POINTS_INCORRECT;
   
-  // Bonus points: linear from 0-10s, 0 after 10s
+  // Bonus points: step-based tiers from 0-10s, 0 after 10s
   const bonusPoints = isCorrect ? calculateBonus(clampedElapsedMs) : 0;
   
   return {
