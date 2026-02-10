@@ -51,3 +51,41 @@ export async function getCurrentUser() {
   return user;
 }
 
+/**
+ * Ensure a session exists — creates an anonymous one if needed.
+ * Returns the session (never null after this call).
+ */
+export async function ensureSession() {
+  const existing = await getSession();
+  if (existing) return existing;
+
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error) throw error;
+  return data.session!;
+}
+
+/**
+ * Check whether the current user is anonymous (not signed in with a provider).
+ */
+export async function isAnonymousUser(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.is_anonymous ?? true;
+}
+
+/**
+ * Upgrade an anonymous account to Google.
+ * Uses linkIdentity so the same user ID is preserved and all data stays.
+ */
+export async function upgradeToGoogle() {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'google',
+    options: {
+      redirectTo: typeof window !== 'undefined'
+        ? `${window.location.origin}/auth/callback`
+        : undefined,
+    },
+  });
+  if (error) throw error;
+  return data;
+}
+

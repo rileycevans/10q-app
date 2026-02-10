@@ -8,8 +8,13 @@ import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HUD } from '@/components/HUD';
 import { QuestionCard } from '@/components/QuestionCard';
 import { AnswerButton } from '@/components/AnswerButton';
+import type { AnswerFeedback } from '@/components/AnswerButton';
 import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 export default function QuestionPage() {
   const router = useRouter();
@@ -18,13 +23,14 @@ export default function QuestionPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [quizId, setQuizId] = useState<string | null>(null);
+  const [_quizId, setQuizId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState<AttemptState | null>(null);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [_questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
 
   useEffect(() => {
     // Prefetch next question route for instant navigation
@@ -53,7 +59,7 @@ export default function QuestionPage() {
             setCurrentQuestion(question);
             setQuizId(cachedQuizId);
             setLoading(false);
-            
+
             // Calculate time remaining
             if (parsedAttempt.current_question_expires_at) {
               const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
@@ -69,7 +75,7 @@ export default function QuestionPage() {
             } else {
               setTimeRemaining(16000);
             }
-            
+
             // Still validate in background, but don't block UI
             initialize();
             return;
@@ -84,7 +90,7 @@ export default function QuestionPage() {
       try {
         let quizQuestions: QuizQuestion[] = [];
         let attemptState: AttemptState | null = null;
-        let currentQuizId: string;
+        const currentQuizId = currentQuiz.quiz_id;
 
         // Get current quiz (always needed)
         const currentQuiz = await getCurrentQuiz();
@@ -122,9 +128,9 @@ export default function QuestionPage() {
           try {
             const parsed = JSON.parse(cachedAttempt);
             // Use cache if it matches requested index, or is 1 ahead (optimistic navigation), or 1 behind (catching up)
-            if (parsed.current_index === questionIndex || 
-                parsed.current_index === questionIndex - 1 || 
-                parsed.current_index === questionIndex + 1) {
+            if (parsed.current_index === questionIndex ||
+              parsed.current_index === questionIndex - 1 ||
+              parsed.current_index === questionIndex + 1) {
               attemptState = parsed;
               setAttempt(attemptState);
             }
@@ -207,7 +213,6 @@ export default function QuestionPage() {
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
         if (!prev || prev <= 0 || isSubmitting) {
-          // Timeout - auto-advance will happen on next resume
           return 0;
         }
         return prev - 100;
@@ -217,11 +222,14 @@ export default function QuestionPage() {
     return () => clearInterval(interval);
   }, [timeRemaining, isSubmitting]);
 
-  // Auto-advance on timeout
+  // Auto-advance on timeout — no animation, just move on
   useEffect(() => {
     if (timeRemaining === 0 && currentQuestion && !isSubmitting && attempt) {
-      // Resume to handle timeout and get next question
+      setIsSubmitting(true); // prevent double-fire
+
+      // Resume to handle timeout and get next question — no visual feedback
       resumeAttempt(attempt.attempt_id).then((newAttempt) => {
+        sessionStorage.setItem('attempt_state', JSON.stringify(newAttempt));
         setAttempt(newAttempt);
         if (newAttempt.current_index <= 10) {
           router.push(`/play/q/${newAttempt.current_index}`);
@@ -235,60 +243,47 @@ export default function QuestionPage() {
   const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
+    // 1. Highlight selected answer & freeze the clock
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
-    // Stop timer immediately when answer is clicked
-    setTimeRemaining(null);
 
-    // Calculate next index optimistically
-    const nextIndex = questionIndex + 1;
-    const nextState: AttemptState = {
-      attempt_id: attempt.attempt_id,
-      quiz_id: attempt.quiz_id,
-      current_index: nextIndex,
-      current_question_started_at: new Date().toISOString(),
-      current_question_expires_at: new Date(Date.now() + 16000).toISOString(),
-      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-    };
+    try {
+      // 2. Await the server response to know correct/wrong
+      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
 
-    // Update cache optimistically for instant navigation
-    sessionStorage.setItem('attempt_state', JSON.stringify(nextState));
+      // 3. Show feedback animation (green pop or red shake)
+      setFeedback(result.is_correct ? 'correct' : 'wrong');
 
-    // Navigate immediately (questions are already cached, so this is instant)
-    if (nextIndex <= 10) {
-      router.push(`/play/q/${nextIndex}`);
-    } else {
-      router.push('/play/finalize');
+      // 4. Build next state for cache
+      const nextState: AttemptState = {
+        attempt_id: result.attempt_id,
+        quiz_id: attempt.quiz_id,
+        current_index: result.current_index,
+        current_question_started_at: result.question_started_at,
+        current_question_expires_at: result.question_expires_at,
+        state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+      };
+      sessionStorage.setItem('attempt_state', JSON.stringify(nextState));
+
+      // 5. Wait 1 second so the player can see the feedback
+      await sleep(1000);
+
+      // 6. Auto-advance to next question
+      if (result.current_index <= 10) {
+        router.push(`/play/q/${result.current_index}`);
+      } else {
+        router.push('/play/finalize');
+      }
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
+      // On network error, still try to advance using optimistic state
+      const nextIndex = questionIndex + 1;
+      if (nextIndex <= 10) {
+        router.push(`/play/q/${nextIndex}`);
+      } else {
+        router.push('/play/finalize');
+      }
     }
-
-    // Submit answer in the background (don't await - let it complete async)
-    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
-      .then((result) => {
-        // Update cache with actual server response (corrects any timing issues)
-        const actualState: AttemptState = {
-          attempt_id: result.attempt_id,
-          quiz_id: attempt.quiz_id,
-          current_index: result.current_index,
-          current_question_started_at: result.question_started_at,
-          current_question_expires_at: result.question_expires_at,
-          state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-        };
-        sessionStorage.setItem('attempt_state', JSON.stringify(actualState));
-
-        // If server says we're on a different index, redirect to correct one
-        if (result.current_index !== nextIndex) {
-          if (result.current_index <= 10) {
-            router.push(`/play/q/${result.current_index}`);
-          } else {
-            router.push('/play/finalize');
-          }
-        }
-      })
-      .catch((err) => {
-        // Log error but don't block UI - server will correct on next page load
-        console.error('Failed to submit answer:', err);
-        // The next page will detect the mismatch and redirect if needed
-      });
   };
 
   if (loading) {
@@ -325,8 +320,6 @@ export default function QuestionPage() {
     return null;
   }
 
-  const totalScore = 0; // TODO: Calculate from attempt answers
-
   return (
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen relative">
@@ -335,8 +328,8 @@ export default function QuestionPage() {
         />
 
         <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4">
-          {/* Time Remaining Progress Bar */}
-          {currentQuestion && attempt && !isSubmitting && (
+          {/* Time Remaining Progress Bar — stays visible but frozen when submitting */}
+          {currentQuestion && attempt && (
             <div className="w-full max-w-md px-4 mb-2">
               <div className="w-full h-10 bg-paper border-[4px] border-ink rounded-full shadow-sticker overflow-hidden relative">
                 <div
@@ -365,6 +358,7 @@ export default function QuestionPage() {
                   key={answer.answer_id}
                   text={answer.body}
                   isSelected={selectedAnswerId === answer.answer_id}
+                  feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
                   onClick={() => handleAnswerClick(answer.answer_id)}
                   disabled={isSubmitting || selectedAnswerId !== null}
                 />
@@ -376,4 +370,3 @@ export default function QuestionPage() {
     </ArcadeBackground>
   );
 }
-

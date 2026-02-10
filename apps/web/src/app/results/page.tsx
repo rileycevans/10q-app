@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { QuestionCard } from '@/components/QuestionCard';
+
 import Link from 'next/link';
 
 function formatTime(ms: number): string {
@@ -32,9 +32,8 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
             ))}
           </div>
         </div>
-        <div className={`px-3 py-1 rounded-full border-[3px] border-ink font-bold text-sm ${
-          question.is_correct ? 'bg-green text-ink' : 'bg-red text-ink'
-        }`}>
+        <div className={`px-3 py-1 rounded-full border-[3px] border-ink font-bold text-sm ${question.is_correct ? 'bg-green text-ink' : 'bg-red text-ink'
+          }`}>
           {question.is_correct ? '✓ CORRECT' : '✗ WRONG'}
         </div>
       </div>
@@ -49,7 +48,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         {question.answers.map((answer) => {
           const isSelected = answer.id === question.selected_answer_id;
           const isCorrectAnswer = answer.is_correct;
-          
+
           let bgColor = 'bg-paper';
           if (isSelected) {
             bgColor = question.is_correct ? 'bg-green' : 'bg-red';
@@ -57,7 +56,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
             // Highlight correct answer in cyan when question was answered incorrectly
             bgColor = 'bg-cyanA';
           }
-          
+
           return (
             <div
               key={answer.id}
@@ -106,7 +105,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
 }
 
 export default function ResultsPage() {
-  const router = useRouter();
+  useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,12 +116,12 @@ export default function ResultsPage() {
     async function loadResults() {
       try {
         const attemptId = searchParams.get('attempt_id');
-        
+
         if (!attemptId) {
           // Try to get attempt from current quiz
           const { getCurrentQuiz } = await import('@/domains/quiz');
           const { startAttempt } = await import('@/domains/attempt');
-          
+
           const currentQuiz = await getCurrentQuiz();
           if (!currentQuiz) {
             setError('No quiz available');
@@ -254,11 +253,11 @@ export default function ResultsPage() {
 
       {/* Scoring Modal */}
       {showScoringModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setShowScoringModal(false)}
         >
-          <div 
+          <div
             className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
@@ -271,13 +270,13 @@ export default function ResultsPage() {
                 ×
               </button>
             </div>
-            
+
             <div className="space-y-3 mb-4">
               <div className="bg-cyanA/20 border-[3px] border-ink rounded-[14px] p-3">
                 <div className="font-bold text-sm text-ink mb-2">BASE POINTS</div>
                 <div className="text-base text-ink">5 points for each correct answer</div>
               </div>
-              
+
               <div className="bg-yellow/20 border-[3px] border-ink rounded-[14px] p-3">
                 <div className="font-bold text-sm text-ink mb-2">SPEED BONUS</div>
                 <div className="space-y-1.5">

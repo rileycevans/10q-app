@@ -12,7 +12,7 @@ export default function TomorrowPage() {
       const now = new Date();
       const tomorrow = new Date(now);
       tomorrow.setUTCHours(11, 30, 0, 0);
-      
+
       // If it's already past 11:30 UTC today, set for tomorrow
       if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
         tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -38,7 +38,7 @@ export default function TomorrowPage() {
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
           <h1 className="font-display text-3xl mb-4 text-ink">Come Back Tomorrow</h1>
           <p className="font-body font-bold text-lg mb-6 text-ink">
-            You've already completed today's quiz!
+            You&apos;ve already completed today&apos;s quiz!
           </p>
           <p className="font-body text-sm mb-4 text-ink/80">
             Next quiz releases in:

@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase/client';
 import { SignInModal } from './SignInModal';
 
 export function AuthButton() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [hasSession, setHasSession] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -17,12 +18,13 @@ export function AuthButton() {
     async function init() {
       try {
         await checkAuth();
-        
+
         // Listen for auth changes
         const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          setIsAuthenticated(!!session);
+          setHasSession(!!session);
+          setIsAnonymous(session?.user?.is_anonymous ?? true);
         });
-        
+
         subscription = authSubscription;
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -43,7 +45,8 @@ export function AuthButton() {
   async function checkAuth() {
     try {
       const session = await getSession();
-      setIsAuthenticated(!!session);
+      setHasSession(!!session);
+      setIsAnonymous(session?.user?.is_anonymous ?? true);
     } catch (err) {
       console.error('Check auth error:', err);
       setError('Failed to check auth');
@@ -56,16 +59,12 @@ export function AuthButton() {
     setShowSignInModal(true);
   }
 
-  function handleAuthSuccess() {
-    setIsAuthenticated(true);
-    setShowSignInModal(false);
-  }
-
   async function handleSignOut() {
     try {
       setIsLoading(true);
       await signOut();
-      setIsAuthenticated(false);
+      setHasSession(false);
+      setIsAnonymous(true);
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -93,7 +92,8 @@ export function AuthButton() {
     );
   }
 
-  if (isAuthenticated) {
+  // User is signed in with a real provider (Google) — show Sign Out
+  if (hasSession && !isAnonymous) {
     return (
       <button
         onClick={handleSignOut}
@@ -104,6 +104,7 @@ export function AuthButton() {
     );
   }
 
+  // Anonymous or no session — show Sign In (upgrade to Google)
   return (
     <>
       <button
@@ -115,9 +116,7 @@ export function AuthButton() {
       <SignInModal
         isOpen={showSignInModal}
         onClose={() => setShowSignInModal(false)}
-        onSuccess={handleAuthSuccess}
       />
     </>
   );
 }
-

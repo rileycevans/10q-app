@@ -118,6 +118,29 @@ body {
   font-family: var(--font-rubik), sans-serif;
 }
 
+/* Answer Feedback Animations */
+@keyframes answer-pop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@keyframes answer-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+
+.animate-answer-pop {
+  animation: answer-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-answer-shake {
+  animation: answer-shake 400ms ease-out forwards;
+}
+
 /* Reduced Motion Support */
 @media (prefers-reduced-motion: reduce) {
   *,

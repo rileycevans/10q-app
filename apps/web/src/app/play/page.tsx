@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentQuiz } from '@/domains/quiz';
 import { startAttempt } from '@/domains/attempt';
-import { getSession } from '@/lib/auth';
+import { ensureSession } from '@/lib/auth';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { supabase } from '@/lib/supabase/client';
 import dynamic from 'next/dynamic';
 
 // Dynamically import AuthButton to avoid SSR issues
@@ -17,35 +16,23 @@ export default function PlayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<string>('');
-  const errorRef = useRef<string | null>(null);
-
-  // Keep errorRef in sync with error state
-  useEffect(() => {
-    errorRef.current = error;
-  }, [error]);
 
   useEffect(() => {
     let mounted = true;
-    let authSubscription: { unsubscribe: () => void } | null = null;
 
     async function initialize() {
       if (!mounted) return;
-      
+
       try {
         setLoading(true);
         setError(null);
-        
-        // Check authentication first
-        const session = await getSession();
-        if (!session) {
-          setError('Please sign in to play. Click "Sign In" in the top-right corner.');
-          setLoading(false);
-          return;
-        }
+
+        // Ensure a session exists (creates anonymous if needed)
+        await ensureSession();
 
         // Get current quiz
         const currentQuiz = await getCurrentQuiz();
-        
+
         if (!currentQuiz) {
           // QUIZ_NOT_AVAILABLE - show countdown
           updateCountdown();
@@ -72,20 +59,9 @@ export default function PlayPage() {
         }
       } catch (err) {
         if (!mounted) return;
-        
+
         const errorMessage = err instanceof Error ? err.message : 'Failed to load quiz';
-        
-        // Check if it's an authentication error (401)
-        if (errorMessage.includes('UNAUTHORIZED') || 
-            errorMessage.includes('Authentication required') ||
-            errorMessage.includes('sign in') ||
-            errorMessage.includes('Sign In') ||
-            errorMessage.includes('401')) {
-          setError('Please sign in to play. Click "Sign In" in the top-right corner.');
-        } else {
-          setError(errorMessage);
-        }
-        
+        setError(errorMessage);
         setLoading(false);
         console.error('Play page error:', err);
       }
@@ -95,7 +71,7 @@ export default function PlayPage() {
       const now = new Date();
       const tomorrow = new Date(now);
       tomorrow.setUTCHours(11, 30, 0, 0);
-      
+
       if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
         tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
       }
@@ -108,18 +84,8 @@ export default function PlayPage() {
       setCountdown(`${hours}h ${minutes}m ${seconds}s`);
     }
 
-    // Listen for auth state changes and auto-retry when user signs in
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session && errorRef.current && errorRef.current.includes('sign in')) {
-        // User just signed in, retry initialization
-        console.log('Auth state changed: user signed in, retrying...');
-        initialize();
-      }
-    });
-    authSubscription = subscription;
-
     initialize();
-    
+
     let countdownInterval: NodeJS.Timeout | null = null;
     if (error && error.includes('11:30')) {
       countdownInterval = setInterval(updateCountdown, 1000);
@@ -127,9 +93,6 @@ export default function PlayPage() {
 
     return () => {
       mounted = false;
-      if (authSubscription && typeof authSubscription.unsubscribe === 'function') {
-        authSubscription.unsubscribe();
-      }
       if (countdownInterval) {
         clearInterval(countdownInterval);
       }
@@ -149,8 +112,6 @@ export default function PlayPage() {
   }
 
   if (error) {
-    const isAuthError = error.includes('sign in') || error.includes('Sign In');
-    
     return (
       <ArcadeBackground>
         <div className="flex items-center justify-center min-h-screen px-4">
@@ -159,7 +120,7 @@ export default function PlayPage() {
           </div>
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
             <h1 className="font-display text-2xl mb-4 text-ink">
-              {isAuthError ? 'Sign In Required' : 'Come Back Later'}
+              Come Back Later
             </h1>
             <p className="font-body font-bold text-lg mb-6 text-ink">{error}</p>
             {countdown && (
@@ -170,22 +131,7 @@ export default function PlayPage() {
                 <p className="font-display text-2xl mb-8 text-ink">{countdown}</p>
               </>
             )}
-            {isAuthError && (
-              <div className="mb-6">
-                <p className="font-body text-sm mb-4 text-ink/80">
-                  Click the "Sign In" button in the top-right corner, then refresh this page.
-                </p>
-              </div>
-            )}
             <div className="flex flex-col gap-3">
-              {isAuthError && (
-                <button
-                  onClick={() => window.location.reload()}
-                  className="h-14 w-full bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
-                >
-                  Refresh After Sign In
-                </button>
-              )}
               <button
                 onClick={() => router.push('/')}
                 className="h-14 w-full bg-paper border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
