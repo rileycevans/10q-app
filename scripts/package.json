@@ -10,7 +10,8 @@
     "create-test-quiz": "tsx create-test-quiz.ts",
     "create-test-quiz:notion": "tsx create-test-quiz-notion.ts",
     "check-quiz": "tsx check-and-publish-quiz.ts",
-    "export-questions": "node export-firestore-questions.js"
+    "export-questions": "node export-firestore-questions.js",
+    "import-questions": "node import-questions.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
