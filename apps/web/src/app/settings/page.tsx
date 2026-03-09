@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateHandle } from '@/domains/profile';
 import { getSession } from '@/lib/auth';
+import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { validateHandle } from '@10q/contracts';
 import dynamic from 'next/dynamic';
