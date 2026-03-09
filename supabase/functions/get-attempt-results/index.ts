@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
 
     // Fetch question details for each answer (Notion plan: body, question_answers, question_tags with tag_id)
     const questionIds = answers.map((a) => a.question_id);
-    
+
     // Get questions with answers and tags
     const { data: questions, error: questionsError } = await supabase
       .from("questions")
@@ -204,6 +204,13 @@ Deno.serve(async (req) => {
       .eq("player_id", userId)
       .single();
 
+    // Get quiz_number for share card
+    const { data: quiz } = await supabase
+      .from("quizzes")
+      .select("quiz_number")
+      .eq("id", attempt.quiz_id)
+      .single();
+
     logStructured(requestId, "get_attempt_results_success", {
       attempt_id: attemptId,
       question_count: questionResults.length,
@@ -213,6 +220,7 @@ Deno.serve(async (req) => {
       {
         attempt_id: attempt.id,
         quiz_id: attempt.quiz_id,
+        quiz_number: quiz?.quiz_number ?? null,
         finalized_at: attempt.finalized_at,
         total_score: Number(attempt.total_score),
         total_time_ms: attempt.total_time_ms,

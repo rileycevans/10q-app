@@ -111,6 +111,7 @@ export default function ResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AttemptResults | null>(null);
   const [showScoringModal, setShowScoringModal] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function loadResults() {
@@ -188,6 +189,43 @@ export default function ResultsPage() {
 
   const totalTimeSeconds = (results.total_time_ms / 1000).toFixed(1);
 
+  // Build Wordle-style share text
+  // 🟩 = correct + answered in < 4s (fast, earned bonus ≥ 4)
+  // 🟨 = correct + answered in ≥ 4s (slow or no bonus)
+  // 🟥 = wrong or timed out
+  function getEmoji(q: QuestionResult): string {
+    if (!q.is_correct) return '🟥';
+    return q.time_ms < 4000 ? '🟩' : '🟨';
+  }
+
+  function buildShareText(): string {
+    const label = results.quiz_number != null ? `10Q #${results.quiz_number}` : '10Q';
+    const score = Math.round(results.total_score);
+    const emojis = results.questions.map(getEmoji);
+    const row1 = emojis.slice(0, 5).join('');
+    const row2 = emojis.slice(5, 10).join('');
+    return `${label} — ${score} pts\n\n${row1}\n${row2}\n\nplay.10q.app`;
+  }
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(buildShareText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for browsers without clipboard API
+      const text = buildShareText();
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   return (
     <ArcadeBackground>
       <div className="flex flex-col items-center min-h-screen px-4 py-8">
@@ -223,7 +261,32 @@ export default function ResultsPage() {
             </div>
           </div>
 
-          {/* Question Breakdown */}
+          {/* Share Card */}
+          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 mb-6 text-center">
+            <p className="font-display text-sm font-bold text-ink/60 uppercase tracking-widest mb-3">
+              {results.quiz_number != null ? `10Q #${results.quiz_number}` : '10Q'}
+            </p>
+            {/* Emoji grid — 2 rows of 5 */}
+            <div className="flex flex-col items-center gap-2 mb-4">
+              <div className="flex gap-1 text-3xl">
+                {results.questions.slice(0, 5).map((q, i) => (
+                  <span key={i}>{getEmoji(q)}</span>
+                ))}
+              </div>
+              <div className="flex gap-1 text-3xl">
+                {results.questions.slice(5, 10).map((q, i) => (
+                  <span key={i}>{getEmoji(q)}</span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleShare}
+              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-yellow'
+                }`}
+            >
+              {copied ? '✓ COPIED!' : '📤 SHARE RESULT'}
+            </button>
+          </div>
           <div className="mb-6">
             <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">
               QUESTION BREAKDOWN

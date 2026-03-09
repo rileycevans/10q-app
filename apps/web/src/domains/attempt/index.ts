@@ -53,12 +53,13 @@ export interface QuestionResult {
 export interface AttemptResults {
   attempt_id: string;
   quiz_id: string;
+  quiz_number: number | null;
   finalized_at: string;
   total_score: number;
   total_time_ms: number;
   correct_count: number;
   questions: QuestionResult[];
-  daily_score: { // Notion plan: daily_score instead of daily_result
+  daily_score: {
     quiz_id: string;
     player_id: string;
     completed_at: string;
