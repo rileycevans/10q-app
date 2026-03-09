@@ -41,6 +41,51 @@ Each phase unblocks the next, so sequence matters.
 - **Why Phase 1:** Domain must be on Cloudflare before Vercel deployment can be linked to the production URL. Doing it early avoids DNS propagation delays blocking launch.
 - **Nice-to-haves once on Cloudflare:** DDoS protection, caching rules, Web Analytics as a lightweight PostHog supplement.
 
+### 1.6 Playwright CI — Automated Tests on Every PR
+
+*Set this up before any code PRs merge so every subsequent phase benefits from it.*
+
+#### Create `.github/workflows/playwright.yml`
+```yaml
+name: Playwright Tests
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+```
+
+#### Add GitHub Secrets
+In the repo settings → Secrets → Actions:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Add other env vars as they are introduced in later phases
+
+#### Required E2E Tests to Implement
+Playwright config already exists at `apps/web/playwright.config.ts`. Write tests covering:
+- Anonymous auth → quiz loads → can answer question 1
+- Full quiz completion → results page renders with score
+- Share button copies text to clipboard
+- Leaderboard loads without error
+- Handle creation flow works
+- `/tomorrow` countdown renders when quiz already completed
+
+> **Note:** Tests MUST use a dedicated **test Supabase project** (not production) to avoid polluting real data. Set up a staging Supabase project for CI.
+
 ---
 
 ## Phase 2 — Database: Migrations & Admin Access
@@ -72,9 +117,62 @@ ALTER TABLE public.players
 - Set `app_metadata`: `{ "role": "admin" }`
 - This unlocks the `/admin` route in the frontend (already gated on this flag)
 
+### 2.4 Create `.env.example`
+No `.env.example` exists in the repo. Riley's AI won't know what variables to configure.
+Create `apps/web/.env.example`:
+```
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Sentry (added in Phase 5)
+NEXT_PUBLIC_SENTRY_DSN=https://...@sentry.io/...
+SENTRY_ORG=
+SENTRY_PROJECT=10q-web
+SENTRY_AUTH_TOKEN=
+
+# PostHog (added in Phase 6)
+NEXT_PUBLIC_POSTHOG_KEY=phc_...
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+### 2.5 Fix Three Critical Bugs in `publish-quiz` ⚠️
+
+Three bugs were found during codebase review that will **silently prevent any quiz from ever publishing**. All three must be fixed before running the import script.
+
+#### Bug 1 — Wrong status filter
+`publish-quiz/index.ts` queries for `status = 'draft'`, but the import script creates quizzes with `status = 'scheduled'`. The cron will never find any quizzes to publish.
+
+**Fix:** Change the status filter to match both:
+```typescript
+.in("status", ["draft", "scheduled"])
+```
+
+#### Bug 2 — Tag requirement blocks all imported questions
+`validateQuiz` enforces `MIN_TAGS_PER_QUESTION = 1`. All 275 imported quizzes have 0 tags. Every quiz will fail validation and never publish.
+
+**Fix:** Change the constant:
+```typescript
+const MIN_TAGS_PER_QUESTION = 0; // Tags optional for imported questions
+```
+Or remove the tag count check entirely from the validator.
+
+#### Bug 3 — `order_index` validation is off-by-one
+`validateQuiz` checks that `orderIndexes[i] !== i + 1` (expects 1–10), but the import script and schema use 0-based indexing (0–9). Every quiz we import will fail.
+
+**Fix:** Change the validation to expect 0-based:
+```typescript
+if (orderIndexes[i] !== i) { // 0–9, not 1–10
+```
+
+> After fixing all three bugs, re-deploy the `publish-quiz` edge function:
+> ```bash
+> supabase functions deploy publish-quiz
+> ```
+
 ### 🔀 Phase 2 PR
 Branch: `feat/phase-2-db-migrations`
-Includes: streak migration SQL file (`supabase/migrations/`), any other unapplied migration files.
+Includes: streak migration SQL, `.env.example`, `publish-quiz` bug fixes, edge function redeploy.
 Merge before starting Phase 3.
 
 ---
@@ -113,6 +211,38 @@ cd scripts && npm run import-questions
 - Check `quizzes` if curated sets were imported
 
 > Phase 3 is script execution only — no PR needed. The import script is already committed.
+
+---
+
+## Phase 3.5 — Deploy with Cloudflare Pages
+
+*Get the app live with auto-deploy before layering in streaks, Sentry, and PostHog. Every merge to `main` deploys automatically.*
+
+### 3.5.1 Connect Repo to Cloudflare Pages
+1. In Cloudflare Dashboard → **Pages** → Create a project → Connect to Git → select the `10q-app` repo.
+2. Set **build configuration**:
+   - Root directory: `apps/web`
+   - Framework preset: **Next.js**
+   - Build command: `npm run build`
+   - Output directory: `.next`
+3. Add environment variables in Cloudflare Pages settings:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. Deploy. Cloudflare assigns a `*.pages.dev` preview URL to confirm it works.
+
+### 3.5.2 Connect Custom Domain
+1. In Cloudflare Pages project → **Custom domains** → add your domain.
+2. Since the domain is already on Cloudflare (Phase 1.5), DNS is auto-configured.
+3. Confirm `https://your-domain.com` loads with SSL active.
+
+### 3.5.3 Auto-Deploy is Now Live
+From this point on, **every merge to `main` deploys automatically**. No manual deploy steps in any subsequent phase — merge the PR and Cloudflare Pages picks it up within ~2 minutes.
+
+### 3.5.4 Verify First Live Quiz
+- Confirm today's quiz loads (or that the first scheduled quiz publishes on March 13 at 11:30 UTC).
+- Verify the `publish-quiz` cron is active: Supabase Dashboard → Edge Functions → Schedules.
+
+> No PR needed — this is a one-time Cloudflare Pages setup.
 
 ---
 
@@ -189,6 +319,12 @@ Add `current_streak` and `longest_streak` to the stats grid on `/u/[handle]`.
 ### 🔀 Phase 4 PR
 Branch: `feat/phase-4-streaks`
 Includes: `finalize-attempt` edge function update, `get-profile-by-handle` update, BottomDock streak display, results page streak celebration, profile page streak stats.
+
+**After merging, deploy the modified edge functions:**
+```bash
+supabase functions deploy finalize-attempt
+supabase functions deploy get-profile-by-handle
+```
 Merge before starting Phase 5.
 
 ---
@@ -341,42 +477,74 @@ Merge before starting Phase 8.
 
 ---
 
-## Phase 8 — Pre-Launch Verification
+## Phase 8 — Pre-Launch Verification & Bug Fixes
 
 *Don't ship until this checklist passes.*
 
-### 8.1 End-to-End Playthrough
+### 8.1 Fix: Anonymous Auth Handle Nudge
+After a user finalizes their quiz, if `player.handle_display` is null, show a modal/bottom sheet prompting them to pick a handle.
+- "You finished! Save your score with a username."
+- CTA: a handle input + confirm button
+- Dismissible (but shows on every results page visit until they set one)
+
+### 8.2 Fix: `/play/finalize` Page — Fragile Attempt ID Lookup
+`/play/finalize/page.tsx` currently calls `startAttempt()` again to retrieve the attempt ID, which is a duplicate API call that can race or return the wrong attempt.
+**Fix:** Pass `attempt_id` via URL param from `/play/q/[index]` when the last question is answered:
+```
+router.push(`/play/finalize?attempt_id=${attemptId}`);
+```
+Then read it from `searchParams` in the finalize page.
+
+### 8.3 Fix: `/tomorrow` "View Results" Link
+`/tomorrow/page.tsx` has a "View Results" button linking to `/results` with no `attempt_id`. The results page will fail or show the wrong results.
+**Fix:** Pass the attempt ID here too, or derive it from the player's last completed attempt from the API.
+
+### 8.4 Add OG / Social Meta Tags
+When users share their results URL (e.g. `play.10q.app/results?attempt_id=...`), it should render a rich preview card on Twitter, Discord, iMessage, etc.
+- Add `og:title`, `og:description`, `og:image` to the results page `<head>`
+- Static OG image is fine for MVP (e.g. the 10Q logo on a dark background)
+- Description can be something like: `"I scored 847 pts on 10Q #12. Can you beat me?"` dynamically generated server-side
+
+### 8.5 End-to-End Playthrough
 1. Open app fresh (incognito)
 2. Sign in anonymously → play today's quiz → see results → share card → leaderboard
-3. Create a handle → check profile page → check streak
+3. Handle nudge appears → create handle → check profile page → check streak
 4. Sign in as Riley (admin) → create a quiz for tomorrow → verify it publishes at 11:30 UTC
+5. Run Playwright suite and confirm all tests pass
 
-### 8.2 Fix Known Bugs
-- [ ] Anonymous auth UX: post-quiz handle nudge (prompt user to create handle after finalizing if they don't have one)
+### 8.6 Smoke Test Edge Functions
+Run each key edge function from the Supabase dashboard and verify responses are well-formed:
+`get-current-quiz`, `start-attempt`, `submit-answer`, `finalize-attempt`, `get-attempt-results`, `publish-quiz`.
 
-### 8.3 Smoke Test Edge Functions
-Run the key edge functions manually via Supabase dashboard and verify responses are well-formed.
+### 8.7 Verify RLS
+Confirm no client-side query can ever read `is_correct` from `question_answers` or see another user's attempt data.
 
-### 8.4 Verify RLS
-Confirm no client-side query can read `is_correct` answers or another user's private data.
+### 8.8 Verify CORS Is Locked Down
+Edge functions currently use `Access-Control-Allow-Origin: *`. Before launch, lock this to the production domain:
+```typescript
+// In _shared/cors.ts
+"Access-Control-Allow-Origin": "https://your-domain.com",
+```
 
-### 8.5 Check Sentry is Receiving Events
-Trigger a test error, confirm it shows in Sentry dashboard.
+### 8.9 Check Sentry Is Receiving Events
+Trigger a test error, confirm it shows in Sentry dashboard with correct environment tag.
 
-### 8.6 Check PostHog is Receiving Events
-Play through a quiz, confirm `quiz_started` → `answer_submitted` × 10 → `quiz_completed` all appear in PostHog.
+### 8.10 Check PostHog Is Receiving Events
+Play through a quiz, confirm `quiz_started` → `answer_submitted` × 10 → `quiz_completed` all appear in PostHog Live Events.
 
 ---
 
 ## Summary Order
 
-| Phase | What | Blocker |
-|---|---|---|
-| 1 | Connect Supabase, Notion, Sentry, PostHog plugins | Nothing — do this first |
-| 2 | DB migrations + streaks schema + Riley admin access | Phase 1 (need Supabase MCP) |
-| 3 | Ingest 2770 questions into Supabase | Phase 2 (need DB access + migrations applied) |
-| 4 | Streaks logic + UI | Phase 2 (need schema) |
-| 5 | Sentry error reporting | Phase 1 (need DSN) |
-| 6 | PostHog analytics | Phase 1 (need API key) |
-| 7 | Admin UI + `create-quiz` edge function | Phase 3 (question bank must exist first) |
-| 8 | Pre-launch verification | All of the above |
+| Phase | What | Blocker | PR? |
+|---|---|---|---|
+| 1 | Connect plugins: Supabase, Notion, Sentry, PostHog, Cloudflare | Nothing — do first | No |
+| 1.6 | Playwright CI on GitHub Actions | Phase 1 (need GitHub Secrets) | Yes — `feat/phase-1-ci` |
+| 2 | DB migrations + streaks schema + Riley admin + `.env.example` + **3 publish-quiz bug fixes** | Phase 1 | Yes — `feat/phase-2-db-migrations` |
+| 3 | Ingest 2770 questions (run import script) | Phase 2 (bugs fixed, migrations applied) | No |
+| 3.5 | Initial Vercel deployment + custom domain | Phase 3 (need content in DB) | No |
+| 4 | Streaks logic + UI + edge function deploy | Phase 2 (need schema) | Yes — `feat/phase-4-streaks` |
+| 5 | Sentry error reporting + edge function deploy | Phase 1 (need DSN) | Yes — `feat/phase-5-sentry` |
+| 6 | PostHog analytics | Phase 1 (need API key) | Yes — `feat/phase-6-posthog` |
+| 7 | Admin UI + `create-quiz` edge function | Phase 3 (question bank must exist) | Yes — `feat/phase-7-admin-ui` |
+| 8 | Bug fixes + pre-launch verification | All of the above | Yes — `feat/phase-8-launch-prep` |
