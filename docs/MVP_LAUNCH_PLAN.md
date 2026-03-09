@@ -3,6 +3,11 @@
 Everything remaining before putting a URL in front of real users, in execution order.
 Each phase unblocks the next, so sequence matters.
 
+> **PR Policy:** Open one PR per phase (where code is changed). Do not merge a phase's PR until all steps in that phase are complete and verified. Phases 1 and 3 involve no committed code changes — no PR needed. Phase 8 is verification only.
+>
+> Branch naming: `feat/phase-2-db-migrations`, `feat/phase-4-streaks`, etc.
+> Each PR title should follow: `feat(<domain>): <short outcome>`
+
 ---
 
 ## Phase 1 — Connect Tools & MCP Plugins
@@ -25,6 +30,16 @@ Each phase unblocks the next, so sequence matters.
 ### 1.4 PostHog Plugin / Credentials
 - **Action:** Confirm PostHog project API key and host.
 - **Why:** Same reason — need credentials before instrumentation in Phase 5.
+
+### 1.5 Cloudflare Plugin & Domain Migration
+- **Action:** Set up the Cloudflare plugin in Cursor (Riley's AI-assisted IDE).
+- **Domain migration steps:**
+  1. Log in to current domain registrar → transfer domain to Cloudflare Registrar (or update nameservers to point to Cloudflare).
+  2. In Cloudflare dashboard, add the site and confirm DNS is resolving.
+  3. In Vercel, add the custom domain and point it to the Cloudflare-proxied DNS record.
+  4. Confirm SSL certificate is provisioned (Cloudflare handles this automatically).
+- **Why Phase 1:** Domain must be on Cloudflare before Vercel deployment can be linked to the production URL. Doing it early avoids DNS propagation delays blocking launch.
+- **Nice-to-haves once on Cloudflare:** DDoS protection, caching rules, Web Analytics as a lightweight PostHog supplement.
 
 ---
 
@@ -56,6 +71,11 @@ ALTER TABLE public.players
 - In Supabase Dashboard → Authentication → Users → find Riley's user
 - Set `app_metadata`: `{ "role": "admin" }`
 - This unlocks the `/admin` route in the frontend (already gated on this flag)
+
+### 🔀 Phase 2 PR
+Branch: `feat/phase-2-db-migrations`
+Includes: streak migration SQL file (`supabase/migrations/`), any other unapplied migration files.
+Merge before starting Phase 3.
 
 ---
 
@@ -91,6 +111,8 @@ cd scripts && npm run import-questions
 - Check `questions` count (~2769 rows, excluding test doc)
 - Check at least one `question_answers` set (4 answers, 1 `is_correct`)
 - Check `quizzes` if curated sets were imported
+
+> Phase 3 is script execution only — no PR needed. The import script is already committed.
 
 ---
 
@@ -164,6 +186,11 @@ The profile page should show current and longest streak in the stats cards.
 ### 4.6 UI — Profile Page Streak Stats
 Add `current_streak` and `longest_streak` to the stats grid on `/u/[handle]`.
 
+### 🔀 Phase 4 PR
+Branch: `feat/phase-4-streaks`
+Includes: `finalize-attempt` edge function update, `get-profile-by-handle` update, BottomDock streak display, results page streak celebration, profile page streak stats.
+Merge before starting Phase 5.
+
 ---
 
 ## Phase 5 — Sentry Error Reporting
@@ -200,6 +227,11 @@ import * as Sentry from "https://deno.land/x/sentry/index.mjs";
 Sentry.init({ dsn: Deno.env.get("SENTRY_DSN") });
 ```
 Add to `_shared/` and wrap edge function handlers. **This is a nice-to-have for MVP.**
+
+### 🔀 Phase 5 PR
+Branch: `feat/phase-5-sentry`
+Includes: Sentry config files, ErrorBoundary integration, any edge function wrappers.
+Merge before starting Phase 6.
 
 ---
 
@@ -246,6 +278,11 @@ After sign-in/handle creation:
 ```typescript
 posthog.identify(userId, { handle: player.handle_display });
 ```
+
+### 🔀 Phase 6 PR
+Branch: `feat/phase-6-posthog`
+Includes: PostHog init, key event calls, user identification.
+Merge before starting Phase 7.
 
 ---
 
@@ -295,6 +332,12 @@ Accepts:
 ### 7.4 Tag Management
 - Simple `/admin/tags` page to create new tags
 - Tags can be assigned to questions via the question detail view
+
+### 🔀 Phase 7 PR
+Branch: `feat/phase-7-admin-ui`
+Includes: `/admin` route + auth guard, `/admin/quiz/new` page, `create-quiz` edge function, tag management.
+This is the largest PR — keep quiz authoring UI and edge function in the same PR since they’re tightly coupled.
+Merge before starting Phase 8.
 
 ---
 
