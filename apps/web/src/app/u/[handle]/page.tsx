@@ -6,6 +6,7 @@ import { getProfileByHandle, type Profile } from '@/domains/profile';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
 import dynamic from 'next/dynamic';
+import { trackScreenView, trackProfileView, trackAppError } from '@/lib/analytics';
 
 const AuthButton = dynamic(
   () => import('@/components/AuthButton').then((mod) => mod.AuthButton),
@@ -34,12 +35,26 @@ export default function ProfilePage() {
         const data = await getProfileByHandle(handle);
         if (mounted) {
           setProfile(data);
+
+          trackScreenView({
+            screen: 'profile',
+            route: `/u/${handle}`,
+          });
+
+          trackProfileView({
+            player_id: data.player_id,
+            handle: data.handle_display,
+          });
         }
       } catch (err) {
         if (!mounted) return;
         const errorMessage = err instanceof Error ? err.message : 'Failed to load profile';
         setError(errorMessage);
         console.error('Profile page error:', err);
+        trackAppError({
+          location: 'profile_fetch',
+          message: errorMessage,
+        });
       } finally {
         if (mounted) {
           setLoading(false);

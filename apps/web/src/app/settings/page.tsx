@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { validateHandle } from '@10q/contracts';
 import dynamic from 'next/dynamic';
+import { trackScreenView, trackSettingsView, trackHandleUpdate, trackAppError } from '@/lib/analytics';
 
 const AuthButton = dynamic(
   () => import('@/components/AuthButton').then((mod) => mod.AuthButton),
@@ -41,6 +42,13 @@ export default function SettingsPage() {
           return;
         }
 
+        trackScreenView({
+          screen: 'settings',
+          route: '/settings',
+        });
+
+        trackSettingsView();
+
         // Get current player to fetch handle and last changed date (Notion plan: players table)
         const { data: player, error: playerError } = await supabase
           .from('players')
@@ -72,6 +80,10 @@ export default function SettingsPage() {
         if (!mounted) return;
         setError(err instanceof Error ? err.message : 'Failed to load settings');
         setLoading(false);
+        trackAppError({
+          location: 'settings_load',
+          message: err instanceof Error ? err.message : 'Failed to load settings',
+        });
       }
     }
 
@@ -96,6 +108,10 @@ export default function SettingsPage() {
       if (!validation.valid) {
         setError(validation.error || 'Invalid handle');
         setUpdating(false);
+
+        trackHandleUpdate({
+          success: false,
+        });
         return;
       }
 
@@ -104,12 +120,20 @@ export default function SettingsPage() {
       setCurrentHandle(handle.trim());
       setHandle('');
 
+      trackHandleUpdate({
+        success: true,
+      });
+
       // Refresh after 2 seconds
       setTimeout(() => {
         router.refresh();
       }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update handle');
+      trackAppError({
+        location: 'settings_update_handle',
+        message: err instanceof Error ? err.message : 'Failed to update handle',
+      });
     } finally {
       setUpdating(false);
     }

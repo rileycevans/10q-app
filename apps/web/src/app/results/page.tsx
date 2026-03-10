@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { trackScreenView, trackResultsView, trackShareClicked, trackAppError } from '@/lib/analytics';
 
 import Link from 'next/link';
 
@@ -105,7 +106,23 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
 }
 
 export default function ResultsPage() {
-  useRouter();
+  return (
+    <Suspense fallback={
+      <ArcadeBackground>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8">
+            <p className="font-bold text-lg text-ink">Loading Results...</p>
+          </div>
+        </div>
+      </ArcadeBackground>
+    }>
+      <ResultsContent />
+    </Suspense>
+  );
+}
+
+function ResultsContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,8 +159,30 @@ export default function ResultsPage() {
           const resultsData = await getAttemptResults(attemptId);
           setResults(resultsData);
         }
+
+        if (results) {
+          trackScreenView({
+            screen: 'results',
+            route: router ? router.toString() : '/results',
+            quiz_id: results.quiz_id,
+            attempt_id: results.attempt_id,
+          });
+
+          trackResultsView({
+            attempt_id: results.attempt_id,
+            quiz_id: results.quiz_id,
+            quiz_number: results.quiz_number,
+            total_score: results.total_score,
+            total_time_ms: results.total_time_ms,
+            correct_count: results.correct_count,
+          });
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load results');
+        trackAppError({
+          location: 'results_load',
+          message: err instanceof Error ? err.message : 'Failed to load results',
+        });
       } finally {
         setLoading(false);
       }
@@ -199,9 +238,10 @@ export default function ResultsPage() {
   }
 
   function buildShareText(): string {
-    const label = results.quiz_number != null ? `10Q #${results.quiz_number}` : '10Q';
-    const score = Math.round(results.total_score);
-    const emojis = results.questions.map(getEmoji);
+    const r = results!;
+    const label = r.quiz_number != null ? `10Q #${r.quiz_number}` : '10Q';
+    const score = Math.round(r.total_score);
+    const emojis = r.questions.map(getEmoji);
     const row1 = emojis.slice(0, 5).join('');
     const row2 = emojis.slice(5, 10).join('');
     return `${label} — ${score} pts\n\n${row1}\n${row2}\n\nplay.10q.app`;
@@ -212,6 +252,16 @@ export default function ResultsPage() {
       await navigator.clipboard.writeText(buildShareText());
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+
+      if (results) {
+        trackShareClicked({
+          attempt_id: results.attempt_id,
+          quiz_number: results.quiz_number,
+          total_score: results.total_score,
+        });
+      } else {
+        trackShareClicked({});
+      }
     } catch {
       // Fallback for browsers without clipboard API
       const text = buildShareText();

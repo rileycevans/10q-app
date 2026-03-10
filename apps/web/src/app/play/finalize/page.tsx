@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { finalizeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { trackScreenView, trackQuizFinalized, trackAppError } from '@/lib/analytics';
 
 export default function FinalizePage() {
   const router = useRouter();
@@ -14,6 +15,7 @@ export default function FinalizePage() {
   useEffect(() => {
     async function finalize() {
       try {
+        trackScreenView({ screen: 'finalize', route: '/play/finalize' });
         // Get attempt ID from somewhere (should be in state/context)
         // For now, we'll need to get it from the resume call
         const { getCurrentQuiz } = await import('@/domains/quiz');
@@ -40,6 +42,11 @@ export default function FinalizePage() {
 
         const result = await finalizeAttempt(attemptState.attempt_id);
         setTotalScore(result.total_score);
+
+        trackQuizFinalized({
+          attempt_id: result.attempt_id,
+          total_score: result.total_score,
+        });
         
         // Clear cached attempt state since attempt is finalized
         sessionStorage.removeItem('attempt_state');
@@ -50,6 +57,10 @@ export default function FinalizePage() {
         }, 2000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to finalize attempt');
+        trackAppError({
+          location: 'finalize_attempt',
+          message: err instanceof Error ? err.message : 'Failed to finalize attempt',
+        });
       } finally {
         setLoading(false);
       }

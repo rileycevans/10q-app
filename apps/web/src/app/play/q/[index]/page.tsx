@@ -11,6 +11,7 @@ import { AnswerButton } from '@/components/AnswerButton';
 import type { AnswerFeedback } from '@/components/AnswerButton';
 import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
+import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -205,6 +206,25 @@ export default function QuestionPage() {
     initialize();
   }, [questionIndex, router]);
 
+  // Track question view once we have both attempt and question
+  useEffect(() => {
+    if (!attempt || !currentQuestion) return;
+
+    trackScreenView({
+      screen: 'question',
+      route: `/play/q/${questionIndex}`,
+      quiz_id: sessionStorage.getItem('quiz_id') || undefined,
+      attempt_id: attempt.attempt_id,
+    });
+
+    trackQuestionView({
+      quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+      attempt_id: attempt.attempt_id,
+      question_id: currentQuestion.question_id,
+      question_index: questionIndex,
+    });
+  }, [attempt, currentQuestion, questionIndex]);
+
   // Update timer (stop when submitting)
   useEffect(() => {
     if (!timeRemaining || timeRemaining <= 0 || isSubmitting) return;
@@ -253,6 +273,20 @@ export default function QuestionPage() {
       // 3. Show feedback animation (green pop or red shake)
       setFeedback(result.is_correct ? 'correct' : 'wrong');
 
+      // Track answer submit with scoring + timing
+      trackAnswerSubmit({
+        quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+        attempt_id: result.attempt_id,
+        question_id: currentQuestion.question_id,
+        question_index: questionIndex,
+        answer_id: answerId,
+        is_correct: result.is_correct,
+        time_ms: result.time_ms,
+        base_points: result.base_points,
+        bonus_points: result.bonus_points,
+        total_points: result.total_points,
+      });
+
       // 4. Build next state for cache
       const nextState: AttemptState = {
         attempt_id: result.attempt_id,
@@ -275,6 +309,10 @@ export default function QuestionPage() {
       }
     } catch (err) {
       console.error('Failed to submit answer:', err);
+      trackAppError({
+        location: 'question_submit',
+        message: err instanceof Error ? err.message : 'Failed to submit answer',
+      });
       // On network error, still try to advance using optimistic state
       const nextIndex = questionIndex + 1;
       if (nextIndex <= 10) {

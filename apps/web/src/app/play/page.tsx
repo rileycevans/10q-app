@@ -6,6 +6,7 @@ import { getCurrentQuiz } from '@/domains/quiz';
 import { startAttempt } from '@/domains/attempt';
 import { ensureSession } from '@/lib/auth';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { trackScreenView, trackQuizStart, trackQuizUnavailable, trackAppError } from '@/lib/analytics';
 import dynamic from 'next/dynamic';
 
 // Dynamically import AuthButton to avoid SSR issues
@@ -23,6 +24,8 @@ export default function PlayPage() {
     async function initialize() {
       if (!mounted) return;
 
+      trackScreenView({ screen: 'play', route: '/play' });
+
       try {
         setLoading(true);
         setError(null);
@@ -36,6 +39,7 @@ export default function PlayPage() {
         if (!currentQuiz) {
           // QUIZ_NOT_AVAILABLE - show countdown
           updateCountdown();
+          trackQuizUnavailable({ reason: 'NO_QUIZ_AVAILABLE' });
           setError('No quiz available. Come back at 11:30 UTC!');
           setLoading(false);
           return;
@@ -50,6 +54,11 @@ export default function PlayPage() {
         if (attemptState.state === 'FINALIZED') {
           router.push('/tomorrow');
         } else if (attemptState.current_index <= 10) {
+          trackQuizStart({
+            quiz_id: currentQuiz.quiz_id,
+            attempt_id: attemptState.attempt_id,
+            is_resume: attemptState.current_index > 1,
+          });
           router.push(`/play/q/${attemptState.current_index}`);
         } else if (attemptState.state === 'READY_TO_FINALIZE') {
           router.push('/play/finalize');
@@ -63,6 +72,10 @@ export default function PlayPage() {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load quiz';
         setError(errorMessage);
         setLoading(false);
+        trackAppError({
+          location: 'play_initialize',
+          message: errorMessage,
+        });
         console.error('Play page error:', err);
       }
     }

@@ -3,11 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { trackScreenView } from '@/lib/analytics';
 
 export default function TomorrowPage() {
   const [countdown, setCountdown] = useState<string>('');
 
   useEffect(() => {
+    trackScreenView({
+      screen: 'tomorrow',
+      route: '/tomorrow',
+    });
+
     function updateCountdown() {
       const now = new Date();
       const tomorrow = new Date(now);

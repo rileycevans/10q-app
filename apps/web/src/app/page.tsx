@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { BottomDock } from '@/components/BottomDock';
+import { trackScreenView, trackAppError } from '@/lib/analytics';
 import dynamic from 'next/dynamic';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
@@ -24,6 +25,11 @@ export default function HomePage() {
   const [isResetting, setIsResetting] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
   const isDevelopment = process.env.NODE_ENV === 'development';
+
+  // Basic screen view for home
+  useEffect(() => {
+    trackScreenView({ screen: 'home', route: '/' });
+  }, []);
   const isSentryEnabled = !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === 'production';
 
   const handleResetQuiz = async () => {
@@ -42,9 +48,17 @@ export default function HomePage() {
         // Refresh the page to clear any cached state
         router.refresh();
       } else {
+        trackAppError({
+          location: 'home_reset_quiz',
+          message: response.error?.message || 'Failed to reset quiz',
+        });
         alert(response.error?.message || 'Failed to reset quiz');
       }
     } catch (error) {
+      trackAppError({
+        location: 'home_reset_quiz',
+        message: error instanceof Error ? error.message : 'Failed to reset quiz',
+      });
       alert(error instanceof Error ? error.message : 'Failed to reset quiz');
     } finally {
       setIsResetting(false);

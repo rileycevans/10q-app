@@ -13,6 +13,7 @@ import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { getSession } from '@/lib/auth';
 import dynamic from 'next/dynamic';
+import { trackScreenView, trackLeaderboardView, trackAppError } from '@/lib/analytics';
 
 const AuthButton = dynamic(
   () => import('@/components/AuthButton').then((mod) => mod.AuthButton),
@@ -59,11 +60,27 @@ export default function LeaderboardPage() {
 
         if (mounted) {
           setData(result);
+
+          trackScreenView({
+            screen: 'leaderboard',
+            route: '/leaderboard',
+          });
+
+          trackLeaderboardView({
+            window,
+            mode,
+            score_type: scoreType,
+            has_session: !!session?.user?.id,
+          });
         }
       } catch (err) {
         if (!mounted) return;
         const errorMessage = err instanceof Error ? err.message : 'Failed to load leaderboard';
         setError(errorMessage);
+         trackAppError({
+          location: 'leaderboard_fetch',
+          message: errorMessage,
+        });
         console.error('Leaderboard page error:', err);
       } finally {
         if (mounted) {

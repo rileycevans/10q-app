@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { SignInModal } from './SignInModal';
+import { posthog } from '@/lib/posthog';
 
 export function AuthButton() {
   const [isAnonymous, setIsAnonymous] = useState(true);
@@ -47,6 +48,13 @@ export function AuthButton() {
       const session = await getSession();
       setHasSession(!!session);
       setIsAnonymous(session?.user?.is_anonymous ?? true);
+
+      if (session?.user && !session.user.is_anonymous) {
+        // Identify signed-in users so their events are tied to a stable id.
+        posthog.identify(session.user.id, {
+          email: session.user.email,
+        });
+      }
     } catch (err) {
       console.error('Check auth error:', err);
       setError('Failed to check auth');

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Rubik, Bungee } from "next/font/google";
 import "./globals.css";
+import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ToastProvider } from "@/components/Toast";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -33,7 +34,7 @@ export default function RootLayout({
       <body className={`${rubik.variable} ${bungee.variable} font-body antialiased`}>
         <ErrorBoundary>
           <ToastProvider>
-            {children}
+            <AnalyticsProvider>{children}</AnalyticsProvider>
           </ToastProvider>
         </ErrorBoundary>
       </body>
