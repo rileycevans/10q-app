@@ -24,6 +24,7 @@ export default function HomePage() {
   const [isResetting, setIsResetting] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
   const isDevelopment = process.env.NODE_ENV === 'development';
+  const isSentryEnabled = !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === 'production';
 
   const handleResetQuiz = async () => {
     if (!isDevelopment) return;
@@ -90,6 +91,18 @@ export default function HomePage() {
               >
                 How is my score calculated?
               </button>
+              {isSentryEnabled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Trigger a test error that should be captured by Sentry
+                    throw new Error('Sentry test error from HomePage');
+                  }}
+                  className="w-full text-[10px] text-ink/50 hover:text-ink/80 underline font-bold transition-colors"
+                >
+                  Trigger Sentry test error
+                </button>
+              )}
               {isDevelopment && (
                 <button
                   onClick={handleResetQuiz}

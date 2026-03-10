@@ -3,6 +3,8 @@
  * Structured logging for debugging and monitoring
  */
 
+import * as Sentry from '@sentry/nextjs';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
@@ -20,14 +22,42 @@ class Logger {
   }
 
   private log(level: LogLevel, context: LogContext | string) {
-    const _timestamp = new Date().toISOString();
+    const timestamp = new Date().toISOString();
 
+    // Dev: keep the colorful console output exactly as before
     if (this.isDev) {
       const style = this.getStyle(level);
       if (typeof context === 'string') {
         console.log(`%c[${level.toUpperCase()}]`, style, context);
       } else {
         console.log(`%c[${level.toUpperCase()}]`, style, context.event || '', context);
+      }
+    }
+
+    // Prod: forward structured logs to Sentry.logger when available
+    if (!this.isDev && (Sentry as any).logger) {
+      const payload: LogContext & { timestamp: string } =
+        typeof context === 'string'
+          ? { event: context, scope: 'ui', timestamp }
+          : { timestamp, ...context };
+
+      const { event, ...attributes } = payload;
+      const message = event || 'LOG';
+
+      const logger = (Sentry as any).logger;
+      switch (level) {
+        case 'debug':
+          logger.debug(message, attributes);
+          break;
+        case 'info':
+          logger.info(message, attributes);
+          break;
+        case 'warn':
+          logger.warn(message, attributes);
+          break;
+        case 'error':
+          logger.error(message, attributes);
+          break;
       }
     }
   }
