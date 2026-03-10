@@ -152,7 +152,7 @@ export async function submitAnswer(
     bonus_points: response.data.bonus_points,
     total_points: response.data.total_points,
     time_ms: response.data.time_ms,
-    next_question: response.data.next_question,
+    next_question: null,
     current_index: response.data.current_index,
     question_started_at: response.data.question_started_at,
     question_expires_at: response.data.question_expires_at,
@@ -166,6 +166,8 @@ export async function finalizeAttempt(attemptId: string): Promise<{
   attempt_id: string;
   total_score: number;
   finalized_at: string;
+  current_streak: number;
+  longest_streak: number;
 }> {
   const response = await edgeFunctions.finalizeAttempt(attemptId);
 
@@ -177,6 +179,8 @@ export async function finalizeAttempt(attemptId: string): Promise<{
     attempt_id: response.data.attempt_id,
     total_score: response.data.total_score,
     finalized_at: response.data.finalized_at,
+    current_streak: response.data.current_streak,
+    longest_streak: response.data.longest_streak,
   };
 }
 

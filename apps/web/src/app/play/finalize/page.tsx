@@ -1,13 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { finalizeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { trackScreenView, trackQuizFinalized, trackAppError } from '@/lib/analytics';
 
 export default function FinalizePage() {
+  return (
+    <Suspense fallback={
+      <ArcadeBackground>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8">
+            <p className="font-bold text-lg text-ink">Finalizing...</p>
+          </div>
+        </div>
+      </ArcadeBackground>
+    }>
+      <FinalizeContent />
+    </Suspense>
+  );
+}
+
+function FinalizeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalScore, setTotalScore] = useState<number | null>(null);
@@ -16,44 +33,58 @@ export default function FinalizePage() {
     async function finalize() {
       try {
         trackScreenView({ screen: 'finalize', route: '/play/finalize' });
-        // Get attempt ID from somewhere (should be in state/context)
-        // For now, we'll need to get it from the resume call
-        const { getCurrentQuiz } = await import('@/domains/quiz');
-        const { startAttempt } = await import('@/domains/attempt');
-        
-        const currentQuiz = await getCurrentQuiz();
-        if (!currentQuiz) {
-          setError('No quiz available');
-          setLoading(false);
-          return;
-        }
 
-        const attemptState = await startAttempt(currentQuiz.quiz_id);
-        
-        if (attemptState.state !== 'READY_TO_FINALIZE') {
-          // Already finalized or still in progress
-          if (attemptState.state === 'FINALIZED') {
-            router.push('/results');
-          } else {
-            router.push(`/play/q/${attemptState.current_index}`);
+        let attemptId = searchParams.get('attempt_id');
+
+        if (!attemptId) {
+          const cached = sessionStorage.getItem('attempt_state');
+          if (cached) {
+            try {
+              const parsed = JSON.parse(cached);
+              attemptId = parsed.attempt_id;
+            } catch {
+              // Invalid cache
+            }
           }
-          return;
         }
 
-        const result = await finalizeAttempt(attemptState.attempt_id);
+        if (!attemptId) {
+          const { getCurrentQuiz } = await import('@/domains/quiz');
+          const { startAttempt } = await import('@/domains/attempt');
+          const currentQuiz = await getCurrentQuiz();
+          if (!currentQuiz) {
+            setError('No quiz available');
+            setLoading(false);
+            return;
+          }
+          const attemptState = await startAttempt(currentQuiz.quiz_id);
+          attemptId = attemptState.attempt_id;
+
+          if (attemptState.state === 'FINALIZED') {
+            router.push(`/results?attempt_id=${attemptId}`);
+            return;
+          }
+          if (attemptState.state !== 'READY_TO_FINALIZE') {
+            router.push(`/play/q/${attemptState.current_index}`);
+            return;
+          }
+        }
+
+        const result = await finalizeAttempt(attemptId);
         setTotalScore(result.total_score);
 
         trackQuizFinalized({
           attempt_id: result.attempt_id,
           total_score: result.total_score,
         });
-        
-        // Clear cached attempt state since attempt is finalized
+
         sessionStorage.removeItem('attempt_state');
-        
-        // Redirect to results after brief delay with attempt_id
+
+        const streakParams = result.current_streak > 0
+          ? `&streak=${result.current_streak}&longest=${result.longest_streak}`
+          : '';
         setTimeout(() => {
-          router.push(`/results?attempt_id=${attemptState.attempt_id}`);
+          router.push(`/results?attempt_id=${attemptId}${streakParams}`);
         }, 2000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to finalize attempt');
@@ -67,7 +98,7 @@ export default function FinalizePage() {
     }
 
     finalize();
-  }, [router]);
+  }, [router, searchParams]);
 
   if (loading) {
     return (
@@ -115,4 +146,3 @@ export default function FinalizePage() {
     </ArcadeBackground>
   );
 }
-

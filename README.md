@@ -55,6 +55,20 @@ Global leaderboards:
 
 _More details coming soon as the project develops._
 
+## Production domain & DNS
+
+- **Primary domain**: `https://play10q.com`
+- **Registrar**: GoDaddy (registration and renewal stay here)
+- **DNS host**: Cloudflare (authoritative nameservers `emma.ns.cloudflare.com`, `vicente.ns.cloudflare.com`)
+- **Key records in Cloudflare** (mirroring the original GoDaddy DNS):
+  - **A** `play10q.com` → `199.36.158.100`
+  - **CNAME** `www.play10q.com` → `rileycevans.github.io`
+  - **CNAME** `pay.play10q.com` → `paylinks.commerce.godaddy.com`
+  - **TXT** `play10q.com` → `google-site-verification=MEeCxPSRZARu8lAXR_uNkY1DxCTpE36ciRqMon3WMNc`
+  - **TXT** `play10q.com` → `hosting-site=q-production-e4848`
+
+If the Cloudflare zone ever needs to be recreated, `scripts/cloudflare-dns-setup.sh` can be run (with a valid Cloudflare API token and the `play10q.com` zone ID) to restore this baseline DNS configuration.
+
 ## Documentation
 
 See the [Notion Product Hub](https://www.notion.so/2d49608dd8f3813eb948ef0afa7e511f) for full specifications.

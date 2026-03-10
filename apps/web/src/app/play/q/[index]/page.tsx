@@ -160,9 +160,8 @@ export default function QuestionPage() {
           return;
         }
 
-        // If ready to finalize, go to finalize page
         if (attemptState.state === 'READY_TO_FINALIZE') {
-          router.push('/play/finalize');
+          router.push(`/play/finalize?attempt_id=${attemptState.attempt_id}`);
           return;
         }
 
@@ -253,7 +252,7 @@ export default function QuestionPage() {
         if (newAttempt.current_index <= 10) {
           router.push(`/play/q/${newAttempt.current_index}`);
         } else {
-          router.push('/play/finalize');
+          router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
         }
       });
     }
@@ -305,7 +304,7 @@ export default function QuestionPage() {
       if (result.current_index <= 10) {
         router.push(`/play/q/${result.current_index}`);
       } else {
-        router.push('/play/finalize');
+        router.push(`/play/finalize?attempt_id=${result.attempt_id}`);
       }
     } catch (err) {
       console.error('Failed to submit answer:', err);
@@ -313,12 +312,11 @@ export default function QuestionPage() {
         location: 'question_submit',
         message: err instanceof Error ? err.message : 'Failed to submit answer',
       });
-      // On network error, still try to advance using optimistic state
       const nextIndex = questionIndex + 1;
       if (nextIndex <= 10) {
         router.push(`/play/q/${nextIndex}`);
       } else {
-        router.push('/play/finalize');
+        router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
       }
     }
   };

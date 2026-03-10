@@ -1,4 +1,5 @@
 interface BottomDockProps {
+  streak?: number;
   onRankClick?: () => void;
   onStreakClick?: () => void;
   onLeagueClick?: () => void;
@@ -6,6 +7,7 @@ interface BottomDockProps {
 }
 
 export function BottomDock({
+  streak,
   onRankClick,
   onStreakClick,
   onLeagueClick,
@@ -21,11 +23,14 @@ export function BottomDock({
         🏆
       </button>
       <button
-        className="w-14 h-14 bg-orange border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center font-bold text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange focus-visible:outline-offset-2"
+        className="min-w-14 h-14 px-2 bg-orange border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center gap-1 font-bold text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange focus-visible:outline-offset-2"
         onClick={onStreakClick}
-        aria-label="View streak"
+        aria-label={`View streak${streak ? `: ${streak} days` : ''}`}
       >
-        🔥
+        <span>🔥</span>
+        {streak != null && streak > 0 && (
+          <span className="font-display text-sm">{streak}</span>
+        )}
       </button>
       <button
         className="w-14 h-14 bg-yellow border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center font-bold text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-yellow focus-visible:outline-offset-2"

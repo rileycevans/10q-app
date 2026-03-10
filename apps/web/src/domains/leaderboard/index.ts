@@ -79,6 +79,4 @@ export async function getLeagueLeaderboard(params: {
   return response.data;
 }
 
-// Re-export types for convenience
-export type { LeagueLeaderboardResponse };
 

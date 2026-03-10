@@ -7,12 +7,29 @@ import { trackScreenView } from '@/lib/analytics';
 
 export default function TomorrowPage() {
   const [countdown, setCountdown] = useState<string>('');
+  const [resultsUrl, setResultsUrl] = useState('/results');
 
   useEffect(() => {
     trackScreenView({
       screen: 'tomorrow',
       route: '/tomorrow',
     });
+
+    async function resolveAttemptId() {
+      try {
+        const { getCurrentQuiz } = await import('@/domains/quiz');
+        const { startAttempt } = await import('@/domains/attempt');
+        const quiz = await getCurrentQuiz();
+        if (!quiz) return;
+        const attempt = await startAttempt(quiz.quiz_id);
+        if (attempt.state === 'FINALIZED') {
+          setResultsUrl(`/results?attempt_id=${attempt.attempt_id}`);
+        }
+      } catch {
+        // Fall back to /results without attempt_id
+      }
+    }
+    resolveAttemptId();
 
     function updateCountdown() {
       const now = new Date();
@@ -54,7 +71,7 @@ export default function TomorrowPage() {
           </p>
           <div className="space-y-3">
             <Link
-              href="/results"
+              href={resultsUrl}
               className="block w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px]"
             >
               View Results

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
@@ -9,6 +9,7 @@ import { trackScreenView, trackAppError } from '@/lib/analytics';
 import dynamic from 'next/dynamic';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
+import { supabase } from '@/lib/supabase/client';
 
 // Dynamically import AuthButton to avoid SSR issues
 const AuthButton = dynamic(() => import('@/components/AuthButton').then(mod => ({ default: mod.AuthButton })), {
@@ -24,11 +25,27 @@ export default function HomePage() {
   const router = useRouter();
   const [isResetting, setIsResetting] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
+  const [streak, setStreak] = useState<number | undefined>(undefined);
   const isDevelopment = process.env.NODE_ENV === 'development';
 
-  // Basic screen view for home
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
+
+    async function loadStreak() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const { data: player } = await supabase
+          .from('players')
+          .select('current_streak')
+          .eq('id', session.user.id)
+          .single();
+        if (player) setStreak(player.current_streak);
+      } catch {
+        // Non-critical — silently ignore
+      }
+    }
+    loadStreak();
   }, []);
   const isSentryEnabled = !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === 'production';
 
@@ -130,6 +147,7 @@ export default function HomePage() {
           </div>
         </div>
         <BottomDock
+          streak={streak}
           onRankClick={() => router.push('/leaderboard')}
           onStreakClick={() => router.push('/leaderboard')}
           onLeagueClick={() => router.push('/leagues')}

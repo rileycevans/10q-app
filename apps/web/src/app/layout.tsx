@@ -22,6 +22,19 @@ const bungee = Bungee({
 export const metadata: Metadata = {
   title: "10Q - Daily Trivia Game",
   description: "A high-stakes daily trivia game. 10 questions. One attempt. Every day at 11:30 UTC.",
+  metadataBase: new URL("https://play10q.com"),
+  openGraph: {
+    title: "10Q - Daily Trivia Game",
+    description: "10 questions. One attempt. Every day at 11:30 UTC. How much do you really know?",
+    url: "https://play10q.com",
+    siteName: "10Q",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "10Q - Daily Trivia Game",
+    description: "10 questions. One attempt. Every day at 11:30 UTC. How much do you really know?",
+  },
 };
 
 export default function RootLayout({

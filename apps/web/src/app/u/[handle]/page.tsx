@@ -126,6 +126,18 @@ export default function ProfilePage() {
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6">
           <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Stats</h2>
           <div className="grid grid-cols-2 gap-4">
+            <div className="bg-orange border-[3px] border-ink rounded-lg p-4 text-center">
+              <p className="font-body text-xs text-ink/80 mb-1">Current Streak</p>
+              <p className="font-display text-2xl font-bold text-ink">
+                {profile.streaks.current_streak}
+              </p>
+            </div>
+            <div className="bg-orange/60 border-[3px] border-ink rounded-lg p-4 text-center">
+              <p className="font-body text-xs text-ink/80 mb-1">Longest Streak</p>
+              <p className="font-display text-2xl font-bold text-ink">
+                {profile.streaks.longest_streak}
+              </p>
+            </div>
             <div className="bg-cyanA border-[3px] border-ink rounded-lg p-4 text-center">
               <p className="font-body text-xs text-ink/80 mb-1">All-Time Best</p>
               <p className="font-display text-2xl font-bold text-ink">

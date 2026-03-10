@@ -111,11 +111,6 @@ async function main() {
         body: q.body,
     }));
 
-    // Supabase doesn't return inserted IDs from bulk insert without select().
-    // Insert one at a time would be too slow. Instead, insert with select to
-    // get back the generated IDs, then correlate by position.
-    //
-    // We insert in batches and use RETURNING id by including .select('id, body').
     const firestoreIdToSupabaseId = new Map();
 
     const BATCH = 100;
@@ -125,16 +120,12 @@ async function main() {
         const { data, error } = await supabase
             .from('questions')
             .insert(chunk.map((q) => ({ body: q.body })))
-            .select('id, body');
+            .select('id');
 
         if (error) throw new Error(`Failed to insert questions: ${error.message}`);
 
-        // Match returned rows back to source questions by body text.
-        // (body is unique enough within a batch for our purposes)
-        const bodyToId = new Map(data.map((r) => [r.body, r.id]));
-        for (const q of chunk) {
-            const supabaseId = bodyToId.get(q.body);
-            if (supabaseId) firestoreIdToSupabaseId.set(q._firestore_id, supabaseId);
+        for (let k = 0; k < chunk.length; k++) {
+            firestoreIdToSupabaseId.set(chunk[k]._firestore_id, data[k].id);
         }
 
         qInserted += chunk.length;

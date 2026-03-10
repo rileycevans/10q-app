@@ -1,0 +1,15 @@
+{
+  "name": "10q-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-02-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "play10q.com/*", "zone_id": "12a66884a8c9c819e255004726c89a4d" },
+    { "pattern": "www.play10q.com/*", "zone_id": "12a66884a8c9c819e255004726c89a4d" }
+  ]
+}

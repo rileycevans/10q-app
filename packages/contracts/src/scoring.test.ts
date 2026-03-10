@@ -8,7 +8,7 @@ import {
   calculateBonus,
   calculateQuestionScore,
   validateTotalScore,
-} from "./scoring.js";
+} from "./scoring";
 import {
   BASE_POINTS_CORRECT,
   BASE_POINTS_INCORRECT,
@@ -17,7 +17,7 @@ import {
   QUESTION_TIME_LIMIT_MS,
   MAX_QUESTIONS_PER_QUIZ,
   MAX_SCORE_PER_QUESTION,
-} from "./constants.js";
+} from "./constants";
 
 describe("calculateBonus", () => {
   it("returns max bonus (5) at 0ms", () => {

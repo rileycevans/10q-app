@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
     // Get profile by handle
     const { data: profile, error: profileError } = await supabase
       .from("players")
-      .select("id, handle_display, handle_canonical, created_at")
+      .select("id, handle_display, handle_canonical, created_at, current_streak, longest_streak")
       .eq("handle_canonical", handleCanonical)
       .single();
 
@@ -280,6 +280,10 @@ Deno.serve(async (req) => {
           all_time_worst: allTimeWorst,
           total_games: totalGames,
           average_score: averageScore ? Number(averageScore.toFixed(2)) : null,
+        },
+        streaks: {
+          current_streak: profile.current_streak ?? 0,
+          longest_streak: profile.longest_streak ?? 0,
         },
         recent_results: recentResults,
         category_performance: categoryPerformance,

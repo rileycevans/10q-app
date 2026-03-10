@@ -7,7 +7,7 @@ import {
     generateXboxStyleHandle,
     validateHandle,
     canonicalizeHandle,
-} from "./handles.js";
+} from "./handles";
 
 describe("validateHandle", () => {
     describe("valid handles", () => {

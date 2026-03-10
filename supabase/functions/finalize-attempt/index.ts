@@ -69,12 +69,17 @@ Deno.serve(async (req) => {
 
     // Check if already finalized
     if (attempt.finalized_at) {
-      // Return existing results (Notion plan: daily_scores table)
       const { data: dailyScore } = await supabase
         .from("daily_scores")
         .select("*")
         .eq("quiz_id", attempt.quiz_id)
         .eq("player_id", userId)
+        .single();
+
+      const { data: player } = await supabase
+        .from("players")
+        .select("current_streak, longest_streak")
+        .eq("id", userId)
         .single();
 
       return successResponse(
@@ -84,6 +89,8 @@ Deno.serve(async (req) => {
           total_score: attempt.total_score,
           total_time_ms: attempt.total_time_ms,
           daily_score: dailyScore,
+          current_streak: player?.current_streak ?? 0,
+          longest_streak: player?.longest_streak ?? 0,
         },
         requestId
       );
@@ -206,6 +213,62 @@ Deno.serve(async (req) => {
       );
     }
 
+    // --- Streak logic ---
+    const { data: quiz } = await supabase
+      .from("quizzes")
+      .select("release_at_utc")
+      .eq("id", attempt.quiz_id)
+      .single();
+
+    let currentStreak = 1;
+    let longestStreak = 0;
+
+    if (quiz?.release_at_utc) {
+      const quizDate = new Date(quiz.release_at_utc).toISOString().split("T")[0];
+
+      const { data: player } = await supabase
+        .from("players")
+        .select("current_streak, longest_streak, last_quiz_date")
+        .eq("id", userId)
+        .single();
+
+      if (player) {
+        longestStreak = player.longest_streak ?? 0;
+
+        if (player.last_quiz_date) {
+          if (player.last_quiz_date === quizDate) {
+            currentStreak = player.current_streak;
+          } else {
+            const yesterday = new Date(quizDate);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+            if (player.last_quiz_date === yesterdayStr) {
+              currentStreak = player.current_streak + 1;
+            }
+          }
+        }
+
+        longestStreak = Math.max(longestStreak, currentStreak);
+
+        await supabase
+          .from("players")
+          .update({
+            current_streak: currentStreak,
+            longest_streak: longestStreak,
+            last_quiz_date: quizDate,
+          })
+          .eq("id", userId);
+
+        logStructured(requestId, "streak_updated", {
+          player_id: userId,
+          quiz_date: quizDate,
+          current_streak: currentStreak,
+          longest_streak: longestStreak,
+        });
+      }
+    }
+
     // Write event to outbox
     await supabase.from("outbox_events").insert({
       aggregate_type: "attempt",
@@ -219,6 +282,8 @@ Deno.serve(async (req) => {
         score: attempt.total_score,
         total_time_ms: attempt.total_time_ms,
         correct_count: correctCount,
+        current_streak: currentStreak,
+        longest_streak: longestStreak,
       },
       trace_id: requestId,
     });
@@ -227,6 +292,8 @@ Deno.serve(async (req) => {
       attempt_id,
       score: attempt.total_score,
       correct_count: correctCount,
+      current_streak: currentStreak,
+      longest_streak: longestStreak,
     });
 
     return successResponse(
@@ -237,6 +304,8 @@ Deno.serve(async (req) => {
         total_time_ms: attempt.total_time_ms,
         correct_count: correctCount,
         daily_score: dailyScore,
+        current_streak: currentStreak,
+        longest_streak: longestStreak,
       },
       requestId
     );

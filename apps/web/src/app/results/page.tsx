@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { HandleNudgeModal } from '@/components/HandleNudgeModal';
+import { supabase } from '@/lib/supabase/client';
 import { trackScreenView, trackResultsView, trackShareClicked, trackAppError } from '@/lib/analytics';
 
 import Link from 'next/link';
@@ -128,7 +130,30 @@ function ResultsContent() {
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<AttemptResults | null>(null);
   const [showScoringModal, setShowScoringModal] = useState(false);
+  const [showHandleNudge, setShowHandleNudge] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    async function checkHandle() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const dismissed = sessionStorage.getItem('handle_nudge_dismissed');
+        if (dismissed) return;
+        const { data: player } = await supabase
+          .from('players')
+          .select('handle_display')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!player?.handle_display) {
+          setShowHandleNudge(true);
+        }
+      } catch {
+        // Non-critical — silently ignore
+      }
+    }
+    checkHandle();
+  }, []);
 
   useEffect(() => {
     async function loadResults() {
@@ -227,6 +252,11 @@ function ResultsContent() {
   }
 
   const totalTimeSeconds = (results.total_time_ms / 1000).toFixed(1);
+  const streakParam = searchParams.get('streak');
+  const longestParam = searchParams.get('longest');
+  const currentStreak = streakParam ? parseInt(streakParam, 10) : 0;
+  const longestStreak = longestParam ? parseInt(longestParam, 10) : 0;
+  const isNewRecord = currentStreak > 0 && currentStreak === longestStreak && currentStreak >= 2;
 
   // Build Wordle-style share text
   // 🟩 = correct + answered in < 4s (fast, earned bonus ≥ 4)
@@ -244,7 +274,7 @@ function ResultsContent() {
     const emojis = r.questions.map(getEmoji);
     const row1 = emojis.slice(0, 5).join('');
     const row2 = emojis.slice(5, 10).join('');
-    return `${label} — ${score} pts\n\n${row1}\n${row2}\n\nplay.10q.app`;
+    return `${label} — ${score} pts\n\n${row1}\n${row2}\n\nplay10q.com`;
   }
 
   async function handleShare() {
@@ -283,6 +313,13 @@ function ResultsContent() {
           {/* Header Card */}
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 mb-6 text-center">
             <h1 className="font-display text-4xl mb-2 text-ink">QUIZ COMPLETE!</h1>
+            {currentStreak >= 2 && (
+              <div className={`inline-block px-4 py-1.5 rounded-full border-[3px] border-ink font-display text-sm font-bold text-ink mt-2 ${isNewRecord ? 'bg-yellow' : 'bg-orange/30'}`}>
+                {isNewRecord
+                  ? `NEW RECORD — ${currentStreak} days!`
+                  : `${currentStreak}-day streak!`}
+              </div>
+            )}
             <div className="mt-6 mb-4">
               <div className="font-display text-6xl font-bold text-ink mb-2">
                 {results.total_score}
@@ -363,6 +400,19 @@ function ResultsContent() {
           </div>
         </div>
       </div>
+
+      {/* Handle Nudge Modal */}
+      <HandleNudgeModal
+        isOpen={showHandleNudge}
+        onClose={() => {
+          setShowHandleNudge(false);
+          sessionStorage.setItem('handle_nudge_dismissed', '1');
+        }}
+        onSaved={() => {
+          setShowHandleNudge(false);
+          sessionStorage.setItem('handle_nudge_dismissed', '1');
+        }}
+      />
 
       {/* Scoring Modal */}
       {showScoringModal && (

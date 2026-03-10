@@ -12,7 +12,7 @@ import {
   QUESTION_TIME_LIMIT_MS,
   MAX_QUESTIONS_PER_QUIZ,
   MAX_SCORE_PER_QUESTION,
-} from "./constants.js";
+} from "./constants";
 
 export interface ScoreCalculation {
   basePoints: number;

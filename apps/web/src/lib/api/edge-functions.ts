@@ -330,6 +330,8 @@ export const edgeFunctions = {
       attempt_id: string;
       total_score: number;
       finalized_at: string;
+      current_streak: number;
+      longest_streak: number;
     }>('finalize-attempt', {
       method: 'POST',
       body: { attempt_id: attemptId },
@@ -566,6 +568,10 @@ export const edgeFunctions = {
         total_games: number;
         average_score: number | null;
       };
+      streaks: {
+        current_streak: number;
+        longest_streak: number;
+      };
       recent_results: Array<{
         score: number;
         correct_count: number;
@@ -582,6 +588,26 @@ export const edgeFunctions = {
     }>(`get-profile-by-handle?handle=${encodeURIComponent(handle)}`, {
       method: 'GET',
       requireAuth: false, // Public profile page
+    }),
+
+  createQuiz: (data: {
+    release_date: string;
+    questions: Array<{
+      body: string;
+      answers: Array<{ body: string; is_correct: boolean }>;
+      tags?: string[];
+    }>;
+  }) =>
+    callEdgeFunction<{
+      quiz_id: string;
+      quiz_number: number;
+      release_at_utc: string;
+      status: string;
+      question_count: number;
+    }>('create-quiz', {
+      method: 'POST',
+      body: data,
+      requireAuth: true,
     }),
 
   deleteAttempt: (quizId: string) =>
