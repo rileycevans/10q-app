@@ -206,7 +206,7 @@ async function main() {
             qqRows.push({
                 quiz_id: quiz.id,
                 question_id: questionId,
-                order_index: j,
+                order_index: j + 1,
             });
         }
 

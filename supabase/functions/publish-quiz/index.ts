@@ -11,7 +11,7 @@ import { generateRequestId, logStructured } from "../_shared/utils.ts";
 
 const MAX_QUESTIONS_PER_QUIZ = 10;
 const CHOICES_PER_QUESTION = 4;
-const MIN_TAGS_PER_QUESTION = 1;
+const MIN_TAGS_PER_QUESTION = 0;
 const MAX_TAGS_PER_QUESTION = 5;
 
 /**
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
     const { data: draftQuiz, error: quizError } = await supabase
       .from("quizzes")
       .select("id, release_at_utc, status")
-      .eq("status", "draft")
+      .in("status", ["draft", "scheduled"])
       .lte("release_at_utc", now.toISOString())
       .order("release_at_utc", { ascending: false })
       .limit(1)
