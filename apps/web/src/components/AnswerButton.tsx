@@ -41,7 +41,7 @@ export function AnswerButton({
   return (
     <button
       className={`
-        h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm
+        min-h-14 w-full px-6 py-3 border-[4px] border-ink rounded-[18px] shadow-sticker-sm
         font-bold text-lg text-center
         transition-colors duration-200 ease-out
         ${bgColor} ${textColor} ${animationClass}

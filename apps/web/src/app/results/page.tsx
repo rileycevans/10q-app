@@ -96,7 +96,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         <div className="text-right">
           <div className="text-xs text-ink/80 mb-1">
             Base: {question.base_points}pt
-            {question.bonus_points > 0 && ` + Bonus: ${question.bonus_points}pt`}
+            {question.bonus_points > 0 && ` + Time Bonus: ${question.bonus_points}pt`}
           </div>
           <div className="font-display text-xl font-bold text-ink">
             {question.total_points} pts
@@ -258,23 +258,21 @@ function ResultsContent() {
   const longestStreak = longestParam ? parseInt(longestParam, 10) : 0;
   const isNewRecord = currentStreak > 0 && currentStreak === longestStreak && currentStreak >= 2;
 
-  // Build Wordle-style share text
-  // 🟩 = correct + answered in < 4s (fast, earned bonus ≥ 4)
-  // 🟨 = correct + answered in ≥ 4s (slow or no bonus)
-  // 🟥 = wrong or timed out
+  // 🟩 = correct, 🟥 = wrong or timed out
   function getEmoji(q: QuestionResult): string {
-    if (!q.is_correct) return '🟥';
-    return q.time_ms < 4000 ? '🟩' : '🟨';
+    return q.is_correct ? '🟩' : '🟥';
   }
 
   function buildShareText(): string {
     const r = results!;
     const label = r.quiz_number != null ? `10Q #${r.quiz_number}` : '10Q';
+    const d = new Date(r.finalized_at);
+    const date = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
     const score = Math.round(r.total_score);
     const emojis = r.questions.map(getEmoji);
     const row1 = emojis.slice(0, 5).join('');
     const row2 = emojis.slice(5, 10).join('');
-    return `${label} — ${score} pts\n\n${row1}\n${row2}\n\nplay10q.com`;
+    return `${label} ${date} — ${score} pts\n\n${row1}\n${row2}\n\nplay10q.com`;
   }
 
   async function handleShare() {

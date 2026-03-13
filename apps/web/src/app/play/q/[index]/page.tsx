@@ -30,6 +30,7 @@ export default function QuestionPage() {
   const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [totalTime, setTotalTime] = useState<number>(16000);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
 
@@ -61,20 +62,22 @@ export default function QuestionPage() {
             setQuizId(cachedQuizId);
             setLoading(false);
 
-            // Calculate time remaining
-            if (parsedAttempt.current_question_expires_at) {
+            if (parsedAttempt.current_question_expires_at && parsedAttempt.current_question_started_at) {
+              const startedAt = new Date(parsedAttempt.current_question_started_at).getTime();
               const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
-              const now = Date.now();
-              const remaining = Math.max(0, expiresAt - now);
+              const duration = expiresAt - startedAt;
+              setTotalTime(duration);
+              setTimeRemaining(Math.max(0, expiresAt - Date.now()));
+            } else if (parsedAttempt.current_question_expires_at) {
+              const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
+              const remaining = Math.max(0, expiresAt - Date.now());
               setTimeRemaining(remaining);
             } else if (parsedAttempt.current_question_started_at) {
               const startedAt = new Date(parsedAttempt.current_question_started_at).getTime();
-              const now = Date.now();
-              const elapsed = now - startedAt;
-              const remaining = Math.max(0, 16000 - elapsed);
-              setTimeRemaining(remaining);
+              const elapsed = Date.now() - startedAt;
+              setTimeRemaining(Math.max(0, totalTime - elapsed));
             } else {
-              setTimeRemaining(16000);
+              setTimeRemaining(totalTime);
             }
 
             // Still validate in background, but don't block UI
@@ -175,22 +178,20 @@ export default function QuestionPage() {
 
         setCurrentQuestion(question);
 
-        // Calculate time remaining
-        if (attemptState.current_question_expires_at) {
-          const expiresAt = new Date(attemptState.current_question_expires_at).getTime();
-          const now = Date.now();
-          const remaining = Math.max(0, expiresAt - now);
-          setTimeRemaining(remaining);
-        } else if (attemptState.current_question_started_at) {
-          // Fallback: calculate from start time if expires_at is missing
+        if (attemptState.current_question_expires_at && attemptState.current_question_started_at) {
           const startedAt = new Date(attemptState.current_question_started_at).getTime();
-          const now = Date.now();
-          const elapsed = now - startedAt;
-          const remaining = Math.max(0, 16000 - elapsed);
-          setTimeRemaining(remaining);
+          const expiresAt = new Date(attemptState.current_question_expires_at).getTime();
+          const duration = expiresAt - startedAt;
+          setTotalTime(duration);
+          setTimeRemaining(Math.max(0, expiresAt - Date.now()));
+        } else if (attemptState.current_question_expires_at) {
+          const expiresAt = new Date(attemptState.current_question_expires_at).getTime();
+          setTimeRemaining(Math.max(0, expiresAt - Date.now()));
+        } else if (attemptState.current_question_started_at) {
+          const startedAt = new Date(attemptState.current_question_started_at).getTime();
+          setTimeRemaining(Math.max(0, totalTime - (Date.now() - startedAt)));
         } else {
-          // Default to full time if nothing is set
-          setTimeRemaining(16000);
+          setTimeRemaining(totalTime);
         }
 
         // If we got here with cached data, we can skip the loading screen
@@ -258,67 +259,65 @@ export default function QuestionPage() {
     }
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router]);
 
-  const handleAnswerClick = async (answerId: string) => {
+  const handleAnswerClick = (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
-    // 1. Highlight selected answer & freeze the clock
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
 
-    try {
-      // 2. Await the server response to know correct/wrong
-      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
+    const nextIndex = questionIndex + 1;
 
-      // 3. Show feedback animation (green pop or red shake)
-      setFeedback(result.is_correct ? 'correct' : 'wrong');
+    // Optimistic cache: assume server will advance to next index
+    const optimisticState: AttemptState = {
+      attempt_id: attempt.attempt_id,
+      quiz_id: attempt.quiz_id,
+      current_index: nextIndex,
+      current_question_started_at: new Date().toISOString(),
+      current_question_expires_at: null,
+      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+    };
+    sessionStorage.setItem('attempt_state', JSON.stringify(optimisticState));
 
-      // Track answer submit with scoring + timing
-      trackAnswerSubmit({
-        quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
-        attempt_id: result.attempt_id,
-        question_id: currentQuestion.question_id,
-        question_index: questionIndex,
-        answer_id: answerId,
-        is_correct: result.is_correct,
-        time_ms: result.time_ms,
-        base_points: result.base_points,
-        bonus_points: result.bonus_points,
-        total_points: result.total_points,
-      });
-
-      // 4. Build next state for cache
-      const nextState: AttemptState = {
-        attempt_id: result.attempt_id,
-        quiz_id: attempt.quiz_id,
-        current_index: result.current_index,
-        current_question_started_at: result.question_started_at,
-        current_question_expires_at: result.question_expires_at,
-        state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-      };
-      sessionStorage.setItem('attempt_state', JSON.stringify(nextState));
-
-      // 5. Wait 1 second so the player can see the feedback
-      await sleep(1000);
-
-      // 6. Auto-advance to next question
-      if (result.current_index <= 10) {
-        router.push(`/play/q/${result.current_index}`);
-      } else {
-        router.push(`/play/finalize?attempt_id=${result.attempt_id}`);
-      }
-    } catch (err) {
-      console.error('Failed to submit answer:', err);
-      trackAppError({
-        location: 'question_submit',
-        message: err instanceof Error ? err.message : 'Failed to submit answer',
-      });
-      const nextIndex = questionIndex + 1;
-      if (nextIndex <= 10) {
-        router.push(`/play/q/${nextIndex}`);
-      } else {
-        router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
-      }
+    // Navigate immediately — don't wait for network
+    if (nextIndex <= 10) {
+      router.push(`/play/q/${nextIndex}`);
+    } else {
+      router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
     }
+
+    // Fire submit in background — updates cache when response arrives
+    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
+      .then((result) => {
+        const serverState: AttemptState = {
+          attempt_id: result.attempt_id,
+          quiz_id: attempt.quiz_id,
+          current_index: result.current_index,
+          current_question_started_at: result.question_started_at,
+          current_question_expires_at: result.question_expires_at,
+          state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+        };
+        sessionStorage.setItem('attempt_state', JSON.stringify(serverState));
+
+        trackAnswerSubmit({
+          quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+          attempt_id: result.attempt_id,
+          question_id: currentQuestion.question_id,
+          question_index: questionIndex,
+          answer_id: answerId,
+          is_correct: result.is_correct,
+          time_ms: result.time_ms,
+          base_points: result.base_points,
+          bonus_points: result.bonus_points,
+          total_points: result.total_points,
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to submit answer:', err);
+        trackAppError({
+          location: 'question_submit',
+          message: err instanceof Error ? err.message : 'Failed to submit answer',
+        });
+      });
   };
 
   if (loading) {
@@ -370,11 +369,11 @@ export default function QuestionPage() {
                 <div
                   className="h-full bg-cyanA transition-all duration-100 ease-linear"
                   style={{
-                    width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / 16000) * 100))}%`,
+                    width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
                   }}
                 />
                 <span className="absolute inset-0 flex items-center justify-center text-base font-bold uppercase tracking-wide text-ink pointer-events-none z-10">
-                  {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : '16.0'}s
+                  {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
                 </span>
               </div>
             </div>
