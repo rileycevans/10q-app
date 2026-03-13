@@ -27,7 +27,7 @@ export function LeaderboardTable({
   return (
     <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-4 w-full">
       {/* Table Header */}
-      <div className="grid grid-cols-[60px_1fr_120px_80px] gap-4 pb-3 mb-3 border-b-[3px] border-ink">
+      <div className="grid grid-cols-[40px_1fr_80px_50px] gap-3 pb-3 mb-3 border-b-[3px] border-ink">
         <div className="font-display font-bold text-sm uppercase tracking-wide text-ink">Rank</div>
         <div className="font-display font-bold text-sm uppercase tracking-wide text-ink">Player</div>
         <div className="font-display font-bold text-sm uppercase tracking-wide text-ink text-right">
@@ -45,7 +45,7 @@ export function LeaderboardTable({
           return (
             <div
               key={entry.player_id}
-              className={`grid grid-cols-[60px_1fr_120px_80px] gap-4 py-3 px-2 rounded-lg border-[3px] border-ink transition-all ${isUser
+              className={`grid grid-cols-[40px_1fr_80px_50px] gap-3 py-3 px-2 rounded-lg border-[3px] border-ink transition-all ${isUser
                   ? 'bg-cyanA shadow-sticker-sm'
                   : 'bg-paper hover:bg-cyanA/20'
                 }`}

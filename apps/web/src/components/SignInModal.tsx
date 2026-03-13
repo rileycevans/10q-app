@@ -17,14 +17,21 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      // Check if current user is anonymous — if so, upgrade (preserves data)
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user?.is_anonymous) {
-        // linkIdentity merges anon account into Google — same UUID, all data kept
-        await upgradeToGoogle();
+        try {
+          await upgradeToGoogle();
+        } catch {
+          // linkIdentity requires Manual Linking enabled in Supabase — fall back to standard OAuth
+          await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+              redirectTo: `${window.location.origin}/auth/callback`,
+            },
+          });
+        }
       } else {
-        // No session or already a real user — standard OAuth
         await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
