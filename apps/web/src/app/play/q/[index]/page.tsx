@@ -13,10 +13,6 @@ import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
 import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
 
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 export default function QuestionPage() {
   const router = useRouter();
   const params = useParams();
@@ -32,7 +28,7 @@ export default function QuestionPage() {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [totalTime, setTotalTime] = useState<number>(16000);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
+  const [feedback] = useState<AnswerFeedback>('idle');
 
   useEffect(() => {
     // Prefetch next question route for instant navigation

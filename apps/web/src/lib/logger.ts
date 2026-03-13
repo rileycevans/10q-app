@@ -35,6 +35,7 @@ class Logger {
     }
 
     // Prod: forward structured logs to Sentry.logger when available
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!this.isDev && (Sentry as any).logger) {
       const payload: LogContext & { timestamp: string } =
         typeof context === 'string'
@@ -44,6 +45,7 @@ class Logger {
       const { event, ...attributes } = payload;
       const message = event || 'LOG';
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const logger = (Sentry as any).logger;
       switch (level) {
         case 'debug':
