@@ -12,6 +12,53 @@ interface SignInModalProps {
 
 type OAuthProvider = 'google' | 'apple';
 
+function captureOAuthStartFailure(
+  provider: OAuthProvider,
+  redirectTo: string,
+  reason: string,
+  error: unknown
+) {
+  Sentry.withScope((scope) => {
+    scope.setTag('auth.provider', provider);
+    scope.setTag('auth.flow', 'oauth_start');
+    scope.setContext('auth', {
+      provider,
+      redirectTo,
+      reason,
+    });
+    if (error instanceof Error) {
+      Sentry.captureException(error);
+    } else {
+      Sentry.captureMessage(String(reason), { level: 'error', extra: { error } });
+    }
+  });
+}
+
+async function signInWithOAuthOrReport(
+  provider: OAuthProvider,
+  redirectTo: string
+): Promise<void> {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo },
+  });
+
+  if (error) {
+    captureOAuthStartFailure(provider, redirectTo, 'signInWithOAuth returned error', error);
+    return;
+  }
+
+  if (data?.url) {
+    Sentry.addBreadcrumb({
+      category: 'auth',
+      type: 'default',
+      level: 'info',
+      message: 'OAuth redirect URL issued',
+      data: { provider, hasUrl: true },
+    });
+  }
+}
+
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
 
@@ -28,30 +75,21 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
         try {
           if (provider === 'google') await upgradeToGoogle();
           else await upgradeToApple();
-        } catch {
+        } catch (linkErr) {
           // linkIdentity requires Manual Linking enabled in Supabase — fall back to standard OAuth
-          await supabase.auth.signInWithOAuth({
-            provider,
-            options: { redirectTo },
+          Sentry.addBreadcrumb({
+            category: 'auth',
+            message: 'linkIdentity failed, falling back to signInWithOAuth',
+            data: { provider },
           });
+          await signInWithOAuthOrReport(provider, redirectTo);
         }
       } else {
-        await supabase.auth.signInWithOAuth({
-          provider,
-          options: { redirectTo },
-        });
+        await signInWithOAuthOrReport(provider, redirectTo);
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      Sentry.withScope((scope) => {
-        scope.setTag('auth.provider', provider);
-        scope.setTag('auth.flow', 'oauth_start');
-        scope.setContext('auth', {
-          provider,
-          redirectTo,
-        });
-        Sentry.captureException(error);
-      });
+      captureOAuthStartFailure(provider, redirectTo, 'unexpected throw', error);
     } finally {
       setLoadingProvider(null);
     }
