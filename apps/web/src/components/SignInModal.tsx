@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { upgradeToApple, upgradeToGoogle } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
+import * as Sentry from '@sentry/nextjs';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -42,6 +43,15 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       }
     } catch (error) {
       console.error('Sign in error:', error);
+      Sentry.withScope((scope) => {
+        scope.setTag('auth.provider', provider);
+        scope.setTag('auth.flow', 'oauth_start');
+        scope.setContext('auth', {
+          provider,
+          redirectTo,
+        });
+        Sentry.captureException(error);
+      });
     } finally {
       setLoadingProvider(null);
     }
