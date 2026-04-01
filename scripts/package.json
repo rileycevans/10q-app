@@ -15,6 +15,7 @@
     "apple:client-secret": "tsx generate-apple-client-secret.ts"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.47.0",
     "@supabase/supabase-js": "^2.39.0",
     "firebase-admin": "^12.7.0",
     "tsx": "^4.7.0"
