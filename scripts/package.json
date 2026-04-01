@@ -11,7 +11,8 @@
     "create-test-quiz:notion": "tsx create-test-quiz-notion.ts",
     "check-quiz": "tsx check-and-publish-quiz.ts",
     "export-questions": "node export-firestore-questions.js",
-    "import-questions": "node import-questions.js"
+    "import-questions": "node import-questions.js",
+    "apple:client-secret": "tsx generate-apple-client-secret.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
@@ -19,6 +20,7 @@
     "tsx": "^4.7.0"
   },
   "devDependencies": {
+    "jose": "^5.9.6",
     "pg": "^8.17.1"
   }
 }

@@ -100,7 +100,7 @@ export function AuthButton() {
     );
   }
 
-  // User is signed in with a real provider (Google) — show Sign Out
+  // User is signed in with a real provider — show Sign Out
   if (hasSession && !isAnonymous) {
     return (
       <button
@@ -112,7 +112,7 @@ export function AuthButton() {
     );
   }
 
-  // Anonymous or no session — show Sign In (upgrade to Google)
+  // Anonymous or no session — show Sign In (Google / Apple in modal)
   return (
     <>
       <button

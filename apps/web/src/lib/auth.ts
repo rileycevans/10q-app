@@ -76,14 +76,26 @@ export async function isAnonymousUser(): Promise<boolean> {
  * Upgrade an anonymous account to Google.
  * Uses linkIdentity so the same user ID is preserved and all data stays.
  */
+function oauthCallbackUrl(): string | undefined {
+  return typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
+}
+
 export async function upgradeToGoogle() {
   const { data, error } = await supabase.auth.linkIdentity({
     provider: 'google',
-    options: {
-      redirectTo: typeof window !== 'undefined'
-        ? `${window.location.origin}/auth/callback`
-        : undefined,
-    },
+    options: { redirectTo: oauthCallbackUrl() },
+  });
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Upgrade an anonymous account to Apple (same user ID when manual linking works).
+ */
+export async function upgradeToApple() {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider: 'apple',
+    options: { redirectTo: oauthCallbackUrl() },
   });
   if (error) throw error;
   return data;
