@@ -85,9 +85,6 @@ export default function HomePage() {
   return (
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen">
-        <div className="absolute top-4 left-4 z-10">
-          <AuthButton />
-        </div>
         <div className="flex-1 flex items-center justify-center px-4 py-8">
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
             <div className="mb-6 flex justify-center px-1">
@@ -101,7 +98,7 @@ export default function HomePage() {
               />
             </div>
             <p className="font-body text-sm mb-8 text-ink/80">
-              10 questions. One attempt. Every day at 11:30 UTC.
+              10 questions. One attempt. New quiz, new topic, every single day.
             </p>
             <div className="space-y-3">
               <Link
@@ -158,6 +155,7 @@ export default function HomePage() {
           onStreakClick={() => router.push('/leaderboard')}
           onLeagueClick={() => router.push('/leagues')}
           onSettingsClick={() => router.push('/settings')}
+          authSlot={<AuthButton />}
         />
       </div>
 

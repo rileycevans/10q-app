@@ -4,6 +4,7 @@ interface BottomDockProps {
   onStreakClick?: () => void;
   onLeagueClick?: () => void;
   onSettingsClick?: () => void;
+  authSlot?: React.ReactNode;
 }
 
 export function BottomDock({
@@ -12,6 +13,7 @@ export function BottomDock({
   onStreakClick,
   onLeagueClick,
   onSettingsClick,
+  authSlot,
 }: BottomDockProps) {
   return (
     <div className="flex items-center justify-center gap-3 px-4 py-3">
@@ -46,6 +48,7 @@ export function BottomDock({
       >
         ⚙️
       </button>
+      {authSlot}
     </div>
   );
 }
