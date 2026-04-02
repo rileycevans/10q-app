@@ -4,6 +4,7 @@ export type AnswerFeedback = 'idle' | 'correct' | 'wrong';
 
 interface AnswerButtonProps {
   text: string;
+  marker?: string;
   isSelected?: boolean;
   feedback?: AnswerFeedback;
   onClick: () => void;
@@ -12,6 +13,7 @@ interface AnswerButtonProps {
 
 export function AnswerButton({
   text,
+  marker,
   isSelected = false,
   feedback = 'idle',
   onClick,
@@ -41,8 +43,8 @@ export function AnswerButton({
   return (
     <button
       className={`
-        min-h-14 w-full px-6 py-3 border-[4px] border-ink rounded-[18px] shadow-sticker-sm
-        font-bold text-lg text-center
+        min-h-14 w-full px-5 py-3 border-[4px] border-ink rounded-[18px] shadow-sticker-sm
+        font-bold text-lg text-left flex items-center
         transition-colors duration-200 ease-out
         ${bgColor} ${textColor} ${animationClass}
         ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
@@ -54,7 +56,12 @@ export function AnswerButton({
       aria-label={`Answer option: ${text}`}
       aria-pressed={isSelected}
     >
-      {text}
+      {marker && (
+        <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-ink/10 text-sm font-bold text-ink mr-3 shrink-0">
+          {marker}
+        </span>
+      )}
+      <span className="flex-1">{text}</span>
       {isSelected && <span className="sr-only">Selected</span>}
     </button>
   );
