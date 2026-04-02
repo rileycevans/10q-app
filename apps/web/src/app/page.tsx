@@ -90,10 +90,16 @@ export default function HomePage() {
         </div>
         <div className="flex-1 flex items-center justify-center px-4 py-8">
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
-            <h1 className="font-display text-4xl mb-4 text-ink">10Q</h1>
-            <p className="font-body font-bold text-lg mb-6 text-ink">
-              Daily Trivia Game
-            </p>
+            <div className="mb-6 flex justify-center px-1">
+              {/* Plain img: drop any transparent PNG at public/brand/10q-logo.png — no width/height sync */}
+              <img
+                src="/brand/10q-logo.png"
+                alt="10Q"
+                className="h-auto w-[min(100%,500px)] max-w-full object-contain"
+                decoding="async"
+                fetchPriority="high"
+              />
+            </div>
             <p className="font-body text-sm mb-8 text-ink/80">
               10 questions. One attempt. Every day at 11:30 UTC.
             </p>

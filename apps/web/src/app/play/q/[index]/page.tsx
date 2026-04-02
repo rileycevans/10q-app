@@ -380,19 +380,21 @@ export default function QuestionPage() {
             questionNumber={questionIndex}
           />
 
-          <div className="w-full max-w-md space-y-1.5">
-            {currentQuestion.answers
-              .sort((a, b) => a.sort_index - b.sort_index)
-              .map((answer) => (
-                <AnswerButton
-                  key={answer.answer_id}
-                  text={answer.body}
-                  isSelected={selectedAnswerId === answer.answer_id}
-                  feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
-                  onClick={() => handleAnswerClick(answer.answer_id)}
-                  disabled={isSubmitting || selectedAnswerId !== null}
-                />
-              ))}
+          <div className="w-full max-w-md bg-cyanA/20 border-[3px] border-ink rounded-[20px] shadow-sticker-sm p-3">
+            <div className="space-y-1.5">
+              {currentQuestion.answers
+                .sort((a, b) => a.sort_index - b.sort_index)
+                .map((answer) => (
+                  <AnswerButton
+                    key={answer.answer_id}
+                    text={answer.body}
+                    isSelected={selectedAnswerId === answer.answer_id}
+                    feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
+                    onClick={() => handleAnswerClick(answer.answer_id)}
+                    disabled={isSubmitting || selectedAnswerId !== null}
+                  />
+                ))}
+            </div>
           </div>
         </div>
 
