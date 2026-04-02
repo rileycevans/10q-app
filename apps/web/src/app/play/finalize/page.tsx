@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { finalizeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { trackScreenView, trackQuizFinalized, trackAppError } from '@/lib/analytics';
+import { trackScreenView, trackQuizFinalized, trackAppError, setPersonProperties } from '@/lib/analytics';
 
 export default function FinalizePage() {
   return (
@@ -76,6 +76,14 @@ function FinalizeContent() {
         trackQuizFinalized({
           attempt_id: result.attempt_id,
           total_score: result.total_score,
+        });
+
+        // Update person properties for cohort analysis
+        setPersonProperties({
+          last_quiz_score: result.total_score,
+          last_quiz_at: result.finalized_at,
+          current_streak: result.current_streak,
+          longest_streak: result.longest_streak,
         });
 
         sessionStorage.removeItem('attempt_state');

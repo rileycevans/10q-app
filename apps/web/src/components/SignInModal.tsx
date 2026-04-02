@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { upgradeToApple, upgradeToGoogle } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import * as Sentry from '@sentry/nextjs';
+import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -72,6 +73,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user?.is_anonymous) {
+        trackAuthUpgradeStarted({ provider });
         try {
           if (provider === 'google') await upgradeToGoogle();
           else await upgradeToApple();
@@ -85,6 +87,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
           await signInWithOAuthOrReport(provider, redirectTo);
         }
       } else {
+        trackSignIn({ provider, is_upgrade: false });
         await signInWithOAuthOrReport(provider, redirectTo);
       }
     } catch (error) {

@@ -13,14 +13,43 @@ type ScreenName =
 
 function capture(event: string, properties?: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
-  // posthog.init is triggered by AnalyticsProvider; if it somehow hasn't run yet,
-  // calls will be no-ops on the client until it does.
   try {
     posthog.capture(event, properties);
   } catch {
     // Swallow analytics errors to avoid impacting gameplay.
   }
 }
+
+// ── Person properties ───────────────────────────────────────────────
+
+export function identifyUser(userId: string, properties?: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  try {
+    posthog.identify(userId, properties);
+  } catch {
+    // Swallow
+  }
+}
+
+export function setPersonProperties(properties: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  try {
+    posthog.people.set(properties);
+  } catch {
+    // Swallow
+  }
+}
+
+export function resetIdentity() {
+  if (typeof window === 'undefined') return;
+  try {
+    posthog.reset();
+  } catch {
+    // Swallow
+  }
+}
+
+// ── Screen views ────────────────────────────────────────────────────
 
 export function trackScreenView(props: {
   screen: ScreenName;
@@ -30,6 +59,8 @@ export function trackScreenView(props: {
 }) {
   capture('screen_view', props);
 }
+
+// ── Quiz lifecycle ──────────────────────────────────────────────────
 
 export function trackQuizStart(props: {
   quiz_id: string;
@@ -59,19 +90,24 @@ export function trackAnswerSubmit(props: {
   attempt_id: string;
   question_id: string;
   question_index: number;
-  answer_id: string;
+  answer_id: string | null;
   is_correct: boolean;
   time_ms: number;
   base_points: number;
   bonus_points: number;
   total_points: number;
+  answer_kind: 'selected' | 'timeout';
+  question_tags?: string[];
 }) {
   capture('answer_submit', props);
 }
 
 export function trackQuizFinalized(props: {
   attempt_id: string;
+  quiz_id?: string;
   total_score: number;
+  correct_count?: number;
+  total_time_ms?: number;
 }) {
   capture('quiz_finalized', props);
 }
@@ -94,6 +130,8 @@ export function trackShareClicked(props: {
 }) {
   capture('share_clicked', props);
 }
+
+// ── Leaderboard / profile ───────────────────────────────────────────
 
 export function trackLeaderboardView(props: {
   window: string;
@@ -121,10 +159,30 @@ export function trackHandleUpdate(props: {
   capture('handle_update', props);
 }
 
+// ── Auth events ─────────────────────────────────────────────────────
+
+export function trackSignIn(props: {
+  provider: string;
+  is_upgrade: boolean;
+}) {
+  capture('sign_in', props);
+}
+
+export function trackSignOut() {
+  capture('sign_out');
+}
+
+export function trackAuthUpgradeStarted(props: {
+  provider: string;
+}) {
+  capture('auth_upgrade_started', props);
+}
+
+// ── Errors ──────────────────────────────────────────────────────────
+
 export function trackAppError(props: {
   location: string;
   message: string;
 }) {
   capture('app_error', props);
 }
-

@@ -242,6 +242,22 @@ export default function QuestionPage() {
     if (timeRemaining === 0 && currentQuestion && !isSubmitting && attempt) {
       setIsSubmitting(true); // prevent double-fire
 
+      // Track timeout as an answer_submit event
+      trackAnswerSubmit({
+        quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+        attempt_id: attempt.attempt_id,
+        question_id: currentQuestion.question_id,
+        question_index: questionIndex,
+        answer_id: null,
+        is_correct: false,
+        time_ms: totalTime,
+        base_points: 0,
+        bonus_points: 0,
+        total_points: 0,
+        answer_kind: 'timeout',
+        question_tags: currentQuestion.tags,
+      });
+
       // Resume to handle timeout and get next question — no visual feedback
       resumeAttempt(attempt.attempt_id).then((newAttempt) => {
         sessionStorage.setItem('attempt_state', JSON.stringify(newAttempt));
@@ -305,6 +321,8 @@ export default function QuestionPage() {
           base_points: result.base_points,
           bonus_points: result.bonus_points,
           total_points: result.total_points,
+          answer_kind: 'selected',
+          question_tags: currentQuestion.tags,
         });
       })
       .catch((err) => {

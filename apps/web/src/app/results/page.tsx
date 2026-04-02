@@ -6,7 +6,7 @@ import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/d
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HandleNudgeModal } from '@/components/HandleNudgeModal';
 import { supabase } from '@/lib/supabase/client';
-import { trackScreenView, trackResultsView, trackShareClicked, trackAppError } from '@/lib/analytics';
+import { trackScreenView, trackResultsView, trackShareClicked, trackAppError, setPersonProperties } from '@/lib/analytics';
 
 import Link from 'next/link';
 
@@ -155,6 +155,30 @@ function ResultsContent() {
     checkHandle();
   }, []);
 
+  // Track results view once results are loaded
+  useEffect(() => {
+    if (!results) return;
+    trackScreenView({
+      screen: 'results',
+      route: '/results',
+      quiz_id: results.quiz_id,
+      attempt_id: results.attempt_id,
+    });
+    trackResultsView({
+      attempt_id: results.attempt_id,
+      quiz_id: results.quiz_id,
+      quiz_number: results.quiz_number,
+      total_score: results.total_score,
+      total_time_ms: results.total_time_ms,
+      correct_count: results.correct_count,
+    });
+    setPersonProperties({
+      last_quiz_score: results.total_score,
+      last_correct_count: results.correct_count,
+      last_total_time_ms: results.total_time_ms,
+    });
+  }, [results]);
+
   useEffect(() => {
     async function loadResults() {
       try {
@@ -185,23 +209,6 @@ function ResultsContent() {
           setResults(resultsData);
         }
 
-        if (results) {
-          trackScreenView({
-            screen: 'results',
-            route: router ? router.toString() : '/results',
-            quiz_id: results.quiz_id,
-            attempt_id: results.attempt_id,
-          });
-
-          trackResultsView({
-            attempt_id: results.attempt_id,
-            quiz_id: results.quiz_id,
-            quiz_number: results.quiz_number,
-            total_score: results.total_score,
-            total_time_ms: results.total_time_ms,
-            correct_count: results.correct_count,
-          });
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load results');
         trackAppError({
