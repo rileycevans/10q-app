@@ -278,27 +278,9 @@ export default function QuestionPage() {
     setIsSubmitting(true);
 
     const nextIndex = questionIndex + 1;
+    const isLastQuestion = nextIndex > 10;
 
-    // Optimistic cache: assume server will advance to next index
-    const optimisticState: AttemptState = {
-      attempt_id: attempt.attempt_id,
-      quiz_id: attempt.quiz_id,
-      current_index: nextIndex,
-      current_question_started_at: new Date().toISOString(),
-      current_question_expires_at: null,
-      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-    };
-    sessionStorage.setItem('attempt_state', JSON.stringify(optimisticState));
-
-    // Navigate immediately — don't wait for network
-    if (nextIndex <= 10) {
-      router.push(`/play/q/${nextIndex}`);
-    } else {
-      router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
-    }
-
-    // Fire submit in background — updates cache when response arrives
-    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
+    const submitPromise = submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
       .then((result) => {
         const serverState: AttemptState = {
           attempt_id: result.attempt_id,
@@ -332,6 +314,26 @@ export default function QuestionPage() {
           message: err instanceof Error ? err.message : 'Failed to submit answer',
         });
       });
+
+    if (isLastQuestion) {
+      // On the last question, wait for the answer to be saved before finalizing
+      // to avoid a race where finalize runs before Q10's answer is written
+      submitPromise.then(() => {
+        router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
+      });
+    } else {
+      // For Q1-Q9, navigate optimistically for instant feel
+      const optimisticState: AttemptState = {
+        attempt_id: attempt.attempt_id,
+        quiz_id: attempt.quiz_id,
+        current_index: nextIndex,
+        current_question_started_at: new Date().toISOString(),
+        current_question_expires_at: null,
+        state: 'IN_PROGRESS',
+      };
+      sessionStorage.setItem('attempt_state', JSON.stringify(optimisticState));
+      router.push(`/play/q/${nextIndex}`);
+    }
   };
 
   if (loading) {
@@ -371,48 +373,46 @@ export default function QuestionPage() {
   return (
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen relative">
-        <HUD
-          progress={questionIndex}
-        />
-
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 gap-4">
-          {/* Time Remaining Progress Bar — stays visible but frozen when submitting */}
+        {/* Unified top bar: progress + timer */}
+        <div className="flex items-center gap-3 w-full px-4 py-2">
+          <HUD progress={questionIndex} />
           {currentQuestion && attempt && (
-            <div className="w-full max-w-md px-4 mb-2">
-              <div className="w-full h-10 bg-paper border-[4px] border-ink rounded-full shadow-sticker overflow-hidden relative">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex-1 h-3 bg-paper/40 border-[2px] border-ink rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-cyanA transition-all duration-100 ease-linear"
+                  className="h-full bg-cyanA transition-all duration-100 ease-linear rounded-full"
                   style={{
                     width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
                   }}
                 />
-                <span className="absolute inset-0 flex items-center justify-center text-base font-bold uppercase tracking-wide text-ink pointer-events-none z-10">
-                  {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
-                </span>
               </div>
+              <span className="text-xs font-bold text-paper tabular-nums whitespace-nowrap">
+                {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
+              </span>
             </div>
           )}
+        </div>
 
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3">
           <QuestionCard
             questionText={currentQuestion.body}
             questionNumber={questionIndex}
           />
 
-          <div className="w-full max-w-md bg-cyanA/20 border-[3px] border-ink rounded-[20px] shadow-sticker-sm p-3">
-            <div className="space-y-1.5">
-              {currentQuestion.answers
-                .sort((a, b) => a.sort_index - b.sort_index)
-                .map((answer) => (
-                  <AnswerButton
-                    key={answer.answer_id}
-                    text={answer.body}
-                    isSelected={selectedAnswerId === answer.answer_id}
-                    feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
-                    onClick={() => handleAnswerClick(answer.answer_id)}
-                    disabled={isSubmitting || selectedAnswerId !== null}
-                  />
-                ))}
-            </div>
+          <div className="w-full space-y-2">
+            {currentQuestion.answers
+              .sort((a, b) => a.sort_index - b.sort_index)
+              .map((answer, i) => (
+                <AnswerButton
+                  key={answer.answer_id}
+                  text={answer.body}
+                  marker={String.fromCharCode(65 + i)}
+                  isSelected={selectedAnswerId === answer.answer_id}
+                  feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
+                  onClick={() => handleAnswerClick(answer.answer_id)}
+                  disabled={isSubmitting || selectedAnswerId !== null}
+                />
+              ))}
           </div>
         </div>
 
