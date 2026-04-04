@@ -2,8 +2,10 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { finalizeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { useGameState } from '@/components/GameProvider';
 import { trackScreenView, trackQuizFinalized, trackAppError, setPersonProperties } from '@/lib/analytics';
 
 export default function FinalizePage() {
@@ -25,6 +27,7 @@ export default function FinalizePage() {
 function FinalizeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const game = useGameState();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalScore, setTotalScore] = useState<number | null>(null);
@@ -34,7 +37,13 @@ function FinalizeContent() {
       try {
         trackScreenView({ screen: 'finalize', route: '/play/finalize' });
 
-        let attemptId = searchParams.get('attempt_id');
+        // 1. Try store (normal flow from gameplay)
+        // 2. Try URL param
+        // 3. Try sessionStorage (hard refresh recovery)
+        // 4. Last resort: re-discover from server
+        let attemptId = game.attempt?.attempt_id
+          || searchParams.get('attempt_id')
+          || null;
 
         if (!attemptId) {
           const cached = sessionStorage.getItem('attempt_state');
@@ -141,15 +150,44 @@ function FinalizeContent() {
   return (
     <ArcadeBackground>
       <div className="flex items-center justify-center min-h-screen px-4">
-        <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
-          <h1 className="font-display text-3xl mb-4 text-ink">Quiz Complete!</h1>
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{
+            type: 'spring',
+            stiffness: 300,
+            damping: 20,
+            duration: 0.5,
+          }}
+          className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center"
+        >
+          <motion.h1
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.4 }}
+            className="font-display text-3xl mb-4 text-ink"
+          >
+            Quiz Complete!
+          </motion.h1>
           {totalScore !== null && (
-            <p className="font-bold text-2xl mb-6 text-ink">
+            <motion.p
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.5, type: 'spring', stiffness: 200, damping: 15 }}
+              className="font-bold text-2xl mb-6 text-ink"
+            >
               Total Score: {totalScore} points
-            </p>
+            </motion.p>
           )}
-          <p className="font-body text-sm text-ink/80">Redirecting to results...</p>
-        </div>
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.8 }}
+            className="font-body text-sm text-ink/80"
+          >
+            Redirecting to results...
+          </motion.p>
+        </motion.div>
       </div>
     </ArcadeBackground>
   );
