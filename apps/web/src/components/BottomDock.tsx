@@ -1,19 +1,21 @@
 interface BottomDockProps {
   streak?: number;
+  avatarUrl?: string | null;
   onRankClick?: () => void;
   onStreakClick?: () => void;
   onLeagueClick?: () => void;
   onSettingsClick?: () => void;
-  authSlot?: React.ReactNode;
+  onProfileClick?: () => void;
 }
 
 export function BottomDock({
   streak,
+  avatarUrl,
   onRankClick,
   onStreakClick,
   onLeagueClick,
   onSettingsClick,
-  authSlot,
+  onProfileClick,
 }: BottomDockProps) {
   return (
     <div className="flex items-center justify-center gap-3 px-4 py-3">
@@ -48,7 +50,22 @@ export function BottomDock({
       >
         ⚙️
       </button>
-      {authSlot}
+      <button
+        className="w-14 h-14 bg-paper border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center overflow-hidden transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
+        onClick={onProfileClick}
+        aria-label="Profile"
+      >
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt="Profile"
+            className="w-full h-full object-cover"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span className="text-2xl">👤</span>
+        )}
+      </button>
     </div>
   );
 }
