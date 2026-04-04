@@ -6,34 +6,28 @@ import { useRouter } from 'next/navigation';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { BottomDock } from '@/components/BottomDock';
 import { trackScreenView, trackAppError } from '@/lib/analytics';
-import dynamic from 'next/dynamic';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
 import { supabase } from '@/lib/supabase/client';
-
-// Dynamically import AuthButton to avoid SSR issues
-const AuthButton = dynamic(() => import('@/components/AuthButton').then(mod => ({ default: mod.AuthButton })), {
-  ssr: false,
-  loading: () => (
-    <div className="h-10 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm opacity-50">
-      <span className="text-xs text-ink">Loading...</span>
-    </div>
-  ),
-});
 
 export default function HomePage() {
   const router = useRouter();
   const [isResetting, setIsResetting] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
   const [streak, setStreak] = useState<number | undefined>(undefined);
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [countdown, setCountdown] = useState('');
 
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
 
-    async function loadStreak() {
+    async function warmSessionAndCheckCompletion() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // Warm the session early so /play doesn't have to wait for it
+        const { ensureSession } = await import('@/lib/auth');
+        const session = await ensureSession();
         if (!session) return;
         const { data: player } = await supabase
           .from('players')
@@ -41,16 +35,55 @@ export default function HomePage() {
           .eq('id', session.user.id)
           .single();
         if (player) setStreak(player.current_streak);
+        if (session.user.app_metadata?.role === 'admin') setIsAdmin(true);
+        setAvatarUrl(session.user.user_metadata?.avatar_url ?? session.user.user_metadata?.picture ?? null);
+
+        // Check if the user has already completed today's quiz
+        const currentQuiz = await getCurrentQuiz();
+        if (currentQuiz) {
+          const { data: attempt } = await supabase
+            .from('attempts')
+            .select('finalized_at')
+            .eq('quiz_id', currentQuiz.quiz_id)
+            .eq('player_id', session.user.id)
+            .not('finalized_at', 'is', null)
+            .maybeSingle();
+          if (attempt) setQuizCompleted(true);
+        }
       } catch {
         // Non-critical — silently ignore
       }
     }
-    loadStreak();
+    warmSessionAndCheckCompletion();
   }, []);
+
+  // Countdown timer for next quiz refresh
+  useEffect(() => {
+    if (!quizCompleted) return;
+
+    function updateCountdown() {
+      const now = new Date();
+      const next = new Date(now);
+      next.setUTCHours(11, 30, 0, 0);
+      if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
+        next.setUTCDate(next.getUTCDate() + 1);
+      }
+      const diff = next.getTime() - now.getTime();
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+    }
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [quizCompleted]);
+
   const isSentryEnabled = !!process.env.NEXT_PUBLIC_SENTRY_DSN && process.env.NODE_ENV === 'production';
 
   const handleResetQuiz = async () => {
-    if (!isDevelopment) return;
+    if (!isAdmin) return;
     
     setIsResetting(true);
     try {
@@ -62,7 +95,8 @@ export default function HomePage() {
 
       const response = await edgeFunctions.deleteAttempt(currentQuiz.quiz_id);
       if (response.ok) {
-        // Refresh the page to clear any cached state
+        // Clear completed state so the UI flips back to PLAY NOW
+        setQuizCompleted(false);
         router.refresh();
       } else {
         trackAppError({
@@ -97,65 +131,109 @@ export default function HomePage() {
                 fetchPriority="high"
               />
             </div>
-            <p className="font-body text-sm mb-8 text-ink/80">
-              10 questions. One attempt. New quiz, new topic, every single day.
-            </p>
-            <div className="space-y-3">
-              <Link
-                href="/play"
-                className="block w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
-              >
-                PLAY NOW
-              </Link>
-              <Link
-                href="/leaderboard"
-                className="block w-full h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
-              >
-                LEADERBOARD
-              </Link>
-              <Link
-                href="/leagues"
-                className="block w-full h-14 bg-yellow border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-yellow focus-visible:outline-offset-2"
-              >
-                LEAGUES
-              </Link>
-              <button
-                onClick={() => setShowScoringModal(true)}
-                className="w-full text-xs text-ink/60 hover:text-ink underline font-bold transition-colors mt-2"
-              >
-                How is my score calculated?
-              </button>
-              {isSentryEnabled && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Trigger a test error that should be captured by Sentry
-                    throw new Error('Sentry test error from HomePage');
-                  }}
-                  className="w-full text-[10px] text-ink/50 hover:text-ink/80 underline font-bold transition-colors"
-                >
-                  Trigger Sentry test error
-                </button>
-              )}
-              {isDevelopment && (
-                <button
-                  onClick={handleResetQuiz}
-                  disabled={isResetting}
-                  className="block w-full h-14 bg-red border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-red focus-visible:outline-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isResetting ? 'RESETTING...' : 'RESET QUIZ (DEV)'}
-                </button>
-              )}
-            </div>
+            {quizCompleted ? (
+              <>
+                <h1 className="font-display text-3xl mb-4 text-ink">Come Back Tomorrow!</h1>
+                <p className="font-body text-sm mb-4 text-ink/80">
+                  Next quiz releases in:
+                </p>
+                <p className="font-display text-2xl mb-8 text-ink">
+                  {countdown || 'Calculating...'}
+                </p>
+                <div className="space-y-3">
+                  <Link
+                    href="/results"
+                    className="block w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
+                  >
+                    VIEW RESULTS
+                  </Link>
+                  <Link
+                    href="/leaderboard"
+                    className="block w-full h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
+                  >
+                    LEADERBOARD
+                  </Link>
+                  <Link
+                    href="/leagues"
+                    className="block w-full h-14 bg-yellow border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-yellow focus-visible:outline-offset-2"
+                  >
+                    LEAGUES
+                  </Link>
+                  {isAdmin && (
+                    <button
+                      onClick={handleResetQuiz}
+                      disabled={isResetting}
+                      className="block w-full h-14 bg-red border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-red focus-visible:outline-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isResetting ? 'RESETTING...' : 'RESET QUIZ'}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="font-body text-sm mb-8 text-ink/80">
+                  10 questions. One attempt. New quiz, new topic, every single day.
+                </p>
+                <div className="space-y-3">
+                  <Link
+                    href="/play"
+                    className="block w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
+                  >
+                    PLAY NOW
+                  </Link>
+                  <Link
+                    href="/leaderboard"
+                    className="block w-full h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
+                  >
+                    LEADERBOARD
+                  </Link>
+                  <Link
+                    href="/leagues"
+                    className="block w-full h-14 bg-yellow border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-yellow focus-visible:outline-offset-2"
+                  >
+                    LEAGUES
+                  </Link>
+                  <button
+                    onClick={() => setShowScoringModal(true)}
+                    className="w-full text-xs text-ink/60 hover:text-ink underline font-bold transition-colors mt-2"
+                  >
+                    How is my score calculated?
+                  </button>
+                  {isSentryEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Trigger a test error that should be captured by Sentry
+                        throw new Error('Sentry test error from HomePage');
+                      }}
+                      className="w-full text-[10px] text-ink/50 hover:text-ink/80 underline font-bold transition-colors"
+                    >
+                      Trigger Sentry test error
+                    </button>
+                  )}
+                  {isAdmin && (
+                    <button
+                      onClick={handleResetQuiz}
+                      disabled={isResetting}
+                      className="block w-full h-14 bg-red border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-red focus-visible:outline-offset-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isResetting ? 'RESETTING...' : 'RESET QUIZ'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
         <BottomDock
           streak={streak}
+          avatarUrl={avatarUrl}
           onRankClick={() => router.push('/leaderboard')}
           onStreakClick={() => router.push('/leaderboard')}
           onLeagueClick={() => router.push('/leagues')}
           onSettingsClick={() => router.push('/settings')}
-          authSlot={<AuthButton />}
+          onProfileClick={() => router.push('/profile')}
         />
       </div>
 

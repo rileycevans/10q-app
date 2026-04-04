@@ -2,17 +2,38 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getAttemptResults, type AttemptResults, type QuestionResult } from '@/domains/attempt';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { getAttemptResults, finalizeAttempt, type AttemptResults, type QuestionResult } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HandleNudgeModal } from '@/components/HandleNudgeModal';
 import { supabase } from '@/lib/supabase/client';
-import { trackScreenView, trackResultsView, trackShareClicked, trackAppError, setPersonProperties } from '@/lib/analytics';
+import { trackScreenView, trackResultsView, trackShareClicked, trackQuizFinalized, trackAppError, setPersonProperties } from '@/lib/analytics';
 
 import Link from 'next/link';
 
 function formatTime(ms: number): string {
   const seconds = (ms / 1000).toFixed(1);
   return `${seconds}s`;
+}
+
+function AnimatedScore({ value }: { value: number }) {
+  const count = useMotionValue(0);
+  const rounded = useTransform(count, (v) => Math.round(v));
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const controls = animate(count, value, {
+      duration: 1.2,
+      ease: [0.22, 1, 0.36, 1],
+    });
+    const unsubscribe = rounded.on('change', (v) => setDisplay(v));
+    return () => {
+      controls.stop();
+      unsubscribe();
+    };
+  }, [value, count, rounded]);
+
+  return <>{display}</>;
 }
 
 function QuestionResultCard({ question, index }: { question: QuestionResult; index: number }) {
@@ -57,7 +78,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
             bgColor = question.is_correct ? 'bg-green' : 'bg-red';
           } else if (!question.is_correct && isCorrectAnswer) {
             // Highlight correct answer in cyan when question was answered incorrectly
-            bgColor = 'bg-cyanA';
+            bgColor = 'bg-green';
           }
 
           return (
@@ -132,6 +153,7 @@ function ResultsContent() {
   const [showScoringModal, setShowScoringModal] = useState(false);
   const [showHandleNudge, setShowHandleNudge] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [streakData, setStreakData] = useState<{ current: number; longest: number } | null>(null);
 
   useEffect(() => {
     async function checkHandle() {
@@ -182,7 +204,7 @@ function ResultsContent() {
   useEffect(() => {
     async function loadResults() {
       try {
-        const attemptId = searchParams.get('attempt_id');
+        let attemptId = searchParams.get('attempt_id');
 
         if (!attemptId) {
           // Try to get attempt from current quiz
@@ -198,13 +220,43 @@ function ResultsContent() {
 
           const attemptState = await startAttempt(currentQuiz.quiz_id);
           if (attemptState.state === 'FINALIZED') {
-            // Fetch results using the attempt_id
-            const resultsData = await getAttemptResults(attemptState.attempt_id);
-            setResults(resultsData);
+            attemptId = attemptState.attempt_id;
+          } else if (attemptState.state === 'READY_TO_FINALIZE') {
+            attemptId = attemptState.attempt_id;
           } else {
-            setError('Attempt is not finalized');
+            // Still in progress — send them back to the quiz
+            router.push(`/play/q/${attemptState.current_index}`);
+            return;
           }
-        } else {
+        }
+
+        // Finalize if needed, then fetch results
+        try {
+          const finalizeResult = await finalizeAttempt(attemptId);
+          // Capture streak data from finalization
+          setStreakData({
+            current: finalizeResult.current_streak,
+            longest: finalizeResult.longest_streak,
+          });
+
+          trackQuizFinalized({
+            attempt_id: finalizeResult.attempt_id,
+            total_score: finalizeResult.total_score,
+          });
+
+          setPersonProperties({
+            last_quiz_score: finalizeResult.total_score,
+            last_quiz_at: finalizeResult.finalized_at,
+            current_streak: finalizeResult.current_streak,
+            longest_streak: finalizeResult.longest_streak,
+          });
+
+          sessionStorage.removeItem('attempt_state');
+        } catch {
+          // Already finalized — that's fine, just fetch results
+        }
+
+        {
           const resultsData = await getAttemptResults(attemptId);
           setResults(resultsData);
         }
@@ -259,10 +311,8 @@ function ResultsContent() {
   }
 
   const totalTimeSeconds = (results.total_time_ms / 1000).toFixed(1);
-  const streakParam = searchParams.get('streak');
-  const longestParam = searchParams.get('longest');
-  const currentStreak = streakParam ? parseInt(streakParam, 10) : 0;
-  const longestStreak = longestParam ? parseInt(longestParam, 10) : 0;
+  const currentStreak = streakData?.current ?? (searchParams.get('streak') ? parseInt(searchParams.get('streak')!, 10) : 0);
+  const longestStreak = streakData?.longest ?? (searchParams.get('longest') ? parseInt(searchParams.get('longest')!, 10) : 0);
   const isNewRecord = currentStreak > 0 && currentStreak === longestStreak && currentStreak >= 2;
 
   // 🟩 = correct, 🟥 = wrong or timed out
@@ -316,18 +366,40 @@ function ResultsContent() {
       <div className="flex flex-col items-center min-h-screen px-4 py-8">
         <div className="w-full max-w-2xl">
           {/* Header Card */}
-          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 mb-6 text-center">
-            <h1 className="font-display text-4xl mb-2 text-ink">QUIZ COMPLETE!</h1>
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 250, damping: 20 }}
+            className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 mb-6 text-center"
+          >
+            <motion.h1
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.15, duration: 0.4 }}
+              className="font-display text-4xl mb-2 text-ink"
+            >
+              QUIZ COMPLETE!
+            </motion.h1>
             {currentStreak >= 2 && (
-              <div className={`inline-block px-4 py-1.5 rounded-full border-[3px] border-ink font-display text-sm font-bold text-ink mt-2 ${isNewRecord ? 'bg-yellow' : 'bg-orange/30'}`}>
+              <motion.div
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.4, type: 'spring', stiffness: 300, damping: 15 }}
+                className={`inline-block px-4 py-1.5 rounded-full border-[3px] border-ink font-display text-sm font-bold text-ink mt-2 ${isNewRecord ? 'bg-yellow' : 'bg-orange/30'}`}
+              >
                 {isNewRecord
                   ? `NEW RECORD — ${currentStreak} days!`
                   : `${currentStreak}-day streak!`}
-              </div>
+              </motion.div>
             )}
-            <div className="mt-6 mb-4">
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3, type: 'spring', stiffness: 200, damping: 18 }}
+              className="mt-6 mb-4"
+            >
               <div className="font-display text-6xl font-bold text-ink mb-2">
-                {results.total_score}
+                <AnimatedScore value={results.total_score} />
               </div>
               <div className="text-sm text-ink/80 font-bold">TOTAL POINTS</div>
               <button
@@ -336,8 +408,13 @@ function ResultsContent() {
               >
                 How is my score calculated?
               </button>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-6">
+            </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+              className="grid grid-cols-2 gap-4 mt-6"
+            >
               <div className="bg-cyanA/20 border-[3px] border-ink rounded-[18px] p-4">
                 <div className="font-display text-3xl font-bold text-ink mb-1">
                   {results.correct_count}/10
@@ -350,24 +427,43 @@ function ResultsContent() {
                 </div>
                 <div className="text-xs text-ink/80 font-bold uppercase">TOTAL TIME</div>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           {/* Share Card */}
-          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 mb-6 text-center">
+          <motion.div
+            initial={{ y: 30, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+            className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 mb-6 text-center"
+          >
             <p className="font-display text-sm font-bold text-ink/60 uppercase tracking-widest mb-3">
               {results.quiz_number != null ? `10Q #${results.quiz_number}` : '10Q'}
             </p>
-            {/* Emoji grid — 2 rows of 5 */}
+            {/* Emoji grid — 2 rows of 5, staggered reveal */}
             <div className="flex flex-col items-center gap-2 mb-4">
               <div className="flex gap-1 text-3xl">
                 {results.questions.slice(0, 5).map((q, i) => (
-                  <span key={i}>{getEmoji(q)}</span>
+                  <motion.span
+                    key={i}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.9 + i * 0.08, type: 'spring', stiffness: 400, damping: 15 }}
+                  >
+                    {getEmoji(q)}
+                  </motion.span>
                 ))}
               </div>
               <div className="flex gap-1 text-3xl">
                 {results.questions.slice(5, 10).map((q, i) => (
-                  <span key={i}>{getEmoji(q)}</span>
+                  <motion.span
+                    key={i}
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.9 + (i + 5) * 0.08, type: 'spring', stiffness: 400, damping: 15 }}
+                  >
+                    {getEmoji(q)}
+                  </motion.span>
                 ))}
               </div>
             </div>
@@ -378,15 +474,28 @@ function ResultsContent() {
             >
               {copied ? '✓ COPIED!' : '📤 SHARE RESULT'}
             </button>
-          </div>
-          <div className="mb-6">
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5, duration: 0.3 }}
+            className="mb-6"
+          >
             <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">
               QUESTION BREAKDOWN
             </h2>
             {results.questions.map((question, index) => (
-              <QuestionResultCard key={question.question_id} question={question} index={index} />
+              <motion.div
+                key={question.question_id}
+                initial={{ y: 20, opacity: 0 }}
+                whileInView={{ y: 0, opacity: 1 }}
+                viewport={{ once: true, margin: '-40px' }}
+                transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
+              >
+                <QuestionResultCard question={question} index={index} />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-3">
@@ -394,7 +503,7 @@ function ResultsContent() {
               href="/"
               className="block w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px]"
             >
-              PLAY AGAIN TOMORROW
+              BACK TO HOME
             </Link>
             <button
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
