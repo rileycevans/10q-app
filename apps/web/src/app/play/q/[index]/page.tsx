@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { getCurrentQuiz, getQuizQuestions } from '@/domains/quiz';
-import { resumeAttempt, submitAnswer } from '@/domains/attempt';
+import { motion } from 'framer-motion';
+import { useGameStore, useGameState } from '@/components/GameProvider';
+import { submitAnswer, resumeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HUD } from '@/components/HUD';
 import { QuestionCard } from '@/components/QuestionCard';
@@ -18,218 +19,107 @@ export default function QuestionPage() {
   const params = useParams();
   const questionIndex = parseInt(params.index as string, 10);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [_quizId, setQuizId] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState<AttemptState | null>(null);
-  const [_questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
+  const store = useGameStore();
+  const game = useGameState();
+
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [totalTime, setTotalTime] = useState<number>(16000);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback] = useState<AnswerFeedback>('idle');
+  const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
+  // Derive current question from store
+  const currentQuestion: QuizQuestion | null =
+    game.questions?.find(q => q.order_index === questionIndex) ?? null;
+  const attempt: AttemptState | null = game.attempt;
+
+  // ── Recovery: if store is empty (hard refresh), trigger prepare ──────────
   useEffect(() => {
-    // Prefetch next question route for instant navigation
+    if (game.phase === 'idle') {
+      store.prepare();
+    }
+  }, [game.phase, store]);
+
+  // ── Redirect if store says we're on the wrong question ──────────────────
+  useEffect(() => {
+    if (!attempt) return;
+
+    if (attempt.state === 'FINALIZED') {
+      router.push('/results');
+      return;
+    }
+    if (attempt.state === 'READY_TO_FINALIZE') {
+      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      return;
+    }
+    if (attempt.current_index !== questionIndex) {
+      router.push(`/play/q/${attempt.current_index}`);
+    }
+  }, [attempt, questionIndex, router]);
+
+  // ── Reset per-question state when index changes ─────────────────────────
+  useEffect(() => {
+    setFeedback('idle');
+    setSelectedAnswerId(null);
+    setIsSubmitting(false);
+
+    // Prefetch next route
     if (questionIndex < 10) {
       router.prefetch(`/play/q/${questionIndex + 1}`);
     } else if (questionIndex === 10) {
-      router.prefetch('/play/finalize');
+      router.prefetch('/results');
     }
-
-    // Check cache synchronously first - if we have everything, skip loading screen
-    const cachedQuestions = sessionStorage.getItem('quiz_questions');
-    const cachedAttempt = sessionStorage.getItem('attempt_state');
-    const cachedQuizId = sessionStorage.getItem('quiz_id');
-
-    if (cachedQuestions && cachedAttempt && cachedQuizId) {
-      try {
-        const parsedAttempt = JSON.parse(cachedAttempt);
-        // If cache matches current index, we can render immediately
-        if (parsedAttempt.current_index === questionIndex) {
-          const parsedQuestions = JSON.parse(cachedQuestions);
-          const question = parsedQuestions.find((q: QuizQuestion) => q.order_index === questionIndex);
-          if (question) {
-            // We have everything cached - render immediately
-            setQuestions(parsedQuestions);
-            setAttempt(parsedAttempt);
-            setCurrentQuestion(question);
-            setQuizId(cachedQuizId);
-            setLoading(false);
-
-            if (parsedAttempt.current_question_expires_at && parsedAttempt.current_question_started_at) {
-              const startedAt = new Date(parsedAttempt.current_question_started_at).getTime();
-              const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
-              const duration = expiresAt - startedAt;
-              setTotalTime(duration);
-              setTimeRemaining(Math.max(0, expiresAt - Date.now()));
-            } else if (parsedAttempt.current_question_expires_at) {
-              const expiresAt = new Date(parsedAttempt.current_question_expires_at).getTime();
-              const remaining = Math.max(0, expiresAt - Date.now());
-              setTimeRemaining(remaining);
-            } else if (parsedAttempt.current_question_started_at) {
-              const startedAt = new Date(parsedAttempt.current_question_started_at).getTime();
-              const elapsed = Date.now() - startedAt;
-              setTimeRemaining(Math.max(0, totalTime - elapsed));
-            } else {
-              setTimeRemaining(totalTime);
-            }
-
-            // Still validate in background, but don't block UI
-            initialize();
-            return;
-          }
-        }
-      } catch {
-        // Invalid cache, continue with normal initialization
-      }
-    }
-
-    async function initialize() {
-      try {
-        let quizQuestions: QuizQuestion[] = [];
-        let attemptState: AttemptState | null = null;
-
-        // Get current quiz (always needed)
-        const currentQuiz = await getCurrentQuiz();
-        if (!currentQuiz) {
-          setError('No quiz available');
-          setLoading(false);
-          return;
-        }
-
-        const currentQuizId = currentQuiz.quiz_id;
-        setQuizId(currentQuizId);
-
-        // Use cached questions if available and quiz ID matches
-        if (cachedQuestions && cachedQuizId === currentQuizId) {
-          try {
-            quizQuestions = JSON.parse(cachedQuestions);
-            setQuestions(quizQuestions);
-          } catch {
-            // Invalid cache, fetch fresh
-            quizQuestions = await getQuizQuestions(currentQuizId);
-            setQuestions(quizQuestions);
-            sessionStorage.setItem('quiz_questions', JSON.stringify(quizQuestions));
-            sessionStorage.setItem('quiz_id', currentQuizId);
-          }
-        } else {
-          // Fetch questions and cache them
-          quizQuestions = await getQuizQuestions(currentQuizId);
-          setQuestions(quizQuestions);
-          sessionStorage.setItem('quiz_questions', JSON.stringify(quizQuestions));
-          sessionStorage.setItem('quiz_id', currentQuizId);
-        }
-
-        // Use cached attempt state if available and matches current index (allow optimistic ahead-by-1)
-        if (cachedAttempt) {
-          try {
-            const parsed = JSON.parse(cachedAttempt);
-            // Use cache if it matches requested index, or is 1 ahead (optimistic navigation), or 1 behind (catching up)
-            if (parsed.current_index === questionIndex ||
-              parsed.current_index === questionIndex - 1 ||
-              parsed.current_index === questionIndex + 1) {
-              attemptState = parsed;
-              setAttempt(attemptState);
-            }
-          } catch {
-            // Invalid cache, fetch fresh
-          }
-        }
-
-        // Fetch fresh attempt state if not cached or cache doesn't match
-        if (!attemptState) {
-          const { startAttempt } = await import('@/domains/attempt');
-          attemptState = await startAttempt(currentQuizId);
-          setAttempt(attemptState);
-          sessionStorage.setItem('attempt_state', JSON.stringify(attemptState));
-        }
-
-        // Check if requested index matches server index
-        if (attemptState.current_index !== questionIndex) {
-          // Redirect to correct index
-          router.push(`/play/q/${attemptState.current_index}`);
-          return;
-        }
-
-        // If attempt is finalized, go to results
-        if (attemptState.state === 'FINALIZED') {
-          router.push('/results');
-          return;
-        }
-
-        if (attemptState.state === 'READY_TO_FINALIZE') {
-          router.push(`/play/finalize?attempt_id=${attemptState.attempt_id}`);
-          return;
-        }
-
-        // Get current question
-        const question = quizQuestions.find(q => q.order_index === questionIndex);
-        if (!question) {
-          setError('Question not found');
-          setLoading(false);
-          return;
-        }
-
-        setCurrentQuestion(question);
-
-        if (attemptState.current_question_expires_at && attemptState.current_question_started_at) {
-          const startedAt = new Date(attemptState.current_question_started_at).getTime();
-          const expiresAt = new Date(attemptState.current_question_expires_at).getTime();
-          const duration = expiresAt - startedAt;
-          setTotalTime(duration);
-          setTimeRemaining(Math.max(0, expiresAt - Date.now()));
-        } else if (attemptState.current_question_expires_at) {
-          const expiresAt = new Date(attemptState.current_question_expires_at).getTime();
-          setTimeRemaining(Math.max(0, expiresAt - Date.now()));
-        } else if (attemptState.current_question_started_at) {
-          const startedAt = new Date(attemptState.current_question_started_at).getTime();
-          setTimeRemaining(Math.max(0, totalTime - (Date.now() - startedAt)));
-        } else {
-          setTimeRemaining(totalTime);
-        }
-
-        // If we got here with cached data, we can skip the loading screen
-        // Otherwise it will show briefly while data loads
-        setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load question');
-        setLoading(false);
-      }
-    }
-
-    initialize();
   }, [questionIndex, router]);
 
-  // Track question view once we have both attempt and question
+  // ── Initialize timer from attempt state ─────────────────────────────────
+  useEffect(() => {
+    if (!attempt) return;
+
+    if (attempt.current_question_expires_at && attempt.current_question_started_at) {
+      const startedAt = new Date(attempt.current_question_started_at).getTime();
+      const expiresAt = new Date(attempt.current_question_expires_at).getTime();
+      const duration = expiresAt - startedAt;
+      setTotalTime(duration);
+      setTimeRemaining(Math.max(0, expiresAt - Date.now()));
+    } else if (attempt.current_question_expires_at) {
+      const expiresAt = new Date(attempt.current_question_expires_at).getTime();
+      setTimeRemaining(Math.max(0, expiresAt - Date.now()));
+    } else if (attempt.current_question_started_at) {
+      const startedAt = new Date(attempt.current_question_started_at).getTime();
+      const elapsed = Date.now() - startedAt;
+      setTimeRemaining(Math.max(0, totalTime - elapsed));
+    } else {
+      setTimeRemaining(totalTime);
+    }
+  }, [attempt, questionIndex]);
+
+  // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
     if (!attempt || !currentQuestion) return;
 
     trackScreenView({
       screen: 'question',
       route: `/play/q/${questionIndex}`,
-      quiz_id: sessionStorage.getItem('quiz_id') || undefined,
+      quiz_id: game.quizId || undefined,
       attempt_id: attempt.attempt_id,
     });
 
     trackQuestionView({
-      quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+      quiz_id: game.quizId || currentQuestion.quiz_id,
       attempt_id: attempt.attempt_id,
       question_id: currentQuestion.question_id,
       question_index: questionIndex,
     });
-  }, [attempt, currentQuestion, questionIndex]);
+  }, [attempt, currentQuestion, questionIndex, game.quizId]);
 
-  // Update timer (stop when submitting)
+  // ── Tick timer ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!timeRemaining || timeRemaining <= 0 || isSubmitting) return;
 
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
-        if (!prev || prev <= 0 || isSubmitting) {
-          return 0;
-        }
+        if (!prev || prev <= 0 || isSubmitting) return 0;
         return prev - 100;
       });
     }, 100);
@@ -237,14 +127,13 @@ export default function QuestionPage() {
     return () => clearInterval(interval);
   }, [timeRemaining, isSubmitting]);
 
-  // Auto-advance on timeout — no animation, just move on
+  // ── Auto-advance on timeout ─────────────────────────────────────────────
   useEffect(() => {
     if (timeRemaining === 0 && currentQuestion && !isSubmitting && attempt) {
-      setIsSubmitting(true); // prevent double-fire
+      setIsSubmitting(true);
 
-      // Track timeout as an answer_submit event
       trackAnswerSubmit({
-        quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
+        quiz_id: game.quizId || currentQuestion.quiz_id,
         attempt_id: attempt.attempt_id,
         question_id: currentQuestion.question_id,
         question_index: questionIndex,
@@ -258,85 +147,94 @@ export default function QuestionPage() {
         question_tags: currentQuestion.tags,
       });
 
-      // Resume to handle timeout and get next question — no visual feedback
       resumeAttempt(attempt.attempt_id).then((newAttempt) => {
-        sessionStorage.setItem('attempt_state', JSON.stringify(newAttempt));
-        setAttempt(newAttempt);
+        store.setAttempt(newAttempt);
         if (newAttempt.current_index <= 10) {
           router.push(`/play/q/${newAttempt.current_index}`);
         } else {
-          router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
+          router.push(`/results?attempt_id=${attempt.attempt_id}`);
         }
       });
     }
-  }, [timeRemaining, currentQuestion, isSubmitting, attempt, router]);
+  }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
-  const handleAnswerClick = (answerId: string) => {
+  // ── Answer handler ──────────────────────────────────────────────────────
+  const SUSPENSE_MS = 600;
+  const REVEAL_HOLD_MS = 1000;
+
+  const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
+    setFeedback('committed');
 
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
 
-    const submitPromise = submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
-      .then((result) => {
-        const serverState: AttemptState = {
-          attempt_id: result.attempt_id,
-          quiz_id: attempt.quiz_id,
-          current_index: result.current_index,
-          current_question_started_at: result.question_started_at,
-          current_question_expires_at: result.question_expires_at,
-          state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-        };
-        sessionStorage.setItem('attempt_state', JSON.stringify(serverState));
+    const suspenseTimer = new Promise(resolve => setTimeout(resolve, SUSPENSE_MS));
 
-        trackAnswerSubmit({
-          quiz_id: sessionStorage.getItem('quiz_id') || currentQuestion.quiz_id,
-          attempt_id: result.attempt_id,
-          question_id: currentQuestion.question_id,
-          question_index: questionIndex,
-          answer_id: answerId,
-          is_correct: result.is_correct,
-          time_ms: result.time_ms,
-          base_points: result.base_points,
-          bonus_points: result.bonus_points,
-          total_points: result.total_points,
-          answer_kind: 'selected',
-          question_tags: currentQuestion.tags,
-        });
-      })
-      .catch((err) => {
-        console.error('Failed to submit answer:', err);
-        trackAppError({
-          location: 'question_submit',
-          message: err instanceof Error ? err.message : 'Failed to submit answer',
-        });
-      });
+    try {
+      const [result] = await Promise.all([
+        submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId),
+        suspenseTimer,
+      ]);
 
-    if (isLastQuestion) {
-      // On the last question, wait for the answer to be saved before finalizing
-      // to avoid a race where finalize runs before Q10's answer is written
-      submitPromise.then(() => {
-        router.push(`/play/finalize?attempt_id=${attempt.attempt_id}`);
-      });
-    } else {
-      // For Q1-Q9, navigate optimistically for instant feel
-      const optimisticState: AttemptState = {
-        attempt_id: attempt.attempt_id,
+      // Build the next attempt state but DON'T store it yet —
+      // updating the store changes current_index which triggers the
+      // redirect useEffect, cutting the reveal animation short.
+      const serverState: AttemptState = {
+        attempt_id: result.attempt_id,
         quiz_id: attempt.quiz_id,
-        current_index: nextIndex,
-        current_question_started_at: new Date().toISOString(),
-        current_question_expires_at: null,
-        state: 'IN_PROGRESS',
+        current_index: result.current_index,
+        current_question_started_at: result.question_started_at,
+        current_question_expires_at: result.question_expires_at,
+        state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
       };
-      sessionStorage.setItem('attempt_state', JSON.stringify(optimisticState));
-      router.push(`/play/q/${nextIndex}`);
+
+      trackAnswerSubmit({
+        quiz_id: game.quizId || currentQuestion.quiz_id,
+        attempt_id: result.attempt_id,
+        question_id: currentQuestion.question_id,
+        question_index: questionIndex,
+        answer_id: answerId,
+        is_correct: result.is_correct,
+        time_ms: result.time_ms,
+        base_points: result.base_points,
+        bonus_points: result.bonus_points,
+        total_points: result.total_points,
+        answer_kind: 'selected',
+        question_tags: currentQuestion.tags,
+      });
+
+      // Phase 2: REVEAL — show correct/wrong and hold
+      setFeedback(result.is_correct ? 'correct' : 'wrong');
+      await new Promise(resolve => setTimeout(resolve, REVEAL_HOLD_MS));
+
+      // NOW update the store and navigate
+      store.setAttempt(serverState);
+
+      if (isLastQuestion) {
+        router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      } else {
+        router.push(`/play/q/${nextIndex}`);
+      }
+    } catch (err) {
+      console.error('Failed to submit answer:', err);
+      trackAppError({
+        location: 'question_submit',
+        message: err instanceof Error ? err.message : 'Failed to submit answer',
+      });
+      if (isLastQuestion) {
+        router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      } else {
+        router.push(`/play/q/${nextIndex}`);
+      }
     }
   };
 
-  if (loading) {
+  // ── Render: loading (recovery from hard refresh) ────────────────────────
+  if (game.phase === 'loading' || game.phase === 'idle' || !currentQuestion || !attempt) {
     return (
       <ArcadeBackground>
         <div className="flex items-center justify-center min-h-screen">
@@ -348,12 +246,12 @@ export default function QuestionPage() {
     );
   }
 
-  if (error) {
+  if (game.phase === 'error' || recoveryError) {
     return (
       <ArcadeBackground>
         <div className="flex items-center justify-center min-h-screen px-4">
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
-            <p className="font-bold text-lg text-ink mb-4">{error}</p>
+            <p className="font-bold text-lg text-ink mb-4">{game.error || recoveryError}</p>
             <button
               onClick={() => router.push('/')}
               className="h-14 w-full bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink"
@@ -366,56 +264,75 @@ export default function QuestionPage() {
     );
   }
 
-  if (!currentQuestion || !attempt) {
-    return null;
-  }
-
+  // ── Render: question ────────────────────────────────────────────────────
   return (
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen relative">
         {/* Unified top bar: progress + timer */}
         <div className="flex items-center gap-3 w-full px-4 py-2">
           <HUD progress={questionIndex} />
-          {currentQuestion && attempt && (
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="flex-1 h-3 bg-paper/40 border-[2px] border-ink rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-cyanA transition-all duration-100 ease-linear rounded-full"
-                  style={{
-                    width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
-                  }}
-                />
-              </div>
-              <span className="text-xs font-bold text-paper tabular-nums whitespace-nowrap">
-                {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
-              </span>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="flex-1 h-3 bg-paper/40 border-[2px] border-ink rounded-full overflow-hidden">
+              <div
+                className="h-full bg-cyanA transition-all duration-100 ease-linear rounded-full"
+                style={{
+                  width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
+                }}
+              />
             </div>
-          )}
+            <span className="text-xs font-bold text-paper tabular-nums whitespace-nowrap">
+              {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
+            </span>
+          </div>
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3">
+        <motion.div
+          key={questionIndex}
+          initial={{ opacity: 0, x: 60 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+          className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3"
+        >
           <QuestionCard
             questionText={currentQuestion.body}
             questionNumber={questionIndex}
           />
 
-          <div className="w-full space-y-2">
+          <motion.div
+            initial="hidden"
+            animate="visible"
+            variants={{
+              hidden: {},
+              visible: {
+                transition: { staggerChildren: 0.06, delayChildren: 0.15 },
+              },
+            }}
+            className="w-full space-y-2"
+          >
             {currentQuestion.answers
               .sort((a, b) => a.sort_index - b.sort_index)
               .map((answer, i) => (
-                <AnswerButton
+                <motion.div
                   key={answer.answer_id}
-                  text={answer.body}
-                  marker={String.fromCharCode(65 + i)}
-                  isSelected={selectedAnswerId === answer.answer_id}
-                  feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
-                  onClick={() => handleAnswerClick(answer.answer_id)}
-                  disabled={isSubmitting || selectedAnswerId !== null}
-                />
+                  variants={{
+                    hidden: { opacity: 0, y: 16 },
+                    visible: { opacity: 1, y: 0 },
+                  }}
+                  transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+                >
+                  <AnswerButton
+                    text={answer.body}
+                    marker={String.fromCharCode(65 + i)}
+                    isSelected={selectedAnswerId === answer.answer_id}
+                    feedback={selectedAnswerId === answer.answer_id ? feedback : 'idle'}
+                    dimmed={selectedAnswerId !== null && selectedAnswerId !== answer.answer_id}
+                    onClick={() => handleAnswerClick(answer.answer_id)}
+                    disabled={isSubmitting || selectedAnswerId !== null}
+                  />
+                </motion.div>
               ))}
-          </div>
-        </div>
-
+          </motion.div>
+        </motion.div>
       </div>
     </ArcadeBackground>
   );
