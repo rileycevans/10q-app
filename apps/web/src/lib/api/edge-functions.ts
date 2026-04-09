@@ -476,9 +476,20 @@ export const edgeFunctions = {
       name: string;
       owner_id: string;
       created_at: string;
+      invite_code: string;
     }>('create-league', {
       method: 'POST',
       body: { name },
+      requireAuth: true,
+    }),
+
+  joinLeague: (inviteCode: string) =>
+    callEdgeFunction<{
+      league_id: string;
+      name: string;
+    }>('join-league', {
+      method: 'POST',
+      body: { invite_code: inviteCode },
       requireAuth: true,
     }),
 
@@ -504,6 +515,7 @@ export const edgeFunctions = {
       name: string;
       owner_id: string;
       created_at: string;
+      invite_code: string;
       is_owner: boolean;
       members: Array<{
         player_id: string;

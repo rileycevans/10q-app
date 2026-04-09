@@ -20,6 +20,7 @@ export interface LeagueDetails {
   name: string;
   owner_id: string;
   created_at: string;
+  invite_code: string;
   is_owner: boolean;
   members: Array<{
     player_id: string;
@@ -44,6 +45,7 @@ export async function createLeague(name: string): Promise<{
   name: string;
   owner_id: string;
   created_at: string;
+  invite_code: string;
 }> {
   const response = await edgeFunctions.createLeague(name);
 
@@ -124,5 +126,21 @@ export async function deleteLeague(leagueId: string): Promise<void> {
   if (!response.ok) {
     throw new Error(response.error?.message || 'Failed to delete league');
   }
+}
+
+/**
+ * Join a league using an invite code
+ */
+export async function joinLeague(inviteCode: string): Promise<{
+  league_id: string;
+  name: string;
+}> {
+  const response = await edgeFunctions.joinLeague(inviteCode);
+
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message || 'Failed to join league');
+  }
+
+  return response.data;
 }
 

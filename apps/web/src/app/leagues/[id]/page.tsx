@@ -43,6 +43,7 @@ export default function LeagueDetailPage() {
   const [userPlayerId, setUserPlayerId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -205,10 +206,33 @@ export default function LeagueDetailPage() {
             Created {new Date(leagueDetails.created_at).toLocaleDateString()}
           </p>
           {leagueDetails.is_owner && (
-            <span className="inline-block px-3 py-1 bg-yellow border-[3px] border-ink rounded-full font-bold text-xs text-ink">
+            <span className="inline-block px-3 py-1 bg-yellow border-[3px] border-ink rounded-full font-bold text-xs text-ink mb-4">
               YOU ARE OWNER
             </span>
           )}
+
+          {/* Invite Code */}
+          <div className="mt-2 bg-cyanA/20 border-[3px] border-ink rounded-lg p-4">
+            <p className="font-bold text-xs uppercase tracking-wide text-ink/70 mb-2">Invite Code</p>
+            <div className="flex items-center justify-center gap-3">
+              <span className="font-mono font-bold text-2xl tracking-[0.3em] text-ink">
+                {leagueDetails.invite_code}
+              </span>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(leagueDetails.invite_code);
+                  setCodeCopied(true);
+                  setTimeout(() => setCodeCopied(false), 2000);
+                }}
+                className="h-9 px-3 bg-paper border-[2px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+              >
+                {codeCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p className="font-body text-xs text-ink/60 mt-2">
+              Share this code with friends so they can join your league
+            </p>
+          </div>
         </div>
 
         {/* Members Section */}

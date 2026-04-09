@@ -150,6 +150,15 @@ async function getAuthenticatedUser(
   return { userId: user.id };
 }
 
+function generateInviteCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  for (const b of bytes) code += chars[b % chars.length];
+  return code;
+}
+
 // Main function
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -231,14 +240,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Create league
+    // Create league with invite code
+    const inviteCode = generateInviteCode();
     const { data: league, error: leagueError } = await supabase
       .from("leagues")
       .insert({
         name: name.trim(),
         owner_player_id: userId,
+        invite_code: inviteCode,
       })
-      .select("id, name, owner_player_id, created_at")
+      .select("id, name, owner_player_id, created_at, invite_code")
       .single();
 
     if (leagueError) {
@@ -287,6 +298,7 @@ Deno.serve(async (req) => {
         name: league.name,
         owner_id: league.owner_player_id,
         created_at: league.created_at,
+        invite_code: league.invite_code,
       },
       requestId
     );

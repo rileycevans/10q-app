@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getMyLeagues, type League } from '@/domains/league';
+import { getMyLeagues, joinLeague, type League } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { LeagueCard } from '@/components/LeagueCard';
 import { getSession } from '@/lib/auth';
@@ -19,6 +19,9 @@ export default function LeaguesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
+  const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -59,6 +62,22 @@ export default function LeaguesPage() {
       mounted = false;
     };
   }, []);
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!joinCode.trim() || joining) return;
+
+    setJoining(true);
+    setJoinError(null);
+
+    try {
+      const result = await joinLeague(joinCode.trim());
+      router.push(`/leagues/${result.league_id}`);
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : 'Invalid invite code');
+      setJoining(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -114,12 +133,42 @@ export default function LeaguesPage() {
         {/* Header */}
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6 text-center">
           <h1 className="font-display text-4xl mb-6 text-ink">My Leagues</h1>
-          <Link
-            href="/leagues/create"
-            className="block w-full h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px]"
-          >
-            Create League
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href="/leagues/create"
+              className="flex-1 h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px]"
+            >
+              Create League
+            </Link>
+          </div>
+
+          {/* Join League */}
+          <form onSubmit={handleJoin} className="mt-4 flex gap-2">
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => {
+                setJoinCode(e.target.value.toUpperCase());
+                setJoinError(null);
+              }}
+              placeholder="Enter invite code"
+              maxLength={6}
+              disabled={joining}
+              className="flex-1 h-12 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-mono font-bold text-base text-ink text-center uppercase tracking-[0.3em] placeholder:text-ink/40 placeholder:tracking-normal placeholder:font-body focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={joinCode.trim().length === 0 || joining}
+              className="h-12 px-5 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {joining ? 'Joining...' : 'Join'}
+            </button>
+          </form>
+          {joinError && (
+            <div className="mt-2 bg-red border-[3px] border-ink rounded-lg p-2">
+              <p className="font-body text-sm font-bold text-ink text-center">{joinError}</p>
+            </div>
+          )}
         </div>
 
         {/* League List */}

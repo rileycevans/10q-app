@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
     // Get league info
     const { data: league, error: leagueError } = await supabase
       .from("leagues")
-      .select("id, name, owner_player_id, created_at")
+      .select("id, name, owner_player_id, created_at, invite_code")
       .eq("id", leagueId)
       .single();
 
@@ -245,6 +245,7 @@ Deno.serve(async (req) => {
         name: league.name,
         owner_id: league.owner_player_id,
         created_at: league.created_at,
+        invite_code: league.invite_code,
         is_owner: membership.role === "owner",
         members: memberList,
       },
