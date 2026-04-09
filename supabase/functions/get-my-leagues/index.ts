@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         leagues!inner (
           id,
           name,
-          owner_id,
+          owner_player_id,
           created_at
         )
       `)
@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
       return {
         league_id: league.id,
         name: league.name,
-        owner_id: league.owner_id,
+        owner_id: league.owner_player_id,
         created_at: league.created_at,
         role: m.role,
         member_count: memberCounts[league.id] || 0,

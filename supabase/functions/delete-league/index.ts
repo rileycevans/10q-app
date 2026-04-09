@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
     // Verify league exists and user is owner
     const { data: league, error: leagueError } = await supabase
       .from("leagues")
-      .select("id, owner_id")
+      .select("id, owner_player_id")
       .eq("id", league_id)
       .single();
 
@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (league.owner_id !== userId) {
+    if (league.owner_player_id !== userId) {
       return errorResponse(
         ErrorCodes.NOT_AUTHORIZED,
         "Only the league owner can delete the league",

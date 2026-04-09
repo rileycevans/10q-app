@@ -236,9 +236,9 @@ Deno.serve(async (req) => {
       .from("leagues")
       .insert({
         name: name.trim(),
-        owner_id: userId,
+        owner_player_id: userId,
       })
-      .select("id, name, owner_id, created_at")
+      .select("id, name, owner_player_id, created_at")
       .single();
 
     if (leagueError) {
@@ -285,7 +285,7 @@ Deno.serve(async (req) => {
       {
         league_id: league.id,
         name: league.name,
-        owner_id: league.owner_id,
+        owner_id: league.owner_player_id,
         created_at: league.created_at,
       },
       requestId
