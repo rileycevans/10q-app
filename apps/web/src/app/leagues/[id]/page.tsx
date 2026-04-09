@@ -301,26 +301,6 @@ export default function LeagueDetailPage() {
               </div>
             </div>
 
-            {/* Mode Toggle */}
-            <div>
-              <label className="block font-bold text-sm uppercase tracking-wide text-ink mb-2">
-                View Mode
-              </label>
-              <div className="flex gap-2 justify-center">
-                {(['top', 'around'] as LeaderboardMode[]).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={`h-10 px-6 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${mode === m
-                        ? 'bg-yellow text-ink'
-                        : 'bg-paper text-ink hover:bg-yellow/20'
-                      }`}
-                  >
-                    {m === 'top' ? 'Top Players' : 'Around Me'}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -354,7 +334,7 @@ export default function LeagueDetailPage() {
 
         {/* Delete League (Owner Only) */}
         {leagueDetails.is_owner && (
-          <div className="bg-red border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6">
+          <div className="bg-red border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6 text-center">
             <h3 className="font-display text-xl font-bold text-ink mb-4">Danger Zone</h3>
             {!showDeleteConfirm ? (
               <button

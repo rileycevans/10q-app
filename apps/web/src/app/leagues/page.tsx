@@ -180,7 +180,7 @@ export default function LeaguesPage() {
             </p>
             <Link
               href="/leagues/create"
-              className="inline-block h-12 px-6 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+              className="inline-flex items-center justify-center h-12 px-6 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
             >
               Create League
             </Link>
