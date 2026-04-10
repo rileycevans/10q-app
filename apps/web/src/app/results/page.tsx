@@ -273,7 +273,7 @@ function ResultsContent() {
     }
 
     loadResults();
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   if (loading) {
     return (

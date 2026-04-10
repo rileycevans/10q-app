@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { identifyUser, resetIdentity, trackSignOut, trackScreenView } from '@/lib/analytics';
+import { resetIdentity, trackSignOut, trackScreenView } from '@/lib/analytics';
 
 interface ProfileData {
   email: string | undefined;

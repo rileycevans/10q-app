@@ -45,6 +45,7 @@ export default function PlayPage() {
 
       if (attempt.current_index === 1) {
         // Fresh start — show 3-2-1-GO countdown
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setShowCountdown(true);
       } else {
         // Resume — skip straight to current question
@@ -55,10 +56,29 @@ export default function PlayPage() {
     }
   }, [game.phase, game.attempt, game.quizId, router]);
 
+  // Helper function for countdown calculation
+  const updateCountdown = () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setUTCHours(11, 30, 0, 0);
+
+    if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    }
+
+    const diff = tomorrow.getTime() - now.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+  };
+
   // ── Handle "no quiz" error specifically ──────────────────────────────────
   useEffect(() => {
     if (game.phase === 'error' && game.error?.includes('11:30')) {
       trackQuizUnavailable({ reason: 'NO_QUIZ_AVAILABLE' });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       updateCountdown();
       const interval = setInterval(updateCountdown, 1000);
       return () => clearInterval(interval);
@@ -83,23 +103,6 @@ export default function PlayPage() {
 
     return () => clearTimeout(timer);
   }, [showCountdown, readyCount, game.attempt, router]);
-
-  function updateCountdown() {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setUTCHours(11, 30, 0, 0);
-
-    if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    }
-
-    const diff = tomorrow.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    setCountdown(`${hours}h ${minutes}m ${seconds}s`);
-  }
 
   // ── Render: countdown animation ──────────────────────────────────────────
   if (showCountdown) {

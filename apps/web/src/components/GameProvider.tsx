@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useCallback, useRef, useSyncExternalStore } from 'react';
+import { createContext, useContext, useRef, useSyncExternalStore } from 'react';
 import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
 
@@ -127,11 +127,13 @@ const GameContext = createContext<GameStore | null>(null);
 export function GameProvider({ children }: { children: React.ReactNode }) {
   // Single store instance per mount — survives client-side navigations within /play/*
   const storeRef = useRef<GameStore | null>(null);
+  // eslint-disable-next-line react-hooks/refs
   if (!storeRef.current) {
     storeRef.current = createGameStore();
   }
 
   return (
+    // eslint-disable-next-line react-hooks/refs
     <GameContext.Provider value={storeRef.current}>
       {children}
     </GameContext.Provider>

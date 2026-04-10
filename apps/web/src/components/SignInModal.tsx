@@ -77,7 +77,7 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
         try {
           if (provider === 'google') await upgradeToGoogle();
           else await upgradeToApple();
-        } catch (linkErr) {
+        } catch (_linkErr) {
           // linkIdentity requires Manual Linking enabled in Supabase — fall back to standard OAuth
           Sentry.addBreadcrumb({
             category: 'auth',

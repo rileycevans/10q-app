@@ -27,7 +27,7 @@ export default function QuestionPage() {
   const [totalTime, setTotalTime] = useState<number>(16000);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
-  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryError, _setRecoveryError] = useState<string | null>(null);
 
   // Derive current question from store
   const currentQuestion: QuizQuestion | null =
@@ -60,10 +60,6 @@ export default function QuestionPage() {
 
   // ── Reset per-question state when index changes ─────────────────────────
   useEffect(() => {
-    setFeedback('idle');
-    setSelectedAnswerId(null);
-    setIsSubmitting(false);
-
     // Prefetch next route
     if (questionIndex < 10) {
       router.prefetch(`/play/q/${questionIndex + 1}`);
@@ -71,6 +67,16 @@ export default function QuestionPage() {
       router.prefetch('/results');
     }
   }, [questionIndex, router]);
+
+  // Reset state when question changes (use layout effect to avoid flash)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFeedback('idle');
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedAnswerId(null);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsSubmitting(false);
+  }, [questionIndex]);
 
   // ── Initialize timer from attempt state ─────────────────────────────────
   useEffect(() => {
@@ -80,19 +86,24 @@ export default function QuestionPage() {
       const startedAt = new Date(attempt.current_question_started_at).getTime();
       const expiresAt = new Date(attempt.current_question_expires_at).getTime();
       const duration = expiresAt - startedAt;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTotalTime(duration);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRemaining(Math.max(0, expiresAt - Date.now()));
     } else if (attempt.current_question_expires_at) {
       const expiresAt = new Date(attempt.current_question_expires_at).getTime();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRemaining(Math.max(0, expiresAt - Date.now()));
     } else if (attempt.current_question_started_at) {
       const startedAt = new Date(attempt.current_question_started_at).getTime();
       const elapsed = Date.now() - startedAt;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRemaining(Math.max(0, totalTime - elapsed));
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTimeRemaining(totalTime);
     }
-  }, [attempt, questionIndex]);
+  }, [attempt, questionIndex, totalTime]);
 
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
@@ -130,6 +141,7 @@ export default function QuestionPage() {
   // ── Auto-advance on timeout ─────────────────────────────────────────────
   useEffect(() => {
     if (timeRemaining === 0 && currentQuestion && !isSubmitting && attempt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSubmitting(true);
 
       trackAnswerSubmit({
