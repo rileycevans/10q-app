@@ -143,7 +143,7 @@ export default function LeaguesPage() {
           </div>
 
           {/* Join League */}
-          <form onSubmit={handleJoin} className="mt-4 flex gap-2">
+          <form onSubmit={handleJoin} className="mt-4 flex flex-col gap-3">
             <input
               type="text"
               value={joinCode}
@@ -154,12 +154,12 @@ export default function LeaguesPage() {
               placeholder="Enter invite code"
               maxLength={6}
               disabled={joining}
-              className="flex-1 h-12 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-mono font-bold text-base text-ink text-center uppercase tracking-[0.3em] placeholder:text-ink/40 placeholder:tracking-normal placeholder:font-body focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
+              className="w-full h-12 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-mono font-bold text-base text-ink text-center uppercase tracking-[0.3em] placeholder:text-ink/40 placeholder:tracking-normal placeholder:font-body focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
             />
             <button
               type="submit"
               disabled={joinCode.trim().length === 0 || joining}
-              className="h-12 px-5 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full h-12 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {joining ? 'Joining...' : 'Join'}
             </button>
