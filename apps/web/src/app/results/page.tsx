@@ -58,7 +58,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         </div>
         <div className={`px-3 py-1 rounded-full border-[3px] border-ink font-bold text-sm ${question.is_correct ? 'bg-green text-ink' : 'bg-red text-ink'
           }`}>
-          {question.is_correct ? '✓ CORRECT' : '✗ WRONG'}
+          {question.is_correct ? '✓ CORRECT' : question.answer_kind === 'timeout' ? '⏱ TIMEOUT' : '✗ WRONG'}
         </div>
       </div>
 
@@ -72,12 +72,13 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         {question.answers.map((answer) => {
           const isSelected = answer.id === question.selected_answer_id;
           const isCorrectAnswer = answer.is_correct;
+          const isTimeout = question.answer_kind === 'timeout';
 
           let bgColor = 'bg-paper';
           if (isSelected) {
             bgColor = question.is_correct ? 'bg-green' : 'bg-red';
-          } else if (!question.is_correct && isCorrectAnswer) {
-            // Highlight correct answer in cyan when question was answered incorrectly
+          } else if ((!question.is_correct || isTimeout) && isCorrectAnswer) {
+            // Highlight correct answer in green when question was answered incorrectly or timed out
             bgColor = 'bg-green';
           }
 
@@ -87,14 +88,14 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
               className={`
                 h-12 w-full border-[3px] border-ink rounded-[14px]
                 ${bgColor} flex items-center px-4
-                ${isSelected || (!question.is_correct && isCorrectAnswer) ? 'font-bold' : 'font-normal'}
+                ${isSelected || ((!question.is_correct || isTimeout) && isCorrectAnswer) ? 'font-bold' : 'font-normal'}
               `}
             >
               <span className="text-ink text-base">{answer.body}</span>
-              {isSelected && (
+              {isSelected && !isTimeout && (
                 <span className="ml-auto text-ink font-bold">← YOUR ANSWER</span>
               )}
-              {!isSelected && !question.is_correct && isCorrectAnswer && (
+              {!isSelected && (!question.is_correct || isTimeout) && isCorrectAnswer && (
                 <span className="ml-auto text-ink font-bold">← CORRECT</span>
               )}
             </div>
