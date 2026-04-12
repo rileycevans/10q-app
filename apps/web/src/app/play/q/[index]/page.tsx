@@ -144,29 +144,69 @@ export default function QuestionPage() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSubmitting(true);
 
-      trackAnswerSubmit({
-        quiz_id: game.quizId || currentQuestion.quiz_id,
-        attempt_id: attempt.attempt_id,
-        question_id: currentQuestion.question_id,
-        question_index: questionIndex,
-        answer_id: null,
-        is_correct: false,
-        time_ms: totalTime,
-        base_points: 0,
-        bonus_points: 0,
-        total_points: 0,
-        answer_kind: 'timeout',
-        question_tags: currentQuestion.tags,
-      });
+      // Submit timeout answer - pick first answer (backend will detect timeout and mark as timeout)
+      const firstAnswerId = currentQuestion.answers[0]?.id;
+      if (!firstAnswerId) {
+        // No answers available, skip to next question
+        resumeAttempt(attempt.attempt_id).then((newAttempt) => {
+          store.setAttempt(newAttempt);
+          if (newAttempt.current_index <= 10) {
+            router.push(`/play/q/${newAttempt.current_index}`);
+          } else {
+            router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          }
+        });
+        return;
+      }
 
-      resumeAttempt(attempt.attempt_id).then((newAttempt) => {
-        store.setAttempt(newAttempt);
-        if (newAttempt.current_index <= 10) {
-          router.push(`/play/q/${newAttempt.current_index}`);
-        } else {
-          router.push(`/results?attempt_id=${attempt.attempt_id}`);
-        }
-      });
+      submitAnswer(attempt.attempt_id, currentQuestion.question_id, firstAnswerId)
+        .then((result) => {
+          trackAnswerSubmit({
+            quiz_id: game.quizId || currentQuestion.quiz_id,
+            attempt_id: attempt.attempt_id,
+            question_id: currentQuestion.question_id,
+            question_index: questionIndex,
+            answer_id: null,
+            is_correct: result.is_correct,
+            time_ms: result.time_ms,
+            base_points: result.base_points,
+            bonus_points: result.bonus_points,
+            total_points: result.total_points,
+            answer_kind: 'timeout',
+            question_tags: currentQuestion.tags,
+          });
+
+          const newAttempt: AttemptState = {
+            attempt_id: result.attempt_id,
+            quiz_id: attempt.quiz_id,
+            current_index: result.current_index,
+            current_question_started_at: result.question_started_at,
+            current_question_expires_at: result.question_expires_at,
+            state: result.current_index > 10 ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
+          };
+
+          store.setAttempt(newAttempt);
+          if (result.current_index <= 10) {
+            router.push(`/play/q/${result.current_index}`);
+          } else {
+            router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          }
+        })
+        .catch((err) => {
+          trackAppError({
+            location: 'timeout_submit',
+            message: err instanceof Error ? err.message : 'Failed to submit timeout answer',
+          });
+          // Fallback to resume
+          resumeAttempt(attempt.attempt_id).then((newAttempt) => {
+            store.setAttempt(newAttempt);
+            if (newAttempt.current_index <= 10) {
+              router.push(`/play/q/${newAttempt.current_index}`);
+            } else {
+              router.push(`/results?attempt_id=${attempt.attempt_id}`);
+            }
+          });
+        });
     }
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
