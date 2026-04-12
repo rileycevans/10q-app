@@ -46,6 +46,13 @@ export default function LeagueDetailPage() {
   const [codeCopied, setCodeCopied] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
 
+  // Set invite link on client side only
+  useEffect(() => {
+    if (leagueDetails?.invite_code) {
+      setInviteLink(`${window.location.origin}/invite/${leagueDetails.invite_code}`);
+    }
+  }, [leagueDetails?.invite_code]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -81,10 +88,6 @@ export default function LeagueDetailPage() {
         });
         if (mounted) {
           setLeaderboardData(leaderboard);
-          // Set invite link after component mounts
-          if (typeof window !== 'undefined' && details.invite_code) {
-            setInviteLink(`${window.location.origin}/invite/${details.invite_code}`);
-          }
         }
       } catch (err) {
         if (!mounted) return;
