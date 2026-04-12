@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getMyLeagues, joinLeague, type League } from '@/domains/league';
+import { getMyLeagues, type League } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { LeagueCard } from '@/components/LeagueCard';
 import { getSession } from '@/lib/auth';
@@ -127,7 +127,7 @@ export default function LeaguesPage() {
           <div className="mt-4 bg-yellow/20 border-[3px] border-ink rounded-lg p-4">
             <p className="font-bold text-sm text-ink mb-2">Join a League</p>
             <p className="font-body text-xs text-ink/80">
-              Ask a friend for an invite link to join their league. When you click the link, you'll automatically join!
+              Ask a friend for an invite link to join their league. When you click the link, you&apos;ll automatically join!
             </p>
           </div>
         </div>

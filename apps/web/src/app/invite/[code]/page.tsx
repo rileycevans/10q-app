@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { joinLeague } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
@@ -22,28 +22,7 @@ export default function InvitePage() {
   const [joining, setJoining] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
 
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const session = await getSession();
-        setIsSignedIn(!!session);
-
-        if (session) {
-          // Auto-join if signed in
-          await handleJoin();
-        } else {
-          setLoading(false);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to check authentication');
-        setLoading(false);
-      }
-    }
-
-    checkAuth();
-  }, []);
-
-  async function handleJoin() {
+  const handleJoin = useCallback(async () => {
     if (!isSignedIn) {
       setError('Please sign in to join this league');
       return;
@@ -66,7 +45,28 @@ export default function InvitePage() {
       }
       setJoining(false);
     }
-  }
+  }, [isSignedIn, inviteCode, router]);
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const session = await getSession();
+        setIsSignedIn(!!session);
+
+        if (session) {
+          // Auto-join if signed in
+          await handleJoin();
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to check authentication');
+        setLoading(false);
+      }
+    }
+
+    checkAuth();
+  }, [handleJoin]);
 
   if (loading || joining) {
     return (
