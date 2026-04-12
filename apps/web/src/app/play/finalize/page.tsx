@@ -115,6 +115,7 @@ function FinalizeContent() {
     }
 
     finalize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, searchParams]);
 
   if (loading) {
