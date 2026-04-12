@@ -44,6 +44,7 @@ export default function LeagueDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -80,6 +81,10 @@ export default function LeagueDetailPage() {
         });
         if (mounted) {
           setLeaderboardData(leaderboard);
+          // Set invite link after component mounts
+          if (typeof window !== 'undefined' && details.invite_code) {
+            setInviteLink(`${window.location.origin}/invite/${details.invite_code}`);
+          }
         }
       } catch (err) {
         if (!mounted) return;
@@ -218,15 +223,16 @@ export default function LeagueDetailPage() {
               <input
                 type="text"
                 readOnly
-                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${leagueDetails.invite_code}`}
+                value={inviteLink}
                 className="flex-1 h-10 px-3 bg-paper border-[2px] border-ink rounded-lg font-mono text-xs text-ink text-center overflow-x-auto"
               />
               <button
                 onClick={() => {
-                  const inviteLink = `${window.location.origin}/invite/${leagueDetails.invite_code}`;
-                  navigator.clipboard.writeText(inviteLink);
-                  setCodeCopied(true);
-                  setTimeout(() => setCodeCopied(false), 2000);
+                  if (inviteLink) {
+                    navigator.clipboard.writeText(inviteLink);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  }
                 }}
                 className="h-10 px-4 bg-yellow border-[2px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] whitespace-nowrap"
               >
