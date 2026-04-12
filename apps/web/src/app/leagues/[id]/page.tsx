@@ -37,7 +37,7 @@ export default function LeagueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [leagueDetails, setLeagueDetails] = useState<LeagueDetails | null>(null);
   const [leaderboardData, setLeaderboardData] = useState<LeagueLeaderboardResponse | null>(null);
-  const [window, setWindow] = useState<LeaderboardWindow>('7d');
+  const [timeWindow, setTimeWindow] = useState<LeaderboardWindow>('7d');
   const [scoreType, setScoreType] = useState<ScoreType>('cumulative');
   const [mode, _setMode] = useState<LeaderboardMode>('top');
   const [userPlayerId, setUserPlayerId] = useState<string | null>(null);
@@ -49,7 +49,8 @@ export default function LeagueDetailPage() {
   // Set invite link on client side only
   useEffect(() => {
     if (leagueDetails?.invite_code) {
-      setInviteLink(`${window.location.origin}/invite/${leagueDetails.invite_code}`);
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      setInviteLink(`${origin}/invite/${leagueDetails.invite_code}`);
     }
   }, [leagueDetails?.invite_code]);
 
@@ -80,7 +81,7 @@ export default function LeagueDetailPage() {
         // Fetch leaderboard
         const leaderboard = await getLeagueLeaderboard({
           league_id: leagueId,
-          window,
+          window: timeWindow,
           mode,
           limit: mode === 'top' ? 100 : undefined,
           count: mode === 'around' ? 12 : undefined,
@@ -106,7 +107,7 @@ export default function LeagueDetailPage() {
     return () => {
       mounted = false;
     };
-  }, [leagueId, window, scoreType, mode]);
+  }, [leagueId, timeWindow, scoreType, mode]);
 
   async function handleAddMember(handle: string) {
     if (!leagueDetails) return;
@@ -281,8 +282,8 @@ export default function LeagueDetailPage() {
                 {(['today', '7d', '30d', '365d'] as LeaderboardWindow[]).map((w) => (
                   <button
                     key={w}
-                    onClick={() => setWindow(w)}
-                    className={`h-10 px-4 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${window === w
+                    onClick={() => setTimeWindow(w)}
+                    className={`h-10 px-4 border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] ${timeWindow === w
                         ? 'bg-cyanA text-ink'
                         : 'bg-paper text-ink hover:bg-cyanA/20'
                       }`}
