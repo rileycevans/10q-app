@@ -211,26 +211,30 @@ export default function LeagueDetailPage() {
             </span>
           )}
 
-          {/* Invite Code */}
+          {/* Invite Link */}
           <div className="mt-2 bg-cyanA/20 border-[3px] border-ink rounded-lg p-4">
-            <p className="font-bold text-xs uppercase tracking-wide text-ink/70 mb-2">Invite Code</p>
-            <div className="flex items-center justify-center gap-3">
-              <span className="font-mono font-bold text-2xl tracking-[0.3em] text-ink">
-                {leagueDetails.invite_code}
-              </span>
+            <p className="font-bold text-xs uppercase tracking-wide text-ink/70 mb-2">Invite Link</p>
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                type="text"
+                readOnly
+                value={`${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${leagueDetails.invite_code}`}
+                className="flex-1 h-10 px-3 bg-paper border-[2px] border-ink rounded-lg font-mono text-xs text-ink text-center overflow-x-auto"
+              />
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(leagueDetails.invite_code);
+                  const inviteLink = `${window.location.origin}/invite/${leagueDetails.invite_code}`;
+                  navigator.clipboard.writeText(inviteLink);
                   setCodeCopied(true);
                   setTimeout(() => setCodeCopied(false), 2000);
                 }}
-                className="h-9 px-3 bg-paper border-[2px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+                className="h-10 px-4 bg-yellow border-[2px] border-ink rounded-lg shadow-sticker-sm font-bold text-xs text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] whitespace-nowrap"
               >
-                {codeCopied ? 'Copied!' : 'Copy'}
+                {codeCopied ? '✓ Copied!' : '📋 Copy Link'}
               </button>
             </div>
-            <p className="font-body text-xs text-ink/60 mt-2">
-              Share this code with friends so they can join your league
+            <p className="font-body text-xs text-ink/60">
+              Share this link with friends to invite them to your league. Link expires in 7 days.
             </p>
           </div>
         </div>

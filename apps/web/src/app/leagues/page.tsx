@@ -19,9 +19,6 @@ export default function LeaguesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<League[]>([]);
-  const [joinCode, setJoinCode] = useState('');
-  const [joining, setJoining] = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -62,22 +59,6 @@ export default function LeaguesPage() {
       mounted = false;
     };
   }, []);
-
-  async function handleJoin(e: React.FormEvent) {
-    e.preventDefault();
-    if (!joinCode.trim() || joining) return;
-
-    setJoining(true);
-    setJoinError(null);
-
-    try {
-      const result = await joinLeague(joinCode.trim());
-      router.push(`/leagues/${result.league_id}`);
-    } catch (err) {
-      setJoinError(err instanceof Error ? err.message : 'Invalid invite code');
-      setJoining(false);
-    }
-  }
 
   if (loading) {
     return (
@@ -142,33 +123,13 @@ export default function LeaguesPage() {
             </Link>
           </div>
 
-          {/* Join League */}
-          <form onSubmit={handleJoin} className="mt-4 flex flex-col gap-3">
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => {
-                setJoinCode(e.target.value.toUpperCase());
-                setJoinError(null);
-              }}
-              placeholder="Enter invite code"
-              maxLength={6}
-              disabled={joining}
-              className="w-full h-12 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-mono font-bold text-base text-ink text-center uppercase tracking-[0.3em] placeholder:text-ink/40 placeholder:tracking-normal placeholder:font-body focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
-            />
-            <button
-              type="submit"
-              disabled={joinCode.trim().length === 0 || joining}
-              className="w-full h-12 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {joining ? 'Joining...' : 'Join'}
-            </button>
-          </form>
-          {joinError && (
-            <div className="mt-2 bg-red border-[3px] border-ink rounded-lg p-2">
-              <p className="font-body text-sm font-bold text-ink text-center">{joinError}</p>
-            </div>
-          )}
+          {/* Join League Info */}
+          <div className="mt-4 bg-yellow/20 border-[3px] border-ink rounded-lg p-4">
+            <p className="font-bold text-sm text-ink mb-2">Join a League</p>
+            <p className="font-body text-xs text-ink/80">
+              Ask a friend for an invite link to join their league. When you click the link, you'll automatically join!
+            </p>
+          </div>
         </div>
 
         {/* League List */}
