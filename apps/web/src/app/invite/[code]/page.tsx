@@ -127,7 +127,7 @@ export default function InvitePage() {
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
           <h1 className="font-display text-3xl mb-4 text-ink">League Invite</h1>
           <p className="font-body text-lg mb-6 text-ink">
-            You've been invited to join a league!
+            You&apos;ve been invited to join a league!
           </p>
           <p className="font-body text-sm text-ink/80 mb-6">
             Sign in to accept this invitation and join the league.
