@@ -234,7 +234,7 @@ export default function LeagueDetailPage() {
               </button>
             </div>
             <p className="font-body text-xs text-ink/60">
-              Share this link with friends to invite them to your league. Link expires in 7 days.
+              Share this link with friends to invite them to your league.
             </p>
           </div>
         </div>

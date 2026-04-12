@@ -59,9 +59,7 @@ export default function InvitePage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join league';
 
-      if (errorMessage.includes('expired')) {
-        setError('This invite link has expired. Ask the league owner for a new invite link.');
-      } else if (errorMessage.includes('already a member')) {
+      if (errorMessage.includes('already a member')) {
         setError('You are already a member of this league.');
       } else {
         setError(errorMessage);

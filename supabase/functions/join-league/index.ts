@@ -127,10 +127,10 @@ Deno.serve(async (req) => {
 
     const supabase = await createServiceClient();
 
-    // Look up league by invite code and check expiration
+    // Look up league by invite code
     const { data: league, error: leagueError } = await supabase
       .from("leagues")
-      .select("id, name, invite_expires_at")
+      .select("id, name")
       .eq("invite_code", code)
       .single();
 
@@ -140,18 +140,6 @@ Deno.serve(async (req) => {
         "No league found with that invite code",
         requestId,
         404
-      );
-    }
-
-    // Check if invite link has expired
-    const now = new Date();
-    const expiresAt = new Date(league.invite_expires_at);
-    if (now > expiresAt) {
-      return errorResponse(
-        ErrorCodes.VALIDATION_ERROR,
-        "This invite link has expired",
-        requestId,
-        400
       );
     }
 
