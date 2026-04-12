@@ -145,7 +145,7 @@ export default function QuestionPage() {
       setIsSubmitting(true);
 
       // Submit timeout answer - pick first answer (backend will detect timeout and mark as timeout)
-      const firstAnswerId = currentQuestion.answers[0]?.id;
+      const firstAnswerId = currentQuestion.answers[0]?.answer_id;
       if (!firstAnswerId) {
         // No answers available, skip to next question
         resumeAttempt(attempt.attempt_id).then((newAttempt) => {
