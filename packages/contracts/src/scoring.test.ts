@@ -25,42 +25,42 @@ describe("calculateBonus", () => {
     expect(bonus).toBe(5);
   });
 
-  it("returns 5 bonus in 0-2s tier", () => {
+  it("returns 5 bonus in 0-1.5s tier", () => {
     expect(calculateBonus(0)).toBe(5);
     expect(calculateBonus(1000)).toBe(5); // 1 second
-    expect(calculateBonus(1999)).toBe(5); // Just under 2 seconds
+    expect(calculateBonus(1499)).toBe(5); // Just under 1.5 seconds
   });
 
-  it("returns 4 bonus in 2-4s tier", () => {
-    expect(calculateBonus(2000)).toBe(4); // Exactly 2 seconds
-    expect(calculateBonus(3000)).toBe(4); // 3 seconds
-    expect(calculateBonus(3999)).toBe(4); // Just under 4 seconds
+  it("returns 4 bonus in 1.5-3s tier", () => {
+    expect(calculateBonus(1500)).toBe(4); // Exactly 1.5 seconds
+    expect(calculateBonus(2000)).toBe(4); // 2 seconds
+    expect(calculateBonus(2999)).toBe(4); // Just under 3 seconds
   });
 
-  it("returns 3 bonus in 4-6s tier", () => {
-    expect(calculateBonus(4000)).toBe(3); // Exactly 4 seconds
-    expect(calculateBonus(5000)).toBe(3); // 5 seconds
-    expect(calculateBonus(5999)).toBe(3); // Just under 6 seconds
+  it("returns 3 bonus in 3-4.5s tier", () => {
+    expect(calculateBonus(3000)).toBe(3); // Exactly 3 seconds
+    expect(calculateBonus(4000)).toBe(3); // 4 seconds
+    expect(calculateBonus(4499)).toBe(3); // Just under 4.5 seconds
   });
 
-  it("returns 2 bonus in 6-8s tier", () => {
-    expect(calculateBonus(6000)).toBe(2); // Exactly 6 seconds
-    expect(calculateBonus(7000)).toBe(2); // 7 seconds
-    expect(calculateBonus(7999)).toBe(2); // Just under 8 seconds
+  it("returns 2 bonus in 4.5-6s tier", () => {
+    expect(calculateBonus(4500)).toBe(2); // Exactly 4.5 seconds
+    expect(calculateBonus(5000)).toBe(2); // 5 seconds
+    expect(calculateBonus(5999)).toBe(2); // Just under 6 seconds
   });
 
-  it("returns 1 bonus in 8-10s tier", () => {
-    expect(calculateBonus(8000)).toBe(1); // Exactly 8 seconds
-    expect(calculateBonus(9000)).toBe(1); // 9 seconds
-    expect(calculateBonus(9999)).toBe(1); // Just under 10 seconds
+  it("returns 1 bonus in 6-7.5s tier", () => {
+    expect(calculateBonus(6000)).toBe(1); // Exactly 6 seconds
+    expect(calculateBonus(7000)).toBe(1); // 7 seconds
+    expect(calculateBonus(7499)).toBe(1); // Just under 7.5 seconds
   });
 
-  it("returns 0 bonus at 10s (bonus window end)", () => {
+  it("returns 0 bonus at 7.5s (bonus window end)", () => {
     const bonus = calculateBonus(BONUS_WINDOW_MS);
     expect(bonus).toBe(0);
   });
 
-  it("returns 0 bonus after 10s", () => {
+  it("returns 0 bonus after 7.5s", () => {
     const bonus = calculateBonus(BONUS_WINDOW_MS + 1000);
     expect(bonus).toBe(0);
   });
@@ -87,22 +87,22 @@ describe("calculateQuestionScore", () => {
       expect(result.isTimeout).toBe(false);
     });
 
-    it("calculates score at 5s (3 bonus in 4-6s tier)", () => {
-      const result = calculateQuestionScore(true, 5000);
+    it("calculates score at 4s (3 bonus in 3-4.5s tier)", () => {
+      const result = calculateQuestionScore(true, 4000);
       expect(result.basePoints).toBe(BASE_POINTS_CORRECT);
       expect(result.bonusPoints).toBe(3);
       expect(result.totalPoints).toBe(8);
     });
 
-    it("calculates score at 10s (no bonus)", () => {
+    it("calculates score at 7.5s (no bonus)", () => {
       const result = calculateQuestionScore(true, BONUS_WINDOW_MS);
       expect(result.basePoints).toBe(BASE_POINTS_CORRECT);
       expect(result.bonusPoints).toBe(0);
       expect(result.totalPoints).toBe(BASE_POINTS_CORRECT);
     });
 
-    it("calculates score after 10s (no bonus, still correct)", () => {
-      const result = calculateQuestionScore(true, 15000);
+    it("calculates score after 7.5s (no bonus, still correct)", () => {
+      const result = calculateQuestionScore(true, 11000);
       expect(result.basePoints).toBe(BASE_POINTS_CORRECT);
       expect(result.bonusPoints).toBe(0);
       expect(result.totalPoints).toBe(BASE_POINTS_CORRECT);
