@@ -633,5 +633,16 @@ export const edgeFunctions = {
       body: { quiz_id: quizId },
       requireAuth: true,
     }),
+
+  getLeagueByInviteCode: (inviteCode: string) =>
+    callEdgeFunction<{
+      league_id: string;
+      name: string;
+      creator_handle: string;
+      member_count: number;
+    }>(`get-league-by-invite?code=${encodeURIComponent(inviteCode)}`, {
+      method: 'GET',
+      requireAuth: false,
+    }),
 };
 
