@@ -26,30 +26,30 @@ export interface ScoreCalculation {
 /**
  * Calculate bonus points based on elapsed time using step-based tiers.
  * Step-based bonus tiers:
- * - 0–2s: 5 bonus
- * - 2–4s: 4 bonus
- * - 4–6s: 3 bonus
- * - 6–8s: 2 bonus
- * - 8–10s: 1 bonus
- * - 10s+: 0 bonus
+ * - 0–1.5s: 5 bonus
+ * - 1.5–3s: 4 bonus
+ * - 3–4.5s: 3 bonus
+ * - 4.5–6s: 2 bonus
+ * - 6–7.5s: 1 bonus
+ * - 7.5s+: 0 bonus
  */
 export function calculateBonus(elapsedMs: number): number {
   // Clamp elapsed time to bonus window
   const clamped = Math.min(Math.max(elapsedMs, 0), BONUS_WINDOW_MS);
-  
+
   // Convert to seconds
   const elapsedSeconds = clamped / 1000;
-  
-  // Step-based tiers
-  if (elapsedSeconds < 2) {
+
+  // Step-based tiers (scaled to 12s total time)
+  if (elapsedSeconds < 1.5) {
     return 5;
-  } else if (elapsedSeconds < 4) {
+  } else if (elapsedSeconds < 3) {
     return 4;
-  } else if (elapsedSeconds < 6) {
+  } else if (elapsedSeconds < 4.5) {
     return 3;
-  } else if (elapsedSeconds < 8) {
+  } else if (elapsedSeconds < 6) {
     return 2;
-  } else if (elapsedSeconds < 10) {
+  } else if (elapsedSeconds < 7.5) {
     return 1;
   } else {
     return 0;
@@ -58,10 +58,10 @@ export function calculateBonus(elapsedMs: number): number {
 
 /**
  * Calculate score for a single question.
- * 
+ *
  * @param isCorrect - Whether the answer was correct
- * @param elapsedMs - Time elapsed in milliseconds (0-16000)
- * @param isTimeout - Whether the question timed out (no answer within 16s)
+ * @param elapsedMs - Time elapsed in milliseconds (0-12000)
+ * @param isTimeout - Whether the question timed out (no answer within 12s)
  * @returns Score calculation with base, bonus, and total points
  */
 export function calculateQuestionScore(
@@ -86,8 +86,8 @@ export function calculateQuestionScore(
   
   // Base points: 5 if correct, 0 if incorrect
   const basePoints = isCorrect ? BASE_POINTS_CORRECT : BASE_POINTS_INCORRECT;
-  
-  // Bonus points: step-based tiers from 0-10s, 0 after 10s
+
+  // Bonus points: step-based tiers from 0-7.5s, 0 after 7.5s
   const bonusPoints = isCorrect ? calculateBonus(clampedElapsedMs) : 0;
   
   return {

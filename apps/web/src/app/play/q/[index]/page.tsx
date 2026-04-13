@@ -24,7 +24,7 @@ export default function QuestionPage() {
 
   const [selectedAnswerId, setSelectedAnswerId] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const [totalTime, setTotalTime] = useState<number>(16000);
+  const [totalTime, setTotalTime] = useState<number>(12000);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
   const [recoveryError, _setRecoveryError] = useState<string | null>(null);
