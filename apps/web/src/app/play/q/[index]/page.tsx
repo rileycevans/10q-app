@@ -140,7 +140,7 @@ export default function QuestionPage() {
 
   // ── Auto-advance on timeout ─────────────────────────────────────────────
   useEffect(() => {
-    if (timeRemaining === 0 && currentQuestion && !isSubmitting && attempt) {
+    if (timeRemaining !== null && timeRemaining <= 0 && currentQuestion && !isSubmitting && attempt) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSubmitting(true);
 
