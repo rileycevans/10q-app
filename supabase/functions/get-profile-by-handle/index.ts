@@ -248,19 +248,20 @@ Deno.serve(async (req) => {
           }
         }
 
-      // Convert map to array format
-      categoryPerformance = Array.from(categoryStatsMap.entries()).map(([category, stats]) => ({
-        category,
-        total_questions: stats.total_questions,
-        correct_count: stats.correct_count,
-        accuracy: stats.total_questions > 0 
-          ? Number((stats.correct_count / stats.total_questions * 100).toFixed(1))
-          : 0,
-        average_score: stats.total_questions > 0
-          ? Number((stats.total_points / stats.total_questions).toFixed(2))
-          : 0,
-        best_score: stats.best_score,
-      })).sort((a, b) => b.total_questions - a.total_questions); // Sort by most questions answered
+        // Convert map to array format
+        categoryPerformance = Array.from(categoryStatsMap.entries()).map(([category, stats]) => ({
+          category,
+          total_questions: stats.total_questions,
+          correct_count: stats.correct_count,
+          accuracy: stats.total_questions > 0
+            ? Number((stats.correct_count / stats.total_questions * 100).toFixed(1))
+            : 0,
+          average_score: stats.total_questions > 0
+            ? Number((stats.total_points / stats.total_questions).toFixed(2))
+            : 0,
+          best_score: stats.best_score,
+        })).sort((a, b) => b.total_questions - a.total_questions); // Sort by most questions answered
+      }
     }
 
     logStructured(requestId, "get_profile_by_handle_success", {
