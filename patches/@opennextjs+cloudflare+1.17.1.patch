@@ -1,0 +1,14 @@
+diff --git a/node_modules/@opennextjs/cloudflare/dist/cli/build/bundle-server.js b/node_modules/@opennextjs/cloudflare/dist/cli/build/bundle-server.js
+index e57f6b8..dd165ee 100644
+--- a/node_modules/@opennextjs/cloudflare/dist/cli/build/bundle-server.js
++++ b/node_modules/@opennextjs/cloudflare/dist/cli/build/bundle-server.js
+@@ -119,6 +119,9 @@ export async function bundleServer(buildOpts, projectOpts) {
+             // `@next/env` is used by Next to load environment variables from files.
+             // OpenNext inlines the values at build time so this is not needed.
+             "@next/env": path.join(buildOpts.outputDir, "cloudflare-templates/shims/env.js"),
++            // 10Q: replace @vercel/og with a stub so WASM (~2MB+) is not in the Worker bundle (CF free tier 3 MiB limit).
++            "next/dist/compiled/@vercel/og/index.edge.js": path.join(buildOpts.appPath, "src/lib/stubs/vercel-og-stub.mjs"),
++            "next/dist/compiled/@vercel/og/index.node.js": path.join(buildOpts.appPath, "src/lib/stubs/vercel-og-stub.mjs"),
+         },
+         define: {
+             // config file used by Next.js, see: https://github.com/vercel/next.js/blob/68a7128/packages/next/src/build/utils.ts#L2137-L2139
