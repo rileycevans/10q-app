@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { BottomDock } from '@/components/BottomDock';
+import { SignInModal } from '@/components/SignInModal';
 import { trackScreenView, trackAppError } from '@/lib/analytics';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
@@ -14,11 +15,13 @@ export default function HomePage() {
   const router = useRouter();
   const [isResetting, setIsResetting] = useState(false);
   const [showScoringModal, setShowScoringModal] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
   const [streak, setStreak] = useState<number | undefined>(undefined);
   const [isAdmin, setIsAdmin] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [countdown, setCountdown] = useState('');
+  const [isSignedIn, setIsSignedIn] = useState(false);
 
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
@@ -28,7 +31,11 @@ export default function HomePage() {
         // Warm the session early so /play doesn't have to wait for it
         const { ensureSession } = await import('@/lib/auth');
         const session = await ensureSession();
-        if (!session) return;
+        if (!session) {
+          setIsSignedIn(false);
+          return;
+        }
+        setIsSignedIn(true);
         const { data: player } = await supabase
           .from('players')
           .select('current_streak')
@@ -52,6 +59,7 @@ export default function HomePage() {
         }
       } catch {
         // Non-critical — silently ignore
+        setIsSignedIn(false);
       }
     }
     warmSessionAndCheckCompletion();
@@ -233,17 +241,23 @@ export default function HomePage() {
           onStreakClick={() => router.push('/leaderboard')}
           onLeagueClick={() => router.push('/leagues')}
           onSettingsClick={() => router.push('/settings')}
-          onProfileClick={() => router.push('/profile')}
+          onProfileClick={() => {
+            if (isSignedIn) {
+              router.push('/profile');
+            } else {
+              setShowSignInModal(true);
+            }
+          }}
         />
       </div>
 
       {/* Scoring Modal */}
       {showScoringModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           onClick={() => setShowScoringModal(false)}
         >
-          <div 
+          <div
             className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
@@ -256,13 +270,13 @@ export default function HomePage() {
                 ×
               </button>
             </div>
-            
+
             <div className="space-y-3 mb-4">
               <div className="bg-cyanA/20 border-[3px] border-ink rounded-[14px] p-3">
                 <div className="font-bold text-sm text-ink mb-2">BASE POINTS</div>
                 <div className="text-base text-ink">5 points for each correct answer</div>
               </div>
-              
+
               <div className="bg-yellow/20 border-[3px] border-ink rounded-[14px] p-3">
                 <div className="font-bold text-sm text-ink mb-2">SPEED BONUS</div>
                 <div className="space-y-1.5">
@@ -308,6 +322,9 @@ export default function HomePage() {
           </div>
         </div>
       )}
+
+      {/* Sign In Modal */}
+      <SignInModal isOpen={showSignInModal} onClose={() => setShowSignInModal(false)} />
     </ArcadeBackground>
   );
 }
