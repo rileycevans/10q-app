@@ -78,12 +78,17 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
           if (provider === 'google') await upgradeToGoogle();
           else await upgradeToApple();
         } catch (_linkErr) {
-          // linkIdentity requires Manual Linking enabled in Supabase — fall back to standard OAuth
+          // linkIdentity failed (identity already linked to another account) — sign out and do fresh OAuth
           Sentry.addBreadcrumb({
             category: 'auth',
-            message: 'linkIdentity failed, falling back to signInWithOAuth',
+            message: 'linkIdentity failed, signing out anonymous session and retrying with signInWithOAuth',
             data: { provider },
           });
+
+          // Sign out of anonymous session first
+          await supabase.auth.signOut();
+
+          // Then do fresh OAuth sign in
           await signInWithOAuthOrReport(provider, redirectTo);
         }
       } else {
