@@ -73,24 +73,18 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user?.is_anonymous) {
-        trackAuthUpgradeStarted({ provider });
-        try {
-          if (provider === 'google') await upgradeToGoogle();
-          else await upgradeToApple();
-        } catch (_linkErr) {
-          // linkIdentity failed (identity already linked to another account) — sign out and do fresh OAuth
-          Sentry.addBreadcrumb({
-            category: 'auth',
-            message: 'linkIdentity failed, signing out anonymous session and retrying with signInWithOAuth',
-            data: { provider },
-          });
+        // Sign out of anonymous session first to avoid identity linking conflicts
+        Sentry.addBreadcrumb({
+          category: 'auth',
+          message: 'Anonymous user detected, signing out before OAuth to avoid linking conflicts',
+          data: { provider },
+        });
 
-          // Sign out of anonymous session first
-          await supabase.auth.signOut();
+        await supabase.auth.signOut();
 
-          // Then do fresh OAuth sign in
-          await signInWithOAuthOrReport(provider, redirectTo);
-        }
+        // Then do fresh OAuth sign in
+        trackSignIn({ provider, is_upgrade: false });
+        await signInWithOAuthOrReport(provider, redirectTo);
       } else {
         trackSignIn({ provider, is_upgrade: false });
         await signInWithOAuthOrReport(provider, redirectTo);
