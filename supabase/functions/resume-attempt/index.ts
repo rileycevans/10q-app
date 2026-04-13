@@ -10,7 +10,7 @@ import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
 
-const QUESTION_TIME_LIMIT_MS = 16000;
+const QUESTION_TIME_LIMIT_MS = 12000;
 
 Deno.serve(async (req) => {
   // Handle CORS preflight

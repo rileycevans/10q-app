@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
     // Create new attempt
     const now = new Date();
-    const questionExpiresAt = new Date(now.getTime() + 16000); // 16 seconds
+    const questionExpiresAt = new Date(now.getTime() + 12000); // 12 seconds
 
     const { data: newAttempt, error: createAttemptError } = await supabase
       .from("attempts")
