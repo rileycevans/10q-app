@@ -117,8 +117,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
         </div>
         <div className="text-right">
           <div className="text-xs text-ink/80 mb-1">
-            Base: {question.base_points}pt
-            {question.bonus_points > 0 && ` + Time Bonus: ${question.bonus_points}pt`}
+            Base: {question.base_points}pt + Time Bonus: {question.bonus_points}pt
           </div>
           <div className="font-display text-xl font-bold text-ink">
             {question.total_points} pts

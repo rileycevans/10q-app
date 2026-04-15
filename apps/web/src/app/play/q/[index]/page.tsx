@@ -212,7 +212,7 @@ export default function QuestionPage() {
 
   // ── Answer handler ──────────────────────────────────────────────────────
   const SUSPENSE_MS = 600;
-  const REVEAL_HOLD_MS = 1000;
+  const REVEAL_HOLD_MS = 0;
 
   const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
