@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { useGameStore, useGameState } from '@/components/GameProvider';
 import { submitAnswer, resumeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
@@ -329,11 +328,8 @@ export default function QuestionPage() {
           </div>
         </div>
 
-        <motion.div
+        <div
           key={questionIndex}
-          initial={{ opacity: 0, x: 60 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
           className="flex-1 flex flex-col items-center justify-center px-4 py-4 gap-3"
         >
           <QuestionCard
@@ -341,28 +337,11 @@ export default function QuestionPage() {
             questionNumber={questionIndex}
           />
 
-          <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={{
-              hidden: {},
-              visible: {
-                transition: { staggerChildren: 0.06, delayChildren: 0.15 },
-              },
-            }}
-            className="w-full space-y-2"
-          >
+          <div className="w-full space-y-2">
             {currentQuestion.answers
               .sort((a, b) => a.sort_index - b.sort_index)
               .map((answer, i) => (
-                <motion.div
-                  key={answer.answer_id}
-                  variants={{
-                    hidden: { opacity: 0, y: 16 },
-                    visible: { opacity: 1, y: 0 },
-                  }}
-                  transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-                >
+                <div key={answer.answer_id}>
                   <AnswerButton
                     text={answer.body}
                     marker={String.fromCharCode(65 + i)}
@@ -372,10 +351,10 @@ export default function QuestionPage() {
                     onClick={() => handleAnswerClick(answer.answer_id)}
                     disabled={isSubmitting || selectedAnswerId !== null}
                   />
-                </motion.div>
+                </div>
               ))}
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       </div>
     </ArcadeBackground>
   );
