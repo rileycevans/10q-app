@@ -211,7 +211,7 @@ export default function QuestionPage() {
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
-  const SUSPENSE_MS = 600;
+  const SUSPENSE_MS = 0;
   const REVEAL_HOLD_MS = 0;
 
   const handleAnswerClick = async (answerId: string) => {
@@ -224,13 +224,8 @@ export default function QuestionPage() {
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
 
-    const suspenseTimer = new Promise(resolve => setTimeout(resolve, SUSPENSE_MS));
-
     try {
-      const [result] = await Promise.all([
-        submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId),
-        suspenseTimer,
-      ]);
+      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
 
       // Build the next attempt state but DON'T store it yet —
       // updating the store changes current_index which triggers the
