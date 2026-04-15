@@ -81,12 +81,28 @@ export default function QuestionPage() {
   useEffect(() => {
     if (!attempt) return;
 
-    // Always start with full 12 seconds when question loads
-    // This ensures timer is in sync with when player actually sees the question
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTimeRemaining(12000);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTotalTime(12000);
+    // Start the server-side timer when question loads
+    async function startTimer() {
+      try {
+        const { edgeFunctions } = await import('@/lib/api/edge-functions');
+        await edgeFunctions.startQuestionTimer(attempt.attempt_id);
+
+        // Set client timer to 12 seconds
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTimeRemaining(12000);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTotalTime(12000);
+      } catch (error) {
+        console.error('Failed to start timer:', error);
+        // Fall back to 12 seconds anyway
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTimeRemaining(12000);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTotalTime(12000);
+      }
+    }
+
+    startTimer();
   }, [attempt, questionIndex]);
 
   // ── Track question view ─────────────────────────────────────────────────

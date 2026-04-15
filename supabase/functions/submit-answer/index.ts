@@ -319,12 +319,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update attempt: increment current_index, update totals, set next question timing
+    // Update attempt: increment current_index, update totals
+    // Don't start timer yet - let client start it when question loads
     const nextIndex = attempt.current_index + 1;
-    const nextQuestionStartedAt = new Date();
-    const nextQuestionExpiresAt = new Date(
-      nextQuestionStartedAt.getTime() + QUESTION_TIME_LIMIT_MS
-    );
 
     const newTotalScore = Number(attempt.total_score) + score.totalPoints;
     const newTotalTimeMs = attempt.total_time_ms + score.elapsedMs;
@@ -335,12 +332,8 @@ Deno.serve(async (req) => {
         current_index: nextIndex,
         total_score: newTotalScore,
         total_time_ms: newTotalTimeMs,
-        current_question_started_at:
-          nextIndex <= 10
-            ? nextQuestionStartedAt.toISOString()
-            : null,
-        current_question_expires_at:
-          nextIndex <= 10 ? nextQuestionExpiresAt.toISOString() : null,
+        current_question_started_at: null,
+        current_question_expires_at: null,
       })
       .eq("id", attempt_id);
 

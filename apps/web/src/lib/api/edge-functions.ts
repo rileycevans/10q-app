@@ -301,6 +301,17 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  startQuestionTimer: (attemptId: string) =>
+    callEdgeFunction<{
+      attempt_id: string;
+      question_started_at: string;
+      question_expires_at: string;
+    }>('start-question-timer', {
+      method: 'POST',
+      body: { attempt_id: attemptId },
+      requireAuth: true,
+    }),
+
   submitAnswer: (attemptId: string, questionId: string, selectedAnswerId: string) =>
     callEdgeFunction<{
       attempt_id: string;
