@@ -81,28 +81,13 @@ export default function QuestionPage() {
   useEffect(() => {
     if (!attempt) return;
 
-    if (attempt.current_question_expires_at && attempt.current_question_started_at) {
-      const startedAt = new Date(attempt.current_question_started_at).getTime();
-      const expiresAt = new Date(attempt.current_question_expires_at).getTime();
-      const duration = expiresAt - startedAt;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTotalTime(duration);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTimeRemaining(Math.max(0, expiresAt - Date.now()));
-    } else if (attempt.current_question_expires_at) {
-      const expiresAt = new Date(attempt.current_question_expires_at).getTime();
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTimeRemaining(Math.max(0, expiresAt - Date.now()));
-    } else if (attempt.current_question_started_at) {
-      const startedAt = new Date(attempt.current_question_started_at).getTime();
-      const elapsed = Date.now() - startedAt;
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTimeRemaining(Math.max(0, totalTime - elapsed));
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTimeRemaining(totalTime);
-    }
-  }, [attempt, questionIndex, totalTime]);
+    // Always start with full 12 seconds when question loads
+    // This ensures timer is in sync with when player actually sees the question
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTimeRemaining(12000);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTotalTime(12000);
+  }, [attempt, questionIndex]);
 
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
