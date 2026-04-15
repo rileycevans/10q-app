@@ -254,11 +254,7 @@ export default function QuestionPage() {
         question_tags: currentQuestion.tags,
       });
 
-      // Phase 2: REVEAL — show correct/wrong and hold
-      setFeedback(result.is_correct ? 'correct' : 'wrong');
-      await new Promise(resolve => setTimeout(resolve, REVEAL_HOLD_MS));
-
-      // NOW update the store and navigate
+      // Update the store and navigate immediately
       store.setAttempt(serverState);
 
       if (isLastQuestion) {
