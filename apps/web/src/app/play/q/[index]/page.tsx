@@ -81,23 +81,21 @@ export default function QuestionPage() {
   useEffect(() => {
     if (!attempt) return;
 
+    const attemptId = attempt.attempt_id;
+
     // Start the server-side timer when question loads
     async function startTimer() {
       try {
         const { edgeFunctions } = await import('@/lib/api/edge-functions');
-        await edgeFunctions.startQuestionTimer(attempt.attempt_id);
+        await edgeFunctions.startQuestionTimer(attemptId);
 
         // Set client timer to 12 seconds
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTimeRemaining(12000);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTotalTime(12000);
       } catch (error) {
         console.error('Failed to start timer:', error);
         // Fall back to 12 seconds anyway
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTimeRemaining(12000);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setTotalTime(12000);
       }
     }
@@ -211,9 +209,6 @@ export default function QuestionPage() {
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
-  const SUSPENSE_MS = 0;
-  const REVEAL_HOLD_MS = 0;
-
   const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
