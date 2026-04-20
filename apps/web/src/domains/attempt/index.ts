@@ -73,7 +73,7 @@ export interface AttemptResults {
  * Start or resume an attempt for a quiz
  * Returns attempt state plus all questions for client-side caching
  */
-export async function startAttempt(quizId: string): Promise<AttemptState & { all_questions?: any[] }> {
+export async function startAttempt(quizId: string): Promise<AttemptState & { all_questions?: unknown[] }> {
   const response = await edgeFunctions.startAttempt(quizId);
 
   if (!response.ok || !response.data) {

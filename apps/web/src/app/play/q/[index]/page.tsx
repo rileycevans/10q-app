@@ -89,7 +89,9 @@ export default function QuestionPage() {
     // Add 100ms compensation for network latency
     const compensated = Math.min(12000, remaining + 100);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeRemaining(compensated);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalTime(12000);
   }, [attempt, questionIndex]);
 
