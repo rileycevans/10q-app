@@ -92,7 +92,7 @@ function createGameStore(): GameStore {
         const attemptState = await startAttempt(currentQuiz.quiz_id);
 
         // Extract questions from attempt state
-        const questions = attemptState.all_questions || [];
+        const questions = (attemptState.all_questions as QuizQuestion[]) || [];
 
         // Persist to sessionStorage for hard-refresh recovery
         sessionStorage.setItem('quiz_id', currentQuiz.quiz_id);
