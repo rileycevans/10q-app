@@ -391,10 +391,8 @@ Deno.serve(async (req) => {
         time_ms: score.elapsedMs,
         next_question: nextQuestions?.[0] || null,
         current_index: nextIndex,
-        question_started_at:
-          nextIndex <= 10 ? nextQuestionStartedAt.toISOString() : null,
-        question_expires_at:
-          nextIndex <= 10 ? nextQuestionExpiresAt.toISOString() : null,
+        question_started_at: null,
+        question_expires_at: null,
       },
       requestId
     );
