@@ -79,28 +79,18 @@ export default function QuestionPage() {
 
   // ── Initialize timer from attempt state ─────────────────────────────────
   useEffect(() => {
-    if (!attempt) return;
+    if (!attempt || !attempt.current_question_expires_at) return;
 
-    const attemptId = attempt.attempt_id;
+    // Calculate time remaining from server-authoritative expiry time
+    const now = Date.now();
+    const expiresAt = new Date(attempt.current_question_expires_at).getTime();
+    const remaining = Math.max(0, expiresAt - now);
 
-    // Start the server-side timer when question loads
-    async function startTimer() {
-      try {
-        const { edgeFunctions } = await import('@/lib/api/edge-functions');
-        await edgeFunctions.startQuestionTimer(attemptId);
+    // Add 100ms compensation for network latency
+    const compensated = Math.min(12000, remaining + 100);
 
-        // Set client timer to 12 seconds
-        setTimeRemaining(12000);
-        setTotalTime(12000);
-      } catch (error) {
-        console.error('Failed to start timer:', error);
-        // Fall back to 12 seconds anyway
-        setTimeRemaining(12000);
-        setTotalTime(12000);
-      }
-    }
-
-    startTimer();
+    setTimeRemaining(compensated);
+    setTotalTime(12000);
   }, [attempt, questionIndex]);
 
   // ── Track question view ─────────────────────────────────────────────────

@@ -143,24 +143,26 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Get current question from quiz_play_view
-      const { data: questions, error: questionsError } = await supabase
+      // Get ALL questions from quiz_play_view for client-side caching
+      const { data: allQuestions, error: questionsError } = await supabase
         .from("quiz_play_view")
         .select("*")
         .eq("quiz_id", quiz_id)
-        .eq("order_index", existingAttempt.current_index);
+        .order("order_index", { ascending: true });
 
-      if (questionsError || !questions || questions.length === 0) {
+      if (questionsError || !allQuestions || allQuestions.length === 0) {
         logStructured(requestId, "start_attempt_question_error", {
           error: questionsError?.message,
         });
         return errorResponse(
           ErrorCodes.QUESTION_NOT_FOUND,
-          "Question not found",
+          "Questions not found",
           requestId,
           404
         );
       }
+
+      const currentQuestion = allQuestions.find(q => q.order_index === existingAttempt.current_index);
 
       logStructured(requestId, "start_attempt_existing", {
         attempt_id: existingAttempt.id,
@@ -171,7 +173,8 @@ Deno.serve(async (req) => {
           attempt_id: existingAttempt.id,
           quiz_id: existingAttempt.quiz_id,
           current_index: existingAttempt.current_index,
-          current_question: questions[0],
+          current_question: currentQuestion,
+          all_questions: allQuestions,
           question_started_at: existingAttempt.current_question_started_at,
           question_expires_at: existingAttempt.current_question_expires_at,
           state: "IN_PROGRESS",
@@ -256,20 +259,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get first question from quiz_play_view
-    const { data: questions, error: questionsError } = await supabase
+    // Get ALL questions from quiz_play_view for client-side caching
+    const { data: allQuestions, error: questionsError } = await supabase
       .from("quiz_play_view")
       .select("*")
       .eq("quiz_id", quiz_id)
-      .eq("order_index", 1);
+      .order("order_index", { ascending: true });
 
-    if (questionsError || !questions || questions.length === 0) {
+    if (questionsError || !allQuestions || allQuestions.length === 0) {
       logStructured(requestId, "start_attempt_question_error", {
         error: questionsError?.message,
       });
       return errorResponse(
         ErrorCodes.QUESTION_NOT_FOUND,
-        "Question not found",
+        "Questions not found",
         requestId,
         404
       );
@@ -277,6 +280,7 @@ Deno.serve(async (req) => {
 
     logStructured(requestId, "start_attempt_success", {
       attempt_id: newAttempt.id,
+      question_count: allQuestions.length,
     });
 
     return successResponse(
@@ -284,7 +288,8 @@ Deno.serve(async (req) => {
         attempt_id: newAttempt.id,
         quiz_id: newAttempt.quiz_id,
         current_index: newAttempt.current_index,
-        current_question: questions[0],
+        current_question: allQuestions[0],
+        all_questions: allQuestions,
         question_started_at: newAttempt.current_question_started_at,
         question_expires_at: newAttempt.current_question_expires_at,
       },

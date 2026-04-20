@@ -283,6 +283,7 @@ export const edgeFunctions = {
       current_question_started_at: string;
       current_question_expires_at: string;
       state: string;
+      all_questions?: any[];
     }>('start-attempt', {
       method: 'POST',
       body: { quiz_id: quizId },

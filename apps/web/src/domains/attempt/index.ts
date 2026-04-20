@@ -71,8 +71,9 @@ export interface AttemptResults {
 
 /**
  * Start or resume an attempt for a quiz
+ * Returns attempt state plus all questions for client-side caching
  */
-export async function startAttempt(quizId: string): Promise<AttemptState> {
+export async function startAttempt(quizId: string): Promise<AttemptState & { all_questions?: any[] }> {
   const response = await edgeFunctions.startAttempt(quizId);
 
   if (!response.ok || !response.data) {
@@ -96,6 +97,7 @@ export async function startAttempt(quizId: string): Promise<AttemptState> {
     current_question_started_at: data.current_question_started_at,
     current_question_expires_at: data.current_question_expires_at,
     state,
+    all_questions: data.all_questions || [],
   };
 }
 

@@ -69,7 +69,7 @@ function createGameStore(): GameStore {
 
       try {
         // Lazy-import domains so this module stays light
-        const [{ ensureSession }, { getCurrentQuiz, getQuizQuestions }, { startAttempt }] =
+        const [{ ensureSession }, { getCurrentQuiz }, { startAttempt }] =
           await Promise.all([
             import('@/lib/auth'),
             import('@/domains/quiz'),
@@ -88,11 +88,11 @@ function createGameStore(): GameStore {
           return;
         }
 
-        // Step 2: attempt + questions in parallel (both need session, but not each other)
-        const [attemptState, questions] = await Promise.all([
-          startAttempt(currentQuiz.quiz_id),
-          getQuizQuestions(currentQuiz.quiz_id),
-        ]);
+        // Step 2: start attempt (now returns all questions too)
+        const attemptState = await startAttempt(currentQuiz.quiz_id);
+
+        // Extract questions from attempt state
+        const questions = attemptState.all_questions || [];
 
         // Persist to sessionStorage for hard-refresh recovery
         sessionStorage.setItem('quiz_id', currentQuiz.quiz_id);
