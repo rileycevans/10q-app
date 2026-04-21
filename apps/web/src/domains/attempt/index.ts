@@ -95,8 +95,8 @@ export async function startAttempt(quizId: string): Promise<AttemptState & { all
     quiz_id: data.quiz_id,
     current_index: data.current_index,
     // start-attempt returns these at the top level without the "current_" prefix
-    current_question_started_at: data.question_started_at ?? data.current_question_started_at,
-    current_question_expires_at: data.question_expires_at ?? data.current_question_expires_at,
+    current_question_started_at: data.question_started_at ?? data.current_question_started_at ?? null,
+    current_question_expires_at: data.question_expires_at ?? data.current_question_expires_at ?? null,
     state,
     all_questions: data.all_questions || [],
   };
