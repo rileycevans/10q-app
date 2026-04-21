@@ -22,6 +22,7 @@ export default function HomePage() {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [countdown, setCountdown] = useState('');
   const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(true);
 
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
@@ -33,9 +34,11 @@ export default function HomePage() {
         const session = await ensureSession();
         if (!session) {
           setIsSignedIn(false);
+          setIsAnonymous(true);
           return;
         }
         setIsSignedIn(true);
+        setIsAnonymous(session.user.is_anonymous ?? true);
         const { data: player } = await supabase
           .from('players')
           .select('current_streak')
@@ -60,6 +63,7 @@ export default function HomePage() {
       } catch {
         // Non-critical — silently ignore
         setIsSignedIn(false);
+        setIsAnonymous(true);
       }
     }
     warmSessionAndCheckCompletion();
@@ -237,17 +241,12 @@ export default function HomePage() {
         <BottomDock
           streak={streak}
           avatarUrl={avatarUrl}
+          isAnonymous={isAnonymous}
           onRankClick={() => router.push('/leaderboard')}
           onStreakClick={() => router.push('/leaderboard')}
           onLeagueClick={() => router.push('/leagues')}
           onSettingsClick={() => router.push('/settings')}
-          onProfileClick={() => {
-            if (isSignedIn) {
-              router.push('/profile');
-            } else {
-              setShowSignInModal(true);
-            }
-          }}
+          onProfileClick={() => router.push('/profile')}
         />
       </div>
 

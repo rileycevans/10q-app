@@ -1,6 +1,7 @@
 interface BottomDockProps {
   streak?: number;
   avatarUrl?: string | null;
+  isAnonymous?: boolean;
   onRankClick?: () => void;
   onStreakClick?: () => void;
   onLeagueClick?: () => void;
@@ -11,6 +12,7 @@ interface BottomDockProps {
 export function BottomDock({
   streak,
   avatarUrl,
+  isAnonymous,
   onRankClick,
   onStreakClick,
   onLeagueClick,
@@ -51,19 +53,29 @@ export function BottomDock({
         ⚙️
       </button>
       <button
-        className="w-14 h-14 bg-paper border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center overflow-hidden transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
+        className="relative w-14 h-14 bg-paper border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center overflow-visible transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
         onClick={onProfileClick}
-        aria-label="Profile"
+        aria-label={isAnonymous ? 'Profile (not signed in)' : 'Profile'}
       >
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt="Profile"
-            className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          <span className="text-2xl">👤</span>
+        <span className="w-full h-full flex items-center justify-center overflow-hidden rounded-[4px]">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt="Profile"
+              className="w-full h-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className="text-2xl">👤</span>
+          )}
+        </span>
+        {isAnonymous && (
+          <span
+            aria-hidden
+            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red border-[2px] border-ink rounded-full flex items-center justify-center font-display text-[11px] text-paper leading-none"
+          >
+            !
+          </span>
         )}
       </button>
     </div>
