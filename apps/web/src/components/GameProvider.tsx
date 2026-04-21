@@ -69,7 +69,7 @@ function createGameStore(): GameStore {
 
       try {
         // Lazy-import domains so this module stays light
-        const [{ ensureSession }, { getCurrentQuiz }, { startAttempt }] =
+        const [{ ensureSession }, { getCurrentQuiz, reshapeQuizRows }, { startAttempt }] =
           await Promise.all([
             import('@/lib/auth'),
             import('@/domains/quiz'),
@@ -91,8 +91,10 @@ function createGameStore(): GameStore {
         // Step 2: start attempt (now returns all questions too)
         const attemptState = await startAttempt(currentQuiz.quiz_id);
 
-        // Extract questions from attempt state
-        const questions = (attemptState.all_questions as QuizQuestion[]) || [];
+        // Reshape flat quiz_play_view rows into nested questions+answers
+        const questions = reshapeQuizRows(
+          (attemptState.all_questions as Parameters<typeof reshapeQuizRows>[0]) || []
+        );
 
         // Persist to sessionStorage for hard-refresh recovery
         sessionStorage.setItem('quiz_id', currentQuiz.quiz_id);

@@ -280,8 +280,12 @@ export const edgeFunctions = {
       attempt_id: string;
       quiz_id: string;
       current_index: number;
-      current_question_started_at: string;
-      current_question_expires_at: string;
+      // Server returns these without the "current_" prefix on fresh starts,
+      // but resumed attempts (`start_attempt_existing`) may include current_*.
+      question_started_at?: string | null;
+      question_expires_at?: string | null;
+      current_question_started_at?: string | null;
+      current_question_expires_at?: string | null;
       state: string;
       all_questions?: unknown[];
     }>('start-attempt', {

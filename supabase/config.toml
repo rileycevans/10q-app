@@ -39,3 +39,53 @@ enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
 
+# ── Edge Functions ───────────────────────────────────────────────────────────
+# Disable the gateway's legacy JWT check. The project uses asymmetric (ES256)
+# signing keys, which the legacy check can't validate — it rejects with
+# UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM before the function runs.
+# Each function that needs auth validates the Bearer token itself via
+# _shared/auth.ts → supabase.auth.getUser(token), which understands ES256.
+[functions.add-league-member]
+verify_jwt = false
+[functions.create-league]
+verify_jwt = false
+[functions.create-quiz]
+verify_jwt = false
+[functions.delete-attempt]
+verify_jwt = false
+[functions.delete-league]
+verify_jwt = false
+[functions.finalize-attempt]
+verify_jwt = false
+[functions.get-attempt-results]
+verify_jwt = false
+[functions.get-current-quiz]
+verify_jwt = false
+[functions.get-global-leaderboard]
+verify_jwt = false
+[functions.get-league-by-invite]
+verify_jwt = false
+[functions.get-league-details]
+verify_jwt = false
+[functions.get-league-leaderboard]
+verify_jwt = false
+[functions.get-my-leagues]
+verify_jwt = false
+[functions.get-profile-by-handle]
+verify_jwt = false
+[functions.join-league]
+verify_jwt = false
+[functions.publish-quiz]
+verify_jwt = false
+[functions.remove-league-member]
+verify_jwt = false
+[functions.resume-attempt]
+verify_jwt = false
+[functions.start-attempt]
+verify_jwt = false
+[functions.start-question-timer]
+verify_jwt = false
+[functions.submit-answer]
+verify_jwt = false
+[functions.update-handle]
+verify_jwt = false
