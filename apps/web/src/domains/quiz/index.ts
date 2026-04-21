@@ -40,6 +40,57 @@ export async function getCurrentQuiz(): Promise<CurrentQuiz | null> {
   return response.data;
 }
 
+interface QuizPlayRow {
+  question_id: string;
+  quiz_id: string;
+  body: string;
+  order_index: number;
+  answer_id: string | null;
+  answer_body: string;
+  answer_sort_index: number;
+  tags: string[] | null;
+}
+
+/**
+ * Reshape flat quiz_play_view rows (one row per answer) into nested
+ * QuizQuestion objects with a sorted `answers` array.
+ */
+export function reshapeQuizRows(rows: QuizPlayRow[]): QuizQuestion[] {
+  const questionMap = new Map<string, QuizQuestion>();
+
+  for (const row of rows) {
+    if (!questionMap.has(row.question_id)) {
+      questionMap.set(row.question_id, {
+        question_id: row.question_id,
+        quiz_id: row.quiz_id,
+        body: row.body,
+        order_index: row.order_index,
+        answers: [],
+        tags: row.tags || [],
+      });
+    }
+
+    const question = questionMap.get(row.question_id)!;
+
+    if (row.answer_id && !question.answers.some(a => a.answer_id === row.answer_id)) {
+      question.answers.push({
+        answer_id: row.answer_id,
+        body: row.answer_body,
+        sort_index: row.answer_sort_index,
+      });
+    }
+  }
+
+  const questions = Array.from(questionMap.values())
+    .sort((a, b) => a.order_index - b.order_index);
+
+  for (const question of questions) {
+    question.answers.sort((a, b) => a.sort_index - b.sort_index);
+  }
+
+  return questions;
+}
+
 /**
  * Get all questions for a quiz
  * Uses quiz_play_view which joins via quiz_questions junction
@@ -55,40 +106,5 @@ export async function getQuizQuestions(quizId: string): Promise<QuizQuestion[]> 
     return [];
   }
 
-  // Group rows by question_id (view returns one row per answer)
-  const questionMap = new Map<string, QuizQuestion>();
-  
-  for (const row of data) {
-    if (!questionMap.has(row.question_id)) {
-      questionMap.set(row.question_id, {
-        question_id: row.question_id,
-        quiz_id: row.quiz_id,
-        body: row.body,
-        order_index: row.order_index,
-        answers: [],
-        tags: row.tags || [],
-      });
-    }
-    
-    const question = questionMap.get(row.question_id)!;
-    
-    // Add answer if present and not already added
-    if (row.answer_id && !question.answers.some(a => a.answer_id === row.answer_id)) {
-      question.answers.push({
-        answer_id: row.answer_id,
-        body: row.answer_body,
-        sort_index: row.answer_sort_index,
-      });
-    }
-  }
-  
-  // Sort questions by order_index and answers by sort_index
-  const questions = Array.from(questionMap.values())
-    .sort((a, b) => a.order_index - b.order_index);
-  
-  for (const question of questions) {
-    question.answers.sort((a, b) => a.sort_index - b.sort_index);
-  }
-  
-  return questions;
+  return reshapeQuizRows(data as QuizPlayRow[]);
 }
