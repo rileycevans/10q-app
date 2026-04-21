@@ -9,6 +9,7 @@ import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
+import { classifyAttempt, isUniqueViolation } from "../_shared/attempt-state.ts";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -104,9 +105,9 @@ Deno.serve(async (req) => {
       .single();
 
     if (existingAttempt) {
-      // Attempt exists - return it
-      if (existingAttempt.finalized_at) {
-        // Already finalized - return state indicating completion
+      const state = classifyAttempt(existingAttempt);
+
+      if (state === "FINALIZED") {
         logStructured(requestId, "start_attempt_already_finalized", {
           attempt_id: existingAttempt.id,
         });
@@ -118,14 +119,13 @@ Deno.serve(async (req) => {
             current_question: null,
             question_started_at: null,
             question_expires_at: null,
-            state: "FINALIZED",
+            state,
           },
           requestId
         );
       }
 
-      // Check if all questions answered (ready to finalize)
-      if (existingAttempt.current_index > 10) {
+      if (state === "READY_TO_FINALIZE") {
         logStructured(requestId, "start_attempt_ready_to_finalize", {
           attempt_id: existingAttempt.id,
         });
@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
             current_question: null,
             question_started_at: null,
             question_expires_at: null,
-            state: "READY_TO_FINALIZE",
+            state,
           },
           requestId
         );
@@ -218,7 +218,7 @@ Deno.serve(async (req) => {
 
     if (createAttemptError) {
       // Check if it's a unique constraint violation (race condition)
-      if (createAttemptError.code === "23505") {
+      if (isUniqueViolation(createAttemptError)) {
         // Attempt was created by another request, fetch it
         const { data: raceAttempt } = await supabase
           .from("attempts")

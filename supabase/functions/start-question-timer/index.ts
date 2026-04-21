@@ -8,8 +8,8 @@ import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
-
-const QUESTION_TIME_LIMIT_MS = 12000;
+import { planQuestionTimerStart } from "../_shared/attempt-state.ts";
+import { QUESTION_TIME_LIMIT_MS } from "../_shared/scoring.ts";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -69,40 +69,35 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if attempt is finalized
-    if (attempt.finalized_at) {
-      return errorResponse(
-        ErrorCodes.ATTEMPT_ALREADY_COMPLETED,
-        "Attempt has already been completed",
-        requestId,
-        400
-      );
+    const plan = planQuestionTimerStart(
+      attempt,
+      Date.now(),
+      QUESTION_TIME_LIMIT_MS,
+    );
+
+    if (plan.action === "error") {
+      return errorResponse(plan.code, plan.message, requestId, plan.status);
     }
 
-    // Only start timer if not already started
-    if (attempt.current_question_started_at) {
+    if (plan.action === "noop") {
       logStructured(requestId, "start_question_timer_already_started", {
         attempt_id,
       });
       return successResponse(
         {
           attempt_id,
-          question_started_at: attempt.current_question_started_at,
-          question_expires_at: attempt.current_question_expires_at,
+          question_started_at: plan.questionStartedAt,
+          question_expires_at: plan.questionExpiresAt,
         },
         requestId
       );
     }
 
-    // Start the timer
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + QUESTION_TIME_LIMIT_MS);
-
     const { error: updateError } = await supabase
       .from("attempts")
       .update({
-        current_question_started_at: now.toISOString(),
-        current_question_expires_at: expiresAt.toISOString(),
+        current_question_started_at: plan.questionStartedAt,
+        current_question_expires_at: plan.questionExpiresAt,
       })
       .eq("id", attempt_id);
 
@@ -125,8 +120,8 @@ Deno.serve(async (req) => {
     return successResponse(
       {
         attempt_id,
-        question_started_at: now.toISOString(),
-        question_expires_at: expiresAt.toISOString(),
+        question_started_at: plan.questionStartedAt,
+        question_expires_at: plan.questionExpiresAt,
       },
       requestId
     );
