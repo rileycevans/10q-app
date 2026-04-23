@@ -9,6 +9,7 @@ import { ArcadeBackground } from '@/components/ArcadeBackground';
 export default function AuthCallbackPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [recoveringSignIn, setRecoveringSignIn] = useState(false);
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -31,18 +32,18 @@ export default function AuthCallbackPage() {
             (errorDescription?.toLowerCase().includes('already') ?? false) ||
             (errorDescription?.toLowerCase().includes('identity is already linked') ?? false);
 
-          if (identityAlreadyLinked && linkProvider === 'google') {
+          if (
+            identityAlreadyLinked &&
+            (linkProvider === 'google' || linkProvider === 'apple')
+          ) {
+            setRecoveringSignIn(true);
+            setError('Identity already linked to another user. Signing you in to your existing account...');
+            // Give React a moment to paint the message before the OAuth
+            // redirect replaces the page.
+            await new Promise((resolve) => setTimeout(resolve, 1500));
             await supabase.auth.signOut();
             await supabase.auth.signInWithOAuth({
-              provider: 'google',
-              options: { redirectTo: `${window.location.origin}/auth/callback` },
-            });
-            return;
-          }
-          if (identityAlreadyLinked && linkProvider === 'apple') {
-            await supabase.auth.signOut();
-            await supabase.auth.signInWithOAuth({
-              provider: 'apple',
+              provider: linkProvider,
               options: { redirectTo: `${window.location.origin}/auth/callback` },
             });
             return;
@@ -111,7 +112,9 @@ export default function AuthCallbackPage() {
           {error ? (
             <>
               <p className="font-bold text-lg text-ink mb-4">{error}</p>
-              <p className="text-sm text-ink/60">Redirecting to home...</p>
+              <p className="text-sm text-ink/60">
+                {recoveringSignIn ? 'Redirecting to sign in...' : 'Redirecting to home...'}
+              </p>
             </>
           ) : (
             <>
