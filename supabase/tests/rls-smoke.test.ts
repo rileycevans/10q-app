@@ -116,6 +116,99 @@ describe("RLS Smoke Tests", () => {
       // Anon should not be able to read
       expect(error).toBeTruthy();
     });
+
+    it("anon cannot insert into attempt_answers (mutation path is closed)", async () => {
+      const { error } = await anonClient.from("attempt_answers").insert({
+        attempt_id: "00000000-0000-0000-0000-000000000000",
+        question_id: "00000000-0000-0000-0000-000000000000",
+        selected_answer_id: "00000000-0000-0000-0000-000000000000",
+        is_correct: false,
+        answer_kind: "selected",
+        base_points: 0,
+        bonus_points: 0,
+        time_ms: 0,
+      });
+      expect(error).toBeTruthy();
+    });
+  });
+
+  describe("Players Isolation", () => {
+    it("anon cannot read players table directly", async () => {
+      const { error } = await anonClient.from("players").select("*").limit(1);
+      expect(error).toBeTruthy();
+    });
+
+    it("anon cannot update another player's handle", async () => {
+      const { error } = await anonClient
+        .from("players")
+        .update({ handle_display: "hacker" })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+      expect(error).toBeTruthy();
+    });
+  });
+
+  describe("Daily Scores Isolation", () => {
+    it("anon cannot insert into daily_scores (scoring must go through finalize-attempt)", async () => {
+      const { error } = await anonClient.from("daily_scores").insert({
+        quiz_id: "00000000-0000-0000-0000-000000000000",
+        player_id: "00000000-0000-0000-0000-000000000000",
+        completed_at: new Date().toISOString(),
+        score: 999,
+        total_time_ms: 0,
+        correct_count: 10,
+      });
+      expect(error).toBeTruthy();
+    });
+
+    it("anon cannot update daily_scores (no leaderboard tampering)", async () => {
+      const { error } = await anonClient
+        .from("daily_scores")
+        .update({ score: 100 })
+        .neq("player_id", "00000000-0000-0000-0000-000000000000");
+      expect(error).toBeTruthy();
+    });
+  });
+
+  describe("Quizzes Isolation", () => {
+    it("anon cannot read unpublished quizzes via the raw table", async () => {
+      // quiz_play_view filters to published; the raw table should be gated.
+      const { error } = await anonClient
+        .from("quizzes")
+        .select("id, status")
+        .eq("status", "draft")
+        .limit(1);
+      expect(error).toBeTruthy();
+    });
+
+    it("anon cannot insert a quiz", async () => {
+      const { error } = await anonClient.from("quizzes").insert({
+        release_at_utc: new Date().toISOString(),
+        status: "published",
+      });
+      expect(error).toBeTruthy();
+    });
+  });
+
+  describe("Outbox Events", () => {
+    it("anon cannot read outbox_events", async () => {
+      const { error } = await anonClient
+        .from("outbox_events")
+        .select("*")
+        .limit(1);
+      expect(error).toBeTruthy();
+    });
+
+    it("anon cannot insert into outbox_events (only service role emits events)", async () => {
+      const { error } = await anonClient.from("outbox_events").insert({
+        aggregate_type: "attempt",
+        aggregate_id: "00000000-0000-0000-0000-000000000000",
+        event_type: "AnswerSubmitted",
+        event_version: 1,
+        actor_user_id: "00000000-0000-0000-0000-000000000000",
+        payload: {},
+      });
+      expect(error).toBeTruthy();
+    });
   });
 });
 

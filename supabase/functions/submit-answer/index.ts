@@ -9,80 +9,16 @@ import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
-
-// Scoring constants (mirrored from contracts for Deno compatibility)
-const BASE_POINTS_CORRECT = 5;
-const BASE_POINTS_INCORRECT = 0;
-const MAX_BONUS_POINTS = 5;
-const BONUS_WINDOW_MS = 7500;
-const QUESTION_TIME_LIMIT_MS = 12000;
-
-/**
- * Calculate bonus points using step-based tiers.
- * Step-based bonus tiers:
- * - 0–1.5s: 5 bonus
- * - 1.5–3s: 4 bonus
- * - 3–4.5s: 3 bonus
- * - 4.5–6s: 2 bonus
- * - 6–7.5s: 1 bonus
- * - 7.5s+: 0 bonus
- */
-function calculateBonus(elapsedMs: number): number {
-  const clamped = Math.min(Math.max(elapsedMs, 0), BONUS_WINDOW_MS);
-  const elapsedSeconds = clamped / 1000;
-
-  if (elapsedSeconds < 1.5) {
-    return 5;
-  } else if (elapsedSeconds < 3) {
-    return 4;
-  } else if (elapsedSeconds < 4.5) {
-    return 3;
-  } else if (elapsedSeconds < 6) {
-    return 2;
-  } else if (elapsedSeconds < 7.5) {
-    return 1;
-  } else {
-    return 0;
-  }
-}
-
-/**
- * Calculate question score
- */
-function calculateQuestionScore(
-  isCorrect: boolean,
-  elapsedMs: number,
-  isTimeout: boolean
-): {
-  basePoints: number;
-  bonusPoints: number;
-  totalPoints: number;
-  elapsedMs: number;
-} {
-  const clampedElapsedMs = Math.min(
-    Math.max(elapsedMs, 0),
-    QUESTION_TIME_LIMIT_MS
-  );
-
-  if (isTimeout) {
-    return {
-      basePoints: BASE_POINTS_INCORRECT,
-      bonusPoints: 0,
-      totalPoints: 0,
-      elapsedMs: QUESTION_TIME_LIMIT_MS,
-    };
-  }
-
-  const basePoints = isCorrect ? BASE_POINTS_CORRECT : BASE_POINTS_INCORRECT;
-  const bonusPoints = isCorrect ? calculateBonus(clampedElapsedMs) : 0;
-
-  return {
-    basePoints,
-    bonusPoints,
-    totalPoints: basePoints + bonusPoints,
-    elapsedMs: clampedElapsedMs,
-  };
-}
+import {
+  calculateQuestionScore,
+  computeElapsed,
+  QUESTION_TIME_LIMIT_MS,
+} from "../_shared/scoring.ts";
+import {
+  computeNextQuestionTimings,
+  isUniqueViolation,
+  validateSubmitAnswer,
+} from "../_shared/attempt-state.ts";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -142,16 +78,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if attempt is finalized
-    if (attempt.finalized_at) {
-      return errorResponse(
-        ErrorCodes.ATTEMPT_ALREADY_COMPLETED,
-        "Attempt has already been completed",
-        requestId,
-        400
-      );
-    }
-
     // Verify question is current question (via quiz_questions junction)
     const { data: quizQuestion, error: questionError } = await supabase
       .from("quiz_questions")
@@ -169,12 +95,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (quizQuestion.order_index !== attempt.current_index) {
+    const stateCheck = validateSubmitAnswer(attempt, quizQuestion);
+    if (!stateCheck.ok) {
       return errorResponse(
-        ErrorCodes.INVALID_STATE_TRANSITION,
-        "Question is not the current question",
+        stateCheck.code,
+        stateCheck.message,
         requestId,
-        400
+        stateCheck.status
       );
     }
 
@@ -219,13 +146,11 @@ Deno.serve(async (req) => {
     }
 
     // Server-authoritative timing calculation
-    const now = new Date();
-    const questionStartedAt = new Date(attempt.current_question_started_at);
-    const elapsedMs = Math.max(0, now.getTime() - questionStartedAt.getTime());
-
-    // Check if question expired
-    const isExpired = elapsedMs >= QUESTION_TIME_LIMIT_MS;
-    const isTimeout = isExpired;
+    const nowMs = Date.now();
+    const { elapsedMs, isTimeout } = computeElapsed(
+      attempt.current_question_started_at,
+      nowMs,
+    );
 
     // Get selected answer and check if correct (Notion plan: is_correct on question_answers)
     const { data: selectedAnswer, error: answerCheckError } = await supabase
@@ -273,7 +198,7 @@ Deno.serve(async (req) => {
 
     if (answerError) {
       // Check if it's a duplicate (race condition)
-      if (answerError.code === "23505") {
+      if (isUniqueViolation(answerError)) {
         // Fetch existing answer
         const { data: existing } = await supabase
           .from("attempt_answers")
@@ -320,9 +245,12 @@ Deno.serve(async (req) => {
     }
 
     // Update attempt: increment current_index, update totals, start next question timer
-    const nextIndex = attempt.current_index + 1;
-    const nextQuestionStartedAt = new Date();
-    const nextQuestionExpiresAt = new Date(nextQuestionStartedAt.getTime() + QUESTION_TIME_LIMIT_MS);
+    const timings = computeNextQuestionTimings(
+      attempt.current_index,
+      nowMs,
+      QUESTION_TIME_LIMIT_MS,
+    );
+    const { nextIndex } = timings;
 
     const newTotalScore = Number(attempt.total_score) + score.totalPoints;
     const newTotalTimeMs = attempt.total_time_ms + score.elapsedMs;
@@ -333,8 +261,8 @@ Deno.serve(async (req) => {
         current_index: nextIndex,
         total_score: newTotalScore,
         total_time_ms: newTotalTimeMs,
-        current_question_started_at: nextIndex <= 10 ? nextQuestionStartedAt.toISOString() : null,
-        current_question_expires_at: nextIndex <= 10 ? nextQuestionExpiresAt.toISOString() : null,
+        current_question_started_at: timings.questionStartedAt,
+        current_question_expires_at: timings.questionExpiresAt,
       })
       .eq("id", attempt_id);
 
@@ -392,8 +320,8 @@ Deno.serve(async (req) => {
         time_ms: score.elapsedMs,
         next_question: nextQuestions?.[0] || null,
         current_index: nextIndex,
-        question_started_at: nextIndex <= 10 ? nextQuestionStartedAt.toISOString() : null,
-        question_expires_at: nextIndex <= 10 ? nextQuestionExpiresAt.toISOString() : null,
+        question_started_at: timings.questionStartedAt,
+        question_expires_at: timings.questionExpiresAt,
       },
       requestId
     );

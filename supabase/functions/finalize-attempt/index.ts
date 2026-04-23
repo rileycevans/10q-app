@@ -8,6 +8,8 @@ import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
+import { computeStreak, toUtcDateString } from "../_shared/streak.ts";
+import { validateFinalize } from "../_shared/attempt-state.ts";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -114,44 +116,39 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!answers || answers.length < 10) {
-      // Get which question indices are missing (if possible)
-      let missingIndices: number[] = [];
+    const answerQuestionIds = answers?.map((a) => a.question_id) ?? [];
+    let allQuizQuestions: Array<{ question_id: string; order_index: number }> =
+      [];
+    if (answerQuestionIds.length < 10) {
       try {
-        const { data: allQuizQuestions } = await supabase
+        const { data } = await supabase
           .from("quiz_questions")
           .select("question_id, order_index")
           .eq("quiz_id", attempt.quiz_id)
           .order("order_index");
-        
-        if (allQuizQuestions && allQuizQuestions.length > 0) {
-          const answeredQuestionIds = new Set(answers?.map(a => a.question_id) || []);
-          missingIndices = allQuizQuestions
-            .filter(qq => !answeredQuestionIds.has(qq.question_id))
-            .map(qq => qq.order_index)
-            .sort((a, b) => a - b);
-        }
+        allQuizQuestions = data ?? [];
       } catch (queryError) {
-        // If query fails, just log it and continue without missing indices
-        logStructured(requestId, "finalize_attempt_missing_questions_query_error", {
-          error: queryError?.message || String(queryError),
-        });
+        logStructured(
+          requestId,
+          "finalize_attempt_missing_questions_query_error",
+          {
+            error: (queryError as Error)?.message || String(queryError),
+          },
+        );
       }
-      
+    }
+
+    const finalizeCheck = validateFinalize(answerQuestionIds, allQuizQuestions);
+    if (!finalizeCheck.ok) {
       logStructured(requestId, "finalize_attempt_incomplete", {
-        answer_count: answers?.length || 0,
-        missing_question_indices: missingIndices,
+        answer_count: answerQuestionIds.length,
+        missing_question_indices: finalizeCheck.missingIndices,
       });
-      
-      const errorMessage = missingIndices.length > 0
-        ? `Attempt incomplete: ${answers?.length || 0}/10 questions answered. Missing questions: ${missingIndices.join(', ')}`
-        : `Attempt incomplete: ${answers?.length || 0}/10 questions answered`;
-      
       return errorResponse(
-        ErrorCodes.VALIDATION_ERROR,
-        errorMessage,
+        finalizeCheck.code,
+        finalizeCheck.message,
         requestId,
-        400
+        finalizeCheck.status,
       );
     }
 
@@ -224,7 +221,7 @@ Deno.serve(async (req) => {
     let longestStreak = 0;
 
     if (quiz?.release_at_utc) {
-      const quizDate = new Date(quiz.release_at_utc).toISOString().split("T")[0];
+      const quizDate = toUtcDateString(quiz.release_at_utc);
 
       const { data: player } = await supabase
         .from("players")
@@ -233,23 +230,14 @@ Deno.serve(async (req) => {
         .single();
 
       if (player) {
-        longestStreak = player.longest_streak ?? 0;
-
-        if (player.last_quiz_date) {
-          if (player.last_quiz_date === quizDate) {
-            currentStreak = player.current_streak;
-          } else {
-            const yesterday = new Date(quizDate);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split("T")[0];
-
-            if (player.last_quiz_date === yesterdayStr) {
-              currentStreak = player.current_streak + 1;
-            }
-          }
-        }
-
-        longestStreak = Math.max(longestStreak, currentStreak);
+        const streak = computeStreak({
+          quizDate,
+          lastQuizDate: player.last_quiz_date,
+          previousCurrentStreak: player.current_streak ?? 0,
+          previousLongestStreak: player.longest_streak ?? 0,
+        });
+        currentStreak = streak.currentStreak;
+        longestStreak = streak.longestStreak;
 
         await supabase
           .from("players")
