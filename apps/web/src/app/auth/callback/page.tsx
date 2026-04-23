@@ -68,15 +68,22 @@ export default function AuthCallbackPage() {
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
           if (exchangeError) {
-            console.error('Error exchanging code for session:', exchangeError);
-            Sentry.withScope((scope) => {
-              scope.setTag('auth.flow', 'oauth_callback');
-              scope.setLevel('error');
-              Sentry.captureException(exchangeError);
-            });
-            setError('Failed to complete sign in');
-            setTimeout(() => router.push('/'), 2000);
-            return;
+            // The Supabase server-side /callback may have already exchanged
+            // the code and set the session cookie. In that case the client
+            // exchange fails ("code already used") but the user IS signed
+            // in. Check for a session before reporting failure.
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+              console.error('Error exchanging code for session:', exchangeError);
+              Sentry.withScope((scope) => {
+                scope.setTag('auth.flow', 'oauth_callback');
+                scope.setLevel('error');
+                Sentry.captureException(exchangeError);
+              });
+              setError('Failed to complete sign in');
+              setTimeout(() => router.push('/'), 2000);
+              return;
+            }
           }
         }
 
