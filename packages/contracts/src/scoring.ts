@@ -26,12 +26,12 @@ export interface ScoreCalculation {
 /**
  * Calculate bonus points based on elapsed time using step-based tiers.
  * Step-based bonus tiers:
- * - 0–1.5s: 5 bonus
- * - 1.5–3s: 4 bonus
- * - 3–4.5s: 3 bonus
- * - 4.5–6s: 2 bonus
- * - 6–7.5s: 1 bonus
- * - 7.5s+: 0 bonus
+ * - 0–3s: 5 bonus
+ * - 3–5s: 4 bonus
+ * - 5–7s: 3 bonus
+ * - 7–9s: 2 bonus
+ * - 9–11s: 1 bonus
+ * - 11s+: 0 bonus
  */
 export function calculateBonus(elapsedMs: number): number {
   // Clamp elapsed time to bonus window
@@ -40,16 +40,15 @@ export function calculateBonus(elapsedMs: number): number {
   // Convert to seconds
   const elapsedSeconds = clamped / 1000;
 
-  // Step-based tiers (scaled to 12s total time)
-  if (elapsedSeconds < 1.5) {
+  if (elapsedSeconds < 3) {
     return 5;
-  } else if (elapsedSeconds < 3) {
+  } else if (elapsedSeconds < 5) {
     return 4;
-  } else if (elapsedSeconds < 4.5) {
+  } else if (elapsedSeconds < 7) {
     return 3;
-  } else if (elapsedSeconds < 6) {
+  } else if (elapsedSeconds < 9) {
     return 2;
-  } else if (elapsedSeconds < 7.5) {
+  } else if (elapsedSeconds < 11) {
     return 1;
   } else {
     return 0;

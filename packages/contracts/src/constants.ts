@@ -4,7 +4,7 @@
  */
 
 export const QUESTION_TIME_LIMIT_MS = 12000;
-export const BONUS_WINDOW_MS = 7500;
+export const BONUS_WINDOW_MS = 11000;
 export const BASE_POINTS_CORRECT = 5;
 export const BASE_POINTS_INCORRECT = 0;
 export const MAX_BONUS_POINTS = 5;

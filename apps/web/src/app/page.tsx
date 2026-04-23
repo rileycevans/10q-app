@@ -280,27 +280,27 @@ export default function HomePage() {
                 <div className="font-bold text-sm text-ink mb-2">SPEED BONUS</div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">0 - 1.5 seconds</span>
+                    <span className="text-ink">0 - 3 seconds</span>
                     <span className="font-bold text-ink">+5 bonus</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">1.5 - 3 seconds</span>
+                    <span className="text-ink">3 - 5 seconds</span>
                     <span className="font-bold text-ink">+4 bonus</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">3 - 4.5 seconds</span>
+                    <span className="text-ink">5 - 7 seconds</span>
                     <span className="font-bold text-ink">+3 bonus</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">4.5 - 6 seconds</span>
+                    <span className="text-ink">7 - 9 seconds</span>
                     <span className="font-bold text-ink">+2 bonus</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">6 - 7.5 seconds</span>
+                    <span className="text-ink">9 - 11 seconds</span>
                     <span className="font-bold text-ink">+1 bonus</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-ink">7.5+ seconds</span>
+                    <span className="text-ink">11+ seconds</span>
                     <span className="font-bold text-ink">+0 bonus</span>
                   </div>
                 </div>
