@@ -224,7 +224,7 @@ export default function QuestionPage() {
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
-  const handleAnswerClick = async (answerId: string) => {
+  const handleAnswerClick = (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
     setSelectedAnswerId(answerId);
@@ -234,56 +234,78 @@ export default function QuestionPage() {
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
 
-    try {
-      const result = await submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId);
+    // Optimistic navigation: advance the store to the next question and
+    // route immediately — the next question is already preloaded in
+    // game.questions, so there's nothing to wait for. The server submit
+    // runs in the background and reconciles the expiry when it returns.
+    const optimisticStartedAt = new Date();
+    const optimisticExpiresAt = new Date(optimisticStartedAt.getTime() + 12000);
 
-      // Build the next attempt state but DON'T store it yet —
-      // updating the store changes current_index which triggers the
-      // redirect useEffect, cutting the reveal animation short.
-      const serverState: AttemptState = {
-        attempt_id: result.attempt_id,
-        quiz_id: attempt.quiz_id,
-        current_index: result.current_index,
-        current_question_started_at: result.question_started_at,
-        current_question_expires_at: result.question_expires_at,
-        state: result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-      };
+    const optimisticState: AttemptState = {
+      attempt_id: attempt.attempt_id,
+      quiz_id: attempt.quiz_id,
+      current_index: nextIndex,
+      current_question_started_at: optimisticStartedAt.toISOString(),
+      current_question_expires_at:
+        nextIndex <= 10 ? optimisticExpiresAt.toISOString() : null,
+      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+    };
 
-      trackAnswerSubmit({
-        quiz_id: game.quizId || currentQuestion.quiz_id,
-        attempt_id: result.attempt_id,
-        question_id: currentQuestion.question_id,
-        question_index: questionIndex,
-        answer_id: answerId,
-        is_correct: result.is_correct,
-        time_ms: result.time_ms,
-        base_points: result.base_points,
-        bonus_points: result.bonus_points,
-        total_points: result.total_points,
-        answer_kind: 'selected',
-        question_tags: currentQuestion.tags,
-      });
+    store.setAttempt(optimisticState);
 
-      // Update the store and navigate immediately
-      store.setAttempt(serverState);
-
-      if (isLastQuestion) {
-        router.push(`/results?attempt_id=${attempt.attempt_id}`);
-      } else {
-        router.push(`/play/q/${nextIndex}`);
-      }
-    } catch (err) {
-      console.error('Failed to submit answer:', err);
-      trackAppError({
-        location: 'question_submit',
-        message: err instanceof Error ? err.message : 'Failed to submit answer',
-      });
-      if (isLastQuestion) {
-        router.push(`/results?attempt_id=${attempt.attempt_id}`);
-      } else {
-        router.push(`/play/q/${nextIndex}`);
-      }
+    if (isLastQuestion) {
+      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+    } else {
+      router.push(`/play/q/${nextIndex}`);
     }
+
+    // Fire the submit in the background; reconcile with server state if it
+    // returns different values (the server is authoritative for scoring).
+    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
+      .then((result) => {
+        trackAnswerSubmit({
+          quiz_id: game.quizId || currentQuestion.quiz_id,
+          attempt_id: result.attempt_id,
+          question_id: currentQuestion.question_id,
+          question_index: questionIndex,
+          answer_id: answerId,
+          is_correct: result.is_correct,
+          time_ms: result.time_ms,
+          base_points: result.base_points,
+          bonus_points: result.bonus_points,
+          total_points: result.total_points,
+          answer_kind: 'selected',
+          question_tags: currentQuestion.tags,
+        });
+
+        // Only reconcile if we're still on a question page and the server
+        // state differs from what we optimistically set. This aligns the
+        // countdown to the server's authoritative expiry.
+        const current = store.getState().attempt;
+        if (
+          current &&
+          current.attempt_id === result.attempt_id &&
+          current.current_index === result.current_index &&
+          current.current_question_expires_at !== result.question_expires_at
+        ) {
+          store.setAttempt({
+            attempt_id: result.attempt_id,
+            quiz_id: attempt.quiz_id,
+            current_index: result.current_index,
+            current_question_started_at: result.question_started_at,
+            current_question_expires_at: result.question_expires_at,
+            state:
+              result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to submit answer:', err);
+        trackAppError({
+          location: 'question_submit',
+          message: err instanceof Error ? err.message : 'Failed to submit answer',
+        });
+      });
   };
 
   // ── Render: loading (recovery from hard refresh) ────────────────────────
