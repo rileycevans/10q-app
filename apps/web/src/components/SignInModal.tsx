@@ -113,9 +113,13 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       if (user?.is_anonymous) {
         // Try to upgrade the anonymous session by linking the provider identity.
         // Supabase preserves the auth user id on a successful link, so attempts
-        // and memberships stay attached to the same account.
+        // and memberships stay attached to the same account. We tag the
+        // redirect URL with link_provider so /auth/callback can recover if the
+        // provider identity is already attached to another account (the
+        // link fails server-side, not via an SDK error here).
         trackAuthUpgradeStarted({ provider });
-        const result = await linkIdentityToAnonymous(provider, redirectTo);
+        const linkRedirect = `${redirectTo}?link_provider=${provider}`;
+        const result = await linkIdentityToAnonymous(provider, linkRedirect);
 
         if (result.ok) {
           return;

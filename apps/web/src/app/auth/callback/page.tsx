@@ -20,14 +20,41 @@ export default function AuthCallbackPage() {
         const code = queryParams.get('code');
         const errorCode = queryParams.get('error');
         const errorDescription = queryParams.get('error_description');
+        const linkProvider = queryParams.get('link_provider');
 
         if (errorCode || errorDescription) {
+          // Recovery path: user tapped Sign In on an anonymous session and
+          // the provider identity is already linked to another account. Sign
+          // the anonymous session out and start a fresh OAuth into the
+          // existing account. Anonymous progress is intentionally discarded.
+          const identityAlreadyLinked =
+            (errorDescription?.toLowerCase().includes('already') ?? false) ||
+            (errorDescription?.toLowerCase().includes('identity is already linked') ?? false);
+
+          if (identityAlreadyLinked && linkProvider === 'google') {
+            await supabase.auth.signOut();
+            await supabase.auth.signInWithOAuth({
+              provider: 'google',
+              options: { redirectTo: `${window.location.origin}/auth/callback` },
+            });
+            return;
+          }
+          if (identityAlreadyLinked && linkProvider === 'apple') {
+            await supabase.auth.signOut();
+            await supabase.auth.signInWithOAuth({
+              provider: 'apple',
+              options: { redirectTo: `${window.location.origin}/auth/callback` },
+            });
+            return;
+          }
+
           Sentry.withScope((scope) => {
             scope.setTag('auth.flow', 'oauth_callback');
             scope.setLevel('error');
             scope.setContext('auth_callback', {
               errorCode,
               errorDescription,
+              linkProvider,
             });
             Sentry.captureMessage('OAuth callback returned error params');
           });
