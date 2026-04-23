@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     // Get league by invite code
     const { data: league, error: leagueError } = await supabase
       .from("leagues")
-      .select("id, name, created_by")
+      .select("id, name, owner_player_id")
       .eq("invite_code", code)
       .single();
 
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const { data: creator, error: creatorError } = await supabase
       .from("players")
       .select("handle_display")
-      .eq("id", league.created_by)
+      .eq("id", league.owner_player_id)
       .single();
 
     if (creatorError || !creator) {
@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
 
     // Get member count
     const { count, error: countError } = await supabase
-      .from("league_memberships")
+      .from("league_members")
       .select("*", { count: "exact", head: true })
       .eq("league_id", league.id);
 

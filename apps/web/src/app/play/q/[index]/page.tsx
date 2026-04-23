@@ -79,21 +79,44 @@ export default function QuestionPage() {
 
   // ── Initialize timer from attempt state ─────────────────────────────────
   useEffect(() => {
-    if (!attempt || !attempt.current_question_expires_at) return;
+    if (!attempt) return;
 
-    // Calculate time remaining from server-authoritative expiry time
-    const now = Date.now();
+    // If server hasn't set an expiry yet (e.g. first question after start-attempt,
+    // which no longer auto-starts the timer), kick off start-question-timer and
+    // fall back to the full 12s window.
+    if (!attempt.current_question_expires_at) {
+      (async () => {
+        try {
+          const { edgeFunctions } = await import('@/lib/api/edge-functions');
+          const res = await edgeFunctions.startQuestionTimer(attempt.attempt_id);
+          if (res.ok && res.data?.question_expires_at) {
+            const expiresAt = res.data.question_expires_at;
+            const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
+            setTimeRemaining(Math.min(12000, remaining + 100));
+            setTotalTime(12000);
+            // Mirror the expiry into attempt state so other effects stay in sync
+            store.setAttempt({ ...attempt, current_question_expires_at: expiresAt });
+            return;
+          }
+        } catch (err) {
+          console.error('start-question-timer failed; falling back to client 12s', err);
+        }
+        setTimeRemaining(12000);
+        setTotalTime(12000);
+      })();
+      return;
+    }
+
+    // Server-authoritative expiry exists: derive remaining time from it.
     const expiresAt = new Date(attempt.current_question_expires_at).getTime();
-    const remaining = Math.max(0, expiresAt - now);
-
-    // Add 100ms compensation for network latency
+    const remaining = Math.max(0, expiresAt - Date.now());
     const compensated = Math.min(12000, remaining + 100);
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTimeRemaining(compensated);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalTime(12000);
-  }, [attempt, questionIndex]);
+  }, [attempt, questionIndex, store]);
 
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {

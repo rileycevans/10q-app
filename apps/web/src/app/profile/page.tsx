@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { SignInModal } from '@/components/SignInModal';
 import { resetIdentity, trackSignOut, trackScreenView } from '@/lib/analytics';
 
 interface ProfileData {
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
 
   useEffect(() => {
     trackScreenView({ screen: 'profile', route: '/profile' });
@@ -88,7 +90,29 @@ export default function ProfilePage() {
     <ArcadeBackground>
       <div className="flex flex-col items-center min-h-screen px-4 py-8">
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md">
-          <h1 className="font-display text-3xl mb-6 text-ink text-center">Profile</h1>
+          <h1 className="font-display text-3xl mb-4 text-ink text-center">Profile</h1>
+
+          {/* Signed-in status */}
+          {profile && (
+            <div
+              className={`${
+                profile.isAnonymous ? 'bg-red/20' : 'bg-green/20'
+              } border-[3px] border-ink rounded-lg p-3 mb-4 flex items-center gap-3`}
+            >
+              <span
+                className={`w-3 h-3 rounded-full border-[2px] border-ink ${
+                  profile.isAnonymous ? 'bg-red' : 'bg-green'
+                }`}
+                aria-hidden
+              />
+              <div className="flex-1">
+                <p className="font-body text-xs text-ink/60 uppercase tracking-wide">Status</p>
+                <p className="font-body font-bold text-sm text-ink">
+                  {profile.isAnonymous ? 'Not signed in' : 'Signed in'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {profile && (
             <div className="space-y-4 mb-6">
@@ -131,6 +155,16 @@ export default function ProfilePage() {
           )}
 
           <div className="space-y-3">
+            {/* Sign In (anonymous only) */}
+            {profile && profile.isAnonymous && (
+              <button
+                onClick={() => setShowSignInModal(true)}
+                className="w-full h-12 bg-cyanA border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+              >
+                Sign In
+              </button>
+            )}
+
             {/* Settings link */}
             <button
               onClick={() => router.push('/settings')}
@@ -160,6 +194,11 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+      />
     </ArcadeBackground>
   );
 }

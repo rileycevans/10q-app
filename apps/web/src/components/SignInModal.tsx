@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { upgradeToApple, upgradeToGoogle } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import * as Sentry from '@sentry/nextjs';
 import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
@@ -60,6 +59,45 @@ async function signInWithOAuthOrReport(
   }
 }
 
+// Attempt to link the provider to the current anonymous session.
+// If Supabase rejects because the identity is already attached to another
+// user, the caller should sign out of the anonymous session and do a fresh
+// OAuth flow — the anonymous data is lost, but the user ends up in their
+// existing account instead of creating yet another split account.
+async function linkIdentityToAnonymous(
+  provider: OAuthProvider,
+  redirectTo: string
+): Promise<{ ok: true } | { ok: false; reason: 'identity_taken' | 'unknown'; error: unknown }> {
+  const { data, error } = await supabase.auth.linkIdentity({
+    provider,
+    options: { redirectTo },
+  });
+
+  if (error) {
+    const message = error.message?.toLowerCase() ?? '';
+    const identityTaken =
+      message.includes('already') ||
+      message.includes('exists') ||
+      message.includes('registered');
+    return {
+      ok: false,
+      reason: identityTaken ? 'identity_taken' : 'unknown',
+      error,
+    };
+  }
+
+  if (data?.url) {
+    Sentry.addBreadcrumb({
+      category: 'auth',
+      type: 'default',
+      level: 'info',
+      message: 'OAuth link redirect URL issued',
+      data: { provider, hasUrl: true },
+    });
+  }
+  return { ok: true };
+}
+
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
 
@@ -73,22 +111,37 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user?.is_anonymous) {
-        // Sign out of anonymous session first to avoid identity linking conflicts
-        Sentry.addBreadcrumb({
-          category: 'auth',
-          message: 'Anonymous user detected, signing out before OAuth to avoid linking conflicts',
-          data: { provider },
-        });
+        // Try to upgrade the anonymous session by linking the provider identity.
+        // Supabase preserves the auth user id on a successful link, so attempts
+        // and memberships stay attached to the same account.
+        trackAuthUpgradeStarted({ provider });
+        const result = await linkIdentityToAnonymous(provider, redirectTo);
 
-        await supabase.auth.signOut();
+        if (result.ok) {
+          return;
+        }
 
-        // Then do fresh OAuth sign in
-        trackSignIn({ provider, is_upgrade: false });
-        await signInWithOAuthOrReport(provider, redirectTo);
-      } else {
-        trackSignIn({ provider, is_upgrade: false });
-        await signInWithOAuthOrReport(provider, redirectTo);
+        if (result.reason === 'identity_taken') {
+          // User already has an account with this provider. Discard the
+          // anonymous session and sign into the existing account. The
+          // anonymous data is intentionally dropped in this branch.
+          Sentry.addBreadcrumb({
+            category: 'auth',
+            message: 'linkIdentity rejected (identity already exists); falling back to fresh OAuth',
+            data: { provider },
+          });
+          await supabase.auth.signOut();
+          trackSignIn({ provider, is_upgrade: false });
+          await signInWithOAuthOrReport(provider, redirectTo);
+          return;
+        }
+
+        captureOAuthStartFailure(provider, redirectTo, 'linkIdentity failed', result.error);
+        return;
       }
+
+      trackSignIn({ provider, is_upgrade: false });
+      await signInWithOAuthOrReport(provider, redirectTo);
     } catch (error) {
       console.error('Sign in error:', error);
       captureOAuthStartFailure(provider, redirectTo, 'unexpected throw', error);
