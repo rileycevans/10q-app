@@ -7,7 +7,7 @@
 export const BASE_POINTS_CORRECT = 5;
 export const BASE_POINTS_INCORRECT = 0;
 export const MAX_BONUS_POINTS = 5;
-export const BONUS_WINDOW_MS = 7500;
+export const BONUS_WINDOW_MS = 11000;
 export const QUESTION_TIME_LIMIT_MS = 12000;
 
 export interface ScoreCalculation {
@@ -19,22 +19,22 @@ export interface ScoreCalculation {
 
 /**
  * Step-based bonus tiers:
- * - [0, 1.5s): 5
- * - [1.5s, 3s): 4
- * - [3s, 4.5s): 3
- * - [4.5s, 6s): 2
- * - [6s, 7.5s): 1
- * - [7.5s, ∞): 0
+ * - [0, 3s):   5
+ * - [3s, 5s):  4
+ * - [5s, 7s):  3
+ * - [7s, 9s):  2
+ * - [9s, 11s): 1
+ * - [11s, ∞):  0
  */
 export function calculateBonus(elapsedMs: number): number {
   const clamped = Math.min(Math.max(elapsedMs, 0), BONUS_WINDOW_MS);
   const elapsedSeconds = clamped / 1000;
 
-  if (elapsedSeconds < 1.5) return 5;
-  if (elapsedSeconds < 3) return 4;
-  if (elapsedSeconds < 4.5) return 3;
-  if (elapsedSeconds < 6) return 2;
-  if (elapsedSeconds < 7.5) return 1;
+  if (elapsedSeconds < 3) return 5;
+  if (elapsedSeconds < 5) return 4;
+  if (elapsedSeconds < 7) return 3;
+  if (elapsedSeconds < 9) return 2;
+  if (elapsedSeconds < 11) return 1;
   return 0;
 }
 

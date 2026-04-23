@@ -8,35 +8,35 @@ import {
 } from "../../functions/_shared/scoring.ts";
 
 describe("calculateBonus", () => {
-  it("awards 5 for sub-1.5s answers", () => {
+  it("awards 5 for sub-3s answers", () => {
     expect(calculateBonus(0)).toBe(5);
-    expect(calculateBonus(500)).toBe(5);
-    expect(calculateBonus(1499)).toBe(5);
+    expect(calculateBonus(1_500)).toBe(5);
+    expect(calculateBonus(2_999)).toBe(5);
   });
 
-  it("awards 4 in [1.5s, 3s)", () => {
-    expect(calculateBonus(1500)).toBe(4);
-    expect(calculateBonus(2999)).toBe(4);
+  it("awards 4 in [3s, 5s)", () => {
+    expect(calculateBonus(3_000)).toBe(4);
+    expect(calculateBonus(4_999)).toBe(4);
   });
 
-  it("awards 3 in [3s, 4.5s)", () => {
-    expect(calculateBonus(3000)).toBe(3);
-    expect(calculateBonus(4499)).toBe(3);
+  it("awards 3 in [5s, 7s)", () => {
+    expect(calculateBonus(5_000)).toBe(3);
+    expect(calculateBonus(6_999)).toBe(3);
   });
 
-  it("awards 2 in [4.5s, 6s)", () => {
-    expect(calculateBonus(4500)).toBe(2);
-    expect(calculateBonus(5999)).toBe(2);
+  it("awards 2 in [7s, 9s)", () => {
+    expect(calculateBonus(7_000)).toBe(2);
+    expect(calculateBonus(8_999)).toBe(2);
   });
 
-  it("awards 1 in [6s, 7.5s)", () => {
-    expect(calculateBonus(6000)).toBe(1);
-    expect(calculateBonus(7499)).toBe(1);
+  it("awards 1 in [9s, 11s)", () => {
+    expect(calculateBonus(9_000)).toBe(1);
+    expect(calculateBonus(10_999)).toBe(1);
   });
 
-  it("awards 0 at and beyond 7.5s", () => {
-    expect(calculateBonus(7500)).toBe(0);
-    expect(calculateBonus(10_000)).toBe(0);
+  it("awards 0 at and beyond 11s", () => {
+    expect(calculateBonus(11_000)).toBe(0);
+    expect(calculateBonus(11_500)).toBe(0);
     expect(calculateBonus(QUESTION_TIME_LIMIT_MS)).toBe(0);
   });
 
@@ -80,12 +80,12 @@ describe("calculateQuestionScore", () => {
     });
   });
 
-  it("gives 5 base + 0 bonus when correct but over 7.5s", () => {
-    const score = calculateQuestionScore(true, 9_000, false);
+  it("gives 5 base + 0 bonus when correct but over 11s", () => {
+    const score = calculateQuestionScore(true, 11_500, false);
     expect(score.basePoints).toBe(5);
     expect(score.bonusPoints).toBe(0);
     expect(score.totalPoints).toBe(5);
-    expect(score.elapsedMs).toBe(9_000);
+    expect(score.elapsedMs).toBe(11_500);
   });
 
   it("clamps elapsedMs to [0, QUESTION_TIME_LIMIT_MS]", () => {
