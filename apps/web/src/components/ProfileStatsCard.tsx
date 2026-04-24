@@ -25,9 +25,13 @@ interface StatTileProps {
 
 function StatTile({ label, value, bg }: StatTileProps) {
   return (
-    <div className={`${bg} border-[3px] border-ink rounded-lg p-4 text-center`}>
-      <p className="font-body text-xs text-ink/80 mb-1">{label}</p>
-      <p className="font-display text-2xl font-bold text-ink">{value}</p>
+    <div
+      className={`${bg} border-[3px] border-ink rounded-lg p-3 text-center min-w-0 flex flex-col justify-center`}
+    >
+      <p className="font-body text-[11px] leading-tight text-ink/80 mb-1">{label}</p>
+      <p className="font-display text-xl font-bold text-ink leading-none break-words">
+        {value}
+      </p>
     </div>
   );
 }
@@ -39,10 +43,8 @@ interface StatGroupProps {
 
 function StatGroup({ title, children }: StatGroupProps) {
   return (
-    <div className="mb-5 last:mb-0">
-      <h3 className="font-body font-bold text-sm text-ink/70 uppercase tracking-wide mb-2">
-        {title}
-      </h3>
+    <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-5 w-full max-w-2xl">
+      <p className="font-body text-xs text-ink/60 uppercase tracking-wide mb-3">{title}</p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
     </div>
   );
@@ -50,9 +52,7 @@ function StatGroup({ title, children }: StatGroupProps) {
 
 export function ProfileStatsCard({ stats, streaks }: ProfileStatsCardProps) {
   return (
-    <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl">
-      <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Stats</h2>
-
+    <div className="w-full max-w-2xl flex flex-col gap-4">
       <StatGroup title="Overview">
         <StatTile label="Games Played" value={String(stats.total_games)} bg="bg-green" />
         <StatTile label="Perfect Games" value={String(stats.perfect_games)} bg="bg-green/60" />
