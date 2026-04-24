@@ -156,6 +156,9 @@ Deno.serve(async (req) => {
     const averageScore = scores.length > 0
       ? scores.reduce((a, b) => a + b, 0) / scores.length
       : null;
+    const perfectGames = (results || []).filter(
+      (r: any) => Number(r.correct_count) === 10
+    ).length;
 
     // Get recent results (last 10)
     const recentResults = (results || []).slice(0, 10).map((r: any) => ({
@@ -180,16 +183,28 @@ Deno.serve(async (req) => {
       best_score: number;
     }> = [];
 
+    let overallAccuracy: number | null = null;
+    let avgTimePerQuestionMs: number | null = null;
+
     if (!attemptsError && attempts && attempts.length > 0) {
       const attemptIds = attempts.map((a: any) => a.id);
 
       // Get all attempt_answers for this player
       const { data: answers, error: answersError } = await supabase
         .from("attempt_answers")
-        .select("is_correct, base_points, bonus_points, question_id")
+        .select("is_correct, base_points, bonus_points, question_id, time_ms")
         .in("attempt_id", attemptIds);
 
       if (!answersError && answers && answers.length > 0) {
+        const totalAnswers = answers.length;
+        const correctAnswers = answers.filter((a: any) => a.is_correct).length;
+        overallAccuracy = Number(((correctAnswers / totalAnswers) * 100).toFixed(1));
+        const totalTimeMs = answers.reduce(
+          (sum: number, a: any) => sum + Number(a.time_ms ?? 0),
+          0
+        );
+        avgTimePerQuestionMs = Math.round(totalTimeMs / totalAnswers);
+
         // Get unique question IDs
         const questionIds = [...new Set(answers.map((a: any) => a.question_id))];
 
@@ -281,6 +296,9 @@ Deno.serve(async (req) => {
           all_time_worst: allTimeWorst,
           total_games: totalGames,
           average_score: averageScore ? Number(averageScore.toFixed(2)) : null,
+          perfect_games: perfectGames,
+          overall_accuracy: overallAccuracy,
+          avg_time_per_question_ms: avgTimePerQuestionMs,
         },
         streaks: {
           current_streak: profile.current_streak ?? 0,

@@ -10,6 +10,9 @@ export interface Profile {
     all_time_worst: number | null;
     total_games: number;
     average_score: number | null;
+    perfect_games: number;
+    overall_accuracy: number | null;
+    avg_time_per_question_ms: number | null;
   };
   streaks: {
     current_streak: number;

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { getProfileByHandle, type Profile } from '@/domains/profile';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
+import { ProfileStatsCard } from '@/components/ProfileStatsCard';
 import dynamic from 'next/dynamic';
 import { trackScreenView, trackProfileView, trackAppError } from '@/lib/analytics';
 
@@ -123,44 +124,8 @@ export default function ProfilePage() {
         </div>
 
         {/* Stats */}
-        <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6">
-          <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Stats</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-orange border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">Current Streak</p>
-              <p className="font-display text-2xl font-bold text-ink">
-                {profile.streaks.current_streak}
-              </p>
-            </div>
-            <div className="bg-orange/60 border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">Longest Streak</p>
-              <p className="font-display text-2xl font-bold text-ink">
-                {profile.streaks.longest_streak}
-              </p>
-            </div>
-            <div className="bg-cyanA border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">All-Time Best</p>
-              <p className="font-display text-2xl font-bold text-ink">
-                {profile.stats.all_time_best !== null ? profile.stats.all_time_best.toFixed(0) : 'N/A'}
-              </p>
-            </div>
-            <div className="bg-yellow border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">All-Time Worst</p>
-              <p className="font-display text-2xl font-bold text-ink">
-                {profile.stats.all_time_worst !== null ? profile.stats.all_time_worst.toFixed(0) : 'N/A'}
-              </p>
-            </div>
-            <div className="bg-green border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">Total Games</p>
-              <p className="font-display text-2xl font-bold text-ink">{profile.stats.total_games}</p>
-            </div>
-            <div className="bg-purpleA border-[3px] border-ink rounded-lg p-4 text-center">
-              <p className="font-body text-xs text-ink/80 mb-1">Average Score</p>
-              <p className="font-display text-2xl font-bold text-ink">
-                {profile.stats.average_score !== null ? profile.stats.average_score.toFixed(1) : 'N/A'}
-              </p>
-            </div>
-          </div>
+        <div className="w-full max-w-2xl mb-6 flex justify-center">
+          <ProfileStatsCard stats={profile.stats} streaks={profile.streaks} />
         </div>
 
         {/* Category Performance */}
