@@ -107,7 +107,7 @@ function QuestionResultCard({ question, index }: { question: QuestionResult; ind
       <div className="border-t-[3px] border-ink pt-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="text-sm text-ink/80">
-            <span className="font-bold">Time:</span> {formatTime(question.time_ms)}
+            <span className="font-bold">Time Elapsed:</span> {formatTime(question.time_ms)}
           </div>
           {question.answer_kind === 'timeout' && (
             <div className="px-2 py-1 bg-red/20 border-[2px] border-red rounded text-xs font-bold text-ink">
