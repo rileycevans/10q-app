@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useGameStore, useGameState } from '@/components/GameProvider';
 import { submitAnswer, resumeAttempt } from '@/domains/attempt';
@@ -27,6 +27,12 @@ export default function QuestionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
   const [recoveryError, _setRecoveryError] = useState<string | null>(null);
+
+  // Wall-clock-based timer. `deadlineRef` is the absolute time the question
+  // expires. A single requestAnimationFrame loop keeps `timeRemaining` in
+  // sync. This avoids the drift and jitter of setInterval-based tickers
+  // that restart every 100ms as timeRemaining state changes.
+  const deadlineRef = useRef<number | null>(null);
 
   // Derive current question from store
   const currentQuestion: QuizQuestion | null =
@@ -77,21 +83,20 @@ export default function QuestionPage() {
     setIsSubmitting(false);
   }, [questionIndex]);
 
-  // ── Initialize timer from attempt state ─────────────────────────────────
-  // Only runs on question mount (keyed on attempt_id + questionIndex). We
-  // deliberately don't re-run when other attempt fields change, so late
-  // server responses (e.g. the background submit from the previous question)
-  // can't jump the in-flight countdown.
+  // ── Initialize timer deadline on question mount ──────────────────────────
+  // Keyed on attempt_id + questionIndex so it runs exactly once per question
+  // transition. Sets an absolute wall-clock deadline in a ref — the rAF
+  // loop below polls that deadline. Late server responses (e.g. background
+  // submit of the previous question) won't perturb the in-flight countdown.
   useEffect(() => {
     if (!attempt) return;
 
-    // If server hasn't set an expiry yet (e.g. first question after
-    // start-attempt, which no longer auto-starts the timer), start the
-    // countdown optimistically from now and kick off start-question-timer
-    // in the background so the server knows. We don't reconcile against
-    // the server response — the mount moment is what the user experienced.
+    const now = Date.now();
+
     if (!attempt.current_question_expires_at) {
-      const optimisticStart = Date.now();
+      // Q1 path: server hasn't set an expiry yet. Start the countdown from
+      // now and tell the server in the background.
+      deadlineRef.current = now + 12000;
       setTimeRemaining(12000);
       setTotalTime(12000);
 
@@ -100,11 +105,10 @@ export default function QuestionPage() {
           const { edgeFunctions } = await import('@/lib/api/edge-functions');
           const res = await edgeFunctions.startQuestionTimer(attempt.attempt_id);
           if (res.ok && res.data?.question_expires_at) {
-            // Mirror the expiry into the store so timeout detection and
-            // server-authoritative scoring both see it. Don't overwrite
-            // setTimeRemaining — the optimistic countdown from mount
-            // (optimisticStart) is what the user is watching.
-            void optimisticStart;
+            // Mirror into the store so server-authoritative scoring sees it.
+            // Don't touch deadlineRef — the mount moment is what the user
+            // experienced; the server's expiry would be ~1–2s later due to
+            // round-trip latency and would visibly jump the timer.
             store.setAttempt({
               ...attempt,
               current_question_expires_at: res.data.question_expires_at,
@@ -117,17 +121,15 @@ export default function QuestionPage() {
       return;
     }
 
-    // Server-authoritative expiry exists: derive remaining time from it.
+    // Expiry exists (Q2-10 via optimistic nav, or recovery path). Derive
+    // the deadline from it.
     const expiresAt = new Date(attempt.current_question_expires_at).getTime();
-    const remaining = Math.max(0, expiresAt - Date.now());
-    const compensated = Math.min(12000, remaining + 100);
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTimeRemaining(compensated);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    deadlineRef.current = expiresAt;
+    const remaining = Math.max(0, expiresAt - now);
+    setTimeRemaining(Math.min(12000, remaining));
     setTotalTime(12000);
     // Intentionally omit `attempt` and `store` from deps — we only want
-    // this to run on question changes, not on every attempt update.
+    // this to run on question changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt?.attempt_id, questionIndex]);
 
@@ -150,91 +152,113 @@ export default function QuestionPage() {
     });
   }, [attempt, currentQuestion, questionIndex, game.quizId]);
 
-  // ── Tick timer ──────────────────────────────────────────────────────────
+  // ── Tick timer via requestAnimationFrame + wall-clock deadline ──────────
+  // Polls `deadlineRef` on every frame while the question is active. Because
+  // we're reading the deadline from a ref (not from state) and deriving the
+  // remaining time from `Date.now()` directly, the countdown can't drift or
+  // jump from re-renders — the only state change is setTimeRemaining, which
+  // just updates the visible number/bar.
   useEffect(() => {
-    if (!timeRemaining || timeRemaining <= 0 || isSubmitting) return;
+    if (isSubmitting) return;
+    if (deadlineRef.current == null) return;
 
-    const interval = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (!prev || prev <= 0 || isSubmitting) return 0;
-        return prev - 100;
-      });
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [timeRemaining, isSubmitting]);
+    let rafId: number;
+    const tick = () => {
+      const deadline = deadlineRef.current;
+      if (deadline == null) return;
+      const remaining = Math.max(0, deadline - Date.now());
+      setTimeRemaining(remaining);
+      if (remaining > 0) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isSubmitting, attempt?.attempt_id, questionIndex]);
 
   // ── Auto-advance on timeout ─────────────────────────────────────────────
+  // Mirrors the answer-tap path: navigate optimistically so the timeout feels
+  // as snappy as a tapped answer; fire the submit in the background with a
+  // null selected_answer_id so the server marks it as a timeout.
   useEffect(() => {
-    if (timeRemaining !== null && timeRemaining <= 0 && currentQuestion && !isSubmitting && attempt) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsSubmitting(true);
+    if (timeRemaining === null || timeRemaining > 0) return;
+    if (isSubmitting || !currentQuestion || !attempt) return;
 
-      // Submit timeout answer - pick first answer (backend will detect timeout and mark as timeout)
-      const firstAnswerId = currentQuestion.answers[0]?.answer_id;
-      if (!firstAnswerId) {
-        // No answers available, skip to next question
-        resumeAttempt(attempt.attempt_id).then((newAttempt) => {
-          store.setAttempt(newAttempt);
-          if (newAttempt.current_index <= 10) {
-            router.push(`/play/q/${newAttempt.current_index}`);
-          } else {
-            router.push(`/results?attempt_id=${attempt.attempt_id}`);
-          }
-        });
-        return;
-      }
+    setIsSubmitting(true);
 
-      submitAnswer(attempt.attempt_id, currentQuestion.question_id, firstAnswerId)
-        .then((result) => {
-          trackAnswerSubmit({
-            quiz_id: game.quizId || currentQuestion.quiz_id,
-            attempt_id: attempt.attempt_id,
-            question_id: currentQuestion.question_id,
-            question_index: questionIndex,
-            answer_id: null,
-            is_correct: result.is_correct,
-            time_ms: result.time_ms,
-            base_points: result.base_points,
-            bonus_points: result.bonus_points,
-            total_points: result.total_points,
-            answer_kind: 'timeout',
-            question_tags: currentQuestion.tags,
-          });
+    const nextIndex = questionIndex + 1;
+    const isLastQuestion = nextIndex > 10;
+    const firstAnswerId = currentQuestion.answers[0]?.answer_id;
 
-          const newAttempt: AttemptState = {
+    // Fire the submit in the background. If the first answer is missing
+    // (shouldn't happen on real data), fall back to resumeAttempt.
+    const submitPromise = firstAnswerId
+      ? submitAnswer(attempt.attempt_id, currentQuestion.question_id, firstAnswerId)
+          .then((result) => {
+            trackAnswerSubmit({
+              quiz_id: game.quizId || currentQuestion.quiz_id,
+              attempt_id: attempt.attempt_id,
+              question_id: currentQuestion.question_id,
+              question_index: questionIndex,
+              answer_id: null,
+              is_correct: result.is_correct,
+              time_ms: result.time_ms,
+              base_points: result.base_points,
+              bonus_points: result.bonus_points,
+              total_points: result.total_points,
+              answer_kind: 'timeout',
+              question_tags: currentQuestion.tags,
+            });
+            return result;
+          })
+          .catch((err) => {
+            trackAppError({
+              location: 'timeout_submit',
+              message: err instanceof Error ? err.message : 'Failed to submit timeout answer',
+            });
+            return null;
+          })
+      : Promise.resolve(null);
+
+    if (isLastQuestion) {
+      // Last question: await so finalize-attempt sees READY_TO_FINALIZE.
+      submitPromise.then((result) => {
+        if (result) {
+          store.setAttempt({
             attempt_id: result.attempt_id,
             quiz_id: attempt.quiz_id,
             current_index: result.current_index,
             current_question_started_at: result.question_started_at,
             current_question_expires_at: result.question_expires_at,
             state: result.current_index > 10 ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
-          };
-
+          });
+          router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          return;
+        }
+        // Submit failed — recover via resumeAttempt.
+        resumeAttempt(attempt.attempt_id).then((newAttempt) => {
           store.setAttempt(newAttempt);
-          if (result.current_index <= 10) {
-            router.push(`/play/q/${result.current_index}`);
-          } else {
-            router.push(`/results?attempt_id=${attempt.attempt_id}`);
-          }
-        })
-        .catch((err) => {
-          trackAppError({
-            location: 'timeout_submit',
-            message: err instanceof Error ? err.message : 'Failed to submit timeout answer',
-          });
-          // Fallback to resume
-          resumeAttempt(attempt.attempt_id).then((newAttempt) => {
-            store.setAttempt(newAttempt);
-            if (newAttempt.current_index <= 10) {
-              router.push(`/play/q/${newAttempt.current_index}`);
-            } else {
-              router.push(`/results?attempt_id=${attempt.attempt_id}`);
-            }
-          });
+          router.push(`/results?attempt_id=${attempt.attempt_id}`);
         });
+      });
+      return;
     }
-  }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
+
+    // Non-final question: navigate optimistically, reuse mount-time deadline.
+    const optimisticStartedAt = new Date();
+    const optimisticExpiresAt = new Date(optimisticStartedAt.getTime() + 12000);
+
+    store.setAttempt({
+      attempt_id: attempt.attempt_id,
+      quiz_id: attempt.quiz_id,
+      current_index: nextIndex,
+      current_question_started_at: optimisticStartedAt.toISOString(),
+      current_question_expires_at: optimisticExpiresAt.toISOString(),
+      state: 'IN_PROGRESS',
+    });
+
+    router.push(`/play/q/${nextIndex}`);
+  }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
   const handleAnswerClick = async (answerId: string) => {
@@ -359,7 +383,7 @@ export default function QuestionPage() {
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <div className="flex-1 h-3 bg-paper/40 border-[2px] border-ink rounded-full overflow-hidden">
               <div
-                className="h-full bg-cyanA transition-all duration-100 ease-linear rounded-full"
+                className="h-full bg-cyanA rounded-full"
                 style={{
                   width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
                 }}
