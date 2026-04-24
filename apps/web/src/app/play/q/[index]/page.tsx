@@ -78,31 +78,41 @@ export default function QuestionPage() {
   }, [questionIndex]);
 
   // ── Initialize timer from attempt state ─────────────────────────────────
+  // Only runs on question mount (keyed on attempt_id + questionIndex). We
+  // deliberately don't re-run when other attempt fields change, so late
+  // server responses (e.g. the background submit from the previous question)
+  // can't jump the in-flight countdown.
   useEffect(() => {
     if (!attempt) return;
 
-    // If server hasn't set an expiry yet (e.g. first question after start-attempt,
-    // which no longer auto-starts the timer), kick off start-question-timer and
-    // fall back to the full 12s window.
+    // If server hasn't set an expiry yet (e.g. first question after
+    // start-attempt, which no longer auto-starts the timer), start the
+    // countdown optimistically from now and kick off start-question-timer
+    // in the background so the server knows. We don't reconcile against
+    // the server response — the mount moment is what the user experienced.
     if (!attempt.current_question_expires_at) {
+      const optimisticStart = Date.now();
+      setTimeRemaining(12000);
+      setTotalTime(12000);
+
       (async () => {
         try {
           const { edgeFunctions } = await import('@/lib/api/edge-functions');
           const res = await edgeFunctions.startQuestionTimer(attempt.attempt_id);
           if (res.ok && res.data?.question_expires_at) {
-            const expiresAt = res.data.question_expires_at;
-            const remaining = Math.max(0, new Date(expiresAt).getTime() - Date.now());
-            setTimeRemaining(Math.min(12000, remaining + 100));
-            setTotalTime(12000);
-            // Mirror the expiry into attempt state so other effects stay in sync
-            store.setAttempt({ ...attempt, current_question_expires_at: expiresAt });
-            return;
+            // Mirror the expiry into the store so timeout detection and
+            // server-authoritative scoring both see it. Don't overwrite
+            // setTimeRemaining — the optimistic countdown from mount
+            // (optimisticStart) is what the user is watching.
+            void optimisticStart;
+            store.setAttempt({
+              ...attempt,
+              current_question_expires_at: res.data.question_expires_at,
+            });
           }
         } catch (err) {
           console.error('start-question-timer failed; falling back to client 12s', err);
         }
-        setTimeRemaining(12000);
-        setTotalTime(12000);
       })();
       return;
     }
@@ -116,7 +126,10 @@ export default function QuestionPage() {
     setTimeRemaining(compensated);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setTotalTime(12000);
-  }, [attempt, questionIndex, store]);
+    // Intentionally omit `attempt` and `store` from deps — we only want
+    // this to run on question changes, not on every attempt update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt?.attempt_id, questionIndex]);
 
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
