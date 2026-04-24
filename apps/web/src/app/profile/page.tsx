@@ -6,6 +6,9 @@ import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { SignInModal } from '@/components/SignInModal';
+import { ProfileStatsCard } from '@/components/ProfileStatsCard';
+import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
+import { getProfileByHandle, type Profile } from '@/domains/profile';
 import { resetIdentity, trackSignOut, trackScreenView } from '@/lib/analytics';
 
 interface ProfileData {
@@ -19,6 +22,7 @@ interface ProfileData {
 export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [stats, setStats] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -40,7 +44,7 @@ export default function ProfilePage() {
 
         const { data: player } = await supabase
           .from('players')
-          .select('handle_display')
+          .select('handle_display, handle_canonical')
           .eq('id', user.id)
           .single();
 
@@ -51,6 +55,15 @@ export default function ProfilePage() {
           provider,
           isAnonymous: user.is_anonymous ?? true,
         });
+
+        if (player?.handle_canonical) {
+          try {
+            const fullProfile = await getProfileByHandle(player.handle_canonical);
+            setStats(fullProfile);
+          } catch {
+            // Stats are optional; fail silently
+          }
+        }
       } catch {
         // Non-critical
       } finally {
@@ -86,9 +99,20 @@ export default function ProfilePage() {
     );
   }
 
+  const emptyStats: Profile['stats'] = {
+    all_time_best: 0,
+    all_time_worst: 0,
+    total_games: 0,
+    average_score: 0,
+    perfect_games: 0,
+    overall_accuracy: 0,
+    avg_time_per_question_ms: 0,
+  };
+  const emptyStreaks: Profile['streaks'] = { current_streak: 0, longest_streak: 0 };
+
   return (
     <ArcadeBackground>
-      <div className="flex flex-col items-center min-h-screen px-4 py-8">
+      <div className="flex flex-col items-center min-h-screen px-4 py-8 gap-6">
         <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md">
           <h1 className="font-display text-3xl mb-4 text-ink text-center">Profile</h1>
 
@@ -193,6 +217,18 @@ export default function ProfilePage() {
             </button>
           </div>
         </div>
+
+        {profile && !profile.isAnonymous && (
+          <>
+            <ProfileStatsCard
+              stats={stats?.stats ?? emptyStats}
+              streaks={stats?.streaks ?? emptyStreaks}
+            />
+            {stats && stats.category_performance.length > 0 && (
+              <CategoryPerformanceCard categories={stats.category_performance} />
+            )}
+          </>
+        )}
       </div>
 
       <SignInModal
