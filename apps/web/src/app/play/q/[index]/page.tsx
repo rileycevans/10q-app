@@ -224,7 +224,7 @@ export default function QuestionPage() {
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex, totalTime]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
-  const handleAnswerClick = (answerId: string) => {
+  const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
 
     setSelectedAnswerId(answerId);
@@ -234,34 +234,11 @@ export default function QuestionPage() {
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
 
-    // Optimistic navigation: advance the store to the next question and
-    // route immediately — the next question is already preloaded in
-    // game.questions, so there's nothing to wait for. The server submit
-    // runs in the background and reconciles the expiry when it returns.
-    const optimisticStartedAt = new Date();
-    const optimisticExpiresAt = new Date(optimisticStartedAt.getTime() + 12000);
-
-    const optimisticState: AttemptState = {
-      attempt_id: attempt.attempt_id,
-      quiz_id: attempt.quiz_id,
-      current_index: nextIndex,
-      current_question_started_at: optimisticStartedAt.toISOString(),
-      current_question_expires_at:
-        nextIndex <= 10 ? optimisticExpiresAt.toISOString() : null,
-      state: nextIndex <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-    };
-
-    store.setAttempt(optimisticState);
-
-    if (isLastQuestion) {
-      router.push(`/results?attempt_id=${attempt.attempt_id}`);
-    } else {
-      router.push(`/play/q/${nextIndex}`);
-    }
-
-    // Fire the submit in the background; reconcile with server state if it
-    // returns different values (the server is authoritative for scoring).
-    submitAnswer(attempt.attempt_id, currentQuestion.question_id, answerId)
+    const submitPromise = submitAnswer(
+      attempt.attempt_id,
+      currentQuestion.question_id,
+      answerId,
+    )
       .then((result) => {
         trackAnswerSubmit({
           quiz_id: game.quizId || currentQuestion.quiz_id,
@@ -277,27 +254,7 @@ export default function QuestionPage() {
           answer_kind: 'selected',
           question_tags: currentQuestion.tags,
         });
-
-        // Only reconcile if we're still on a question page and the server
-        // state differs from what we optimistically set. This aligns the
-        // countdown to the server's authoritative expiry.
-        const current = store.getState().attempt;
-        if (
-          current &&
-          current.attempt_id === result.attempt_id &&
-          current.current_index === result.current_index &&
-          current.current_question_expires_at !== result.question_expires_at
-        ) {
-          store.setAttempt({
-            attempt_id: result.attempt_id,
-            quiz_id: attempt.quiz_id,
-            current_index: result.current_index,
-            current_question_started_at: result.question_started_at,
-            current_question_expires_at: result.question_expires_at,
-            state:
-              result.current_index <= 10 ? 'IN_PROGRESS' : 'READY_TO_FINALIZE',
-          });
-        }
+        return result;
       })
       .catch((err) => {
         console.error('Failed to submit answer:', err);
@@ -305,7 +262,47 @@ export default function QuestionPage() {
           location: 'question_submit',
           message: err instanceof Error ? err.message : 'Failed to submit answer',
         });
+        return null;
       });
+
+    if (isLastQuestion) {
+      // On the final question we have to wait for the server to advance
+      // current_index before finalize-attempt will succeed. Await the
+      // submit and let the server's authoritative state drive the store.
+      const result = await submitPromise;
+      if (result) {
+        store.setAttempt({
+          attempt_id: result.attempt_id,
+          quiz_id: attempt.quiz_id,
+          current_index: result.current_index,
+          current_question_started_at: result.question_started_at,
+          current_question_expires_at: result.question_expires_at,
+          state: result.current_index > 10 ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
+        });
+      }
+      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      return;
+    }
+
+    // Non-final question: navigate optimistically. The next question is
+    // already preloaded in game.questions, so there's nothing to wait for.
+    // We use the tap moment as the start of the 12s window so the timer
+    // doesn't jump when the server response lands — the server's expiry
+    // would be ~100-300ms later due to network latency, but that latency
+    // is not time the user experienced on the question.
+    const optimisticStartedAt = new Date();
+    const optimisticExpiresAt = new Date(optimisticStartedAt.getTime() + 12000);
+
+    store.setAttempt({
+      attempt_id: attempt.attempt_id,
+      quiz_id: attempt.quiz_id,
+      current_index: nextIndex,
+      current_question_started_at: optimisticStartedAt.toISOString(),
+      current_question_expires_at: optimisticExpiresAt.toISOString(),
+      state: 'IN_PROGRESS',
+    });
+
+    router.push(`/play/q/${nextIndex}`);
   };
 
   // ── Render: loading (recovery from hard refresh) ────────────────────────
