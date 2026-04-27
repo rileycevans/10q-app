@@ -136,9 +136,9 @@ export default function ProfilePage() {
         )}
 
         {/* Recent Results */}
-        {profile.recent_results.length > 0 && (
-          <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6">
-            <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Recent Results</h2>
+        <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6">
+          <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Recent Results</h2>
+          {profile.recent_results.length > 0 ? (
             <div className="space-y-2">
               {profile.recent_results.map((result, index) => (
                 <div
@@ -161,8 +161,14 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="bg-cyanA/20 border-[3px] border-ink rounded-lg p-4 text-center">
+              <p className="font-body font-bold text-sm text-ink">
+                {profile.handle_display} hasn&apos;t played a quiz yet.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Back Button */}
         <button

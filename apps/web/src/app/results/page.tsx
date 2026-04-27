@@ -170,8 +170,13 @@ function ResultsContent() {
         if (!player?.handle_display) {
           setShowHandleNudge(true);
         }
-      } catch {
-        // Non-critical — silently ignore
+      } catch (err) {
+        // Non-fatal: nudge just won't show. Still log so we know if the
+        // players-table read is failing in production.
+        trackAppError({
+          location: 'results_handle_nudge_check',
+          message: err instanceof Error ? err.message : 'Failed to check handle',
+        });
       }
     }
     checkHandle();
@@ -252,8 +257,14 @@ function ResultsContent() {
           });
 
           sessionStorage.removeItem('attempt_state');
-        } catch {
-          // Already finalized — that's fine, just fetch results
+        } catch (finalizeErr) {
+          // Most likely cause: attempt was already finalized server-side, in
+          // which case we can still fetch results below. Log so unexpected
+          // failure modes (network, RLS) aren't invisible.
+          const message = finalizeErr instanceof Error ? finalizeErr.message : 'Finalize failed';
+          if (!/already.*finaliz/i.test(message)) {
+            trackAppError({ location: 'results_finalize', message });
+          }
         }
 
         {

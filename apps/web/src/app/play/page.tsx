@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { useGameStore, useGameState } from '@/components/GameProvider';
 import { trackScreenView, trackQuizStart, trackQuizUnavailable, trackAppError } from '@/lib/analytics';
+import { formatTimeUntilNextQuiz } from '@/lib/time';
 import dynamic from 'next/dynamic';
 
 const AuthButton = dynamic(() => import('@/components/AuthButton').then(mod => mod.AuthButton), { ssr: false });
@@ -58,20 +59,7 @@ export default function PlayPage() {
 
   // Helper function for countdown calculation
   const updateCountdown = () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setUTCHours(11, 30, 0, 0);
-
-    if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    }
-
-    const diff = tomorrow.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-    setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+    setCountdown(formatTimeUntilNextQuiz());
   };
 
   // ── Handle "no quiz" error specifically ──────────────────────────────────
