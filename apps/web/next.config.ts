@@ -6,6 +6,14 @@ const vercelOgStub = path.join(process.cwd(), "src/lib/stubs/vercel-og-stub.mjs"
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@10q/contracts"],
+  images: {
+    // Allow OAuth provider avatars (Google, Apple) so we can serve them
+    // through the Next.js image optimizer instead of raw <img>.
+    remotePatterns: [
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "appleid.cdn-apple.com" },
+    ],
+  },
   turbopack: {
     resolveAlias: {
       "next/dist/compiled/@vercel/og/index.edge.js": vercelOgStub,

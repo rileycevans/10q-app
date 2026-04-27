@@ -49,6 +49,21 @@ function StatGroup({ title, children }: StatGroupProps) {
 }
 
 export function ProfileStatsCard({ stats, streaks }: ProfileStatsCardProps) {
+  // No games yet — show a friendly nudge instead of a wall of zeros.
+  if (!stats.total_games) {
+    return (
+      <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl">
+        <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Stats</h2>
+        <div className="bg-cyanA/20 border-[3px] border-ink rounded-[18px] p-6 text-center">
+          <p className="font-display text-xl font-bold text-ink mb-2">No games yet</p>
+          <p className="font-body text-sm text-ink/80">
+            Play today&apos;s quiz to start tracking your scores, streaks, and category performance.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl">
       <h2 className="font-display text-2xl font-bold text-ink mb-4 text-center">Stats</h2>

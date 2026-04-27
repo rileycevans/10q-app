@@ -10,6 +10,7 @@ import { trackScreenView, trackAppError } from '@/lib/analytics';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
 import { supabase } from '@/lib/supabase/client';
+import { formatTimeUntilNextQuiz } from '@/lib/time';
 
 export default function HomePage() {
   const router = useRouter();
@@ -60,8 +61,13 @@ export default function HomePage() {
             .maybeSingle();
           if (attempt) setQuizCompleted(true);
         }
-      } catch {
-        // Non-critical — silently ignore
+      } catch (err) {
+        // Non-fatal: home renders fine without warm session, but log so silent
+        // failures (network, RLS, expired token) are visible in Sentry/PostHog.
+        trackAppError({
+          location: 'home_warm_session',
+          message: err instanceof Error ? err.message : 'Failed to warm session',
+        });
         setIsSignedIn(false);
         setIsAnonymous(true);
       }
@@ -74,17 +80,7 @@ export default function HomePage() {
     if (!quizCompleted) return;
 
     function updateCountdown() {
-      const now = new Date();
-      const next = new Date(now);
-      next.setUTCHours(11, 30, 0, 0);
-      if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
-        next.setUTCDate(next.getUTCDate() + 1);
-      }
-      const diff = next.getTime() - now.getTime();
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+      setCountdown(formatTimeUntilNextQuiz());
     }
 
     updateCountdown();

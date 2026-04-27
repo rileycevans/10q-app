@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
-import { trackScreenView } from '@/lib/analytics';
+import { trackScreenView, trackAppError } from '@/lib/analytics';
+import { formatTimeUntilNextQuiz } from '@/lib/time';
 
 export default function TomorrowPage() {
   const [countdown, setCountdown] = useState<string>('');
@@ -25,28 +26,18 @@ export default function TomorrowPage() {
         if (attempt.state === 'FINALIZED') {
           setResultsUrl(`/results?attempt_id=${attempt.attempt_id}`);
         }
-      } catch {
-        // Fall back to /results without attempt_id
+      } catch (err) {
+        // Non-fatal: fall back to /results without attempt_id, but log it.
+        trackAppError({
+          location: 'tomorrow_resolve_attempt',
+          message: err instanceof Error ? err.message : 'Failed to resolve attempt id',
+        });
       }
     }
     resolveAttemptId();
 
     function updateCountdown() {
-      const now = new Date();
-      const tomorrow = new Date(now);
-      tomorrow.setUTCHours(11, 30, 0, 0);
-
-      // If it's already past 11:30 UTC today, set for tomorrow
-      if (now.getUTCHours() > 11 || (now.getUTCHours() === 11 && now.getUTCMinutes() >= 30)) {
-        tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      }
-
-      const diff = tomorrow.getTime() - now.getTime();
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      setCountdown(`${hours}h ${minutes}m ${seconds}s`);
+      setCountdown(formatTimeUntilNextQuiz());
     }
 
     updateCountdown();

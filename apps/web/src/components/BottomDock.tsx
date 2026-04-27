@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 interface BottomDockProps {
   streak?: number;
   avatarUrl?: string | null;
@@ -59,9 +61,11 @@ export function BottomDock({
       >
         <span className="w-full h-full flex items-center justify-center overflow-hidden rounded-[4px]">
           {avatarUrl ? (
-            <img
+            <Image
               src={avatarUrl}
               alt="Profile"
+              width={52}
+              height={52}
               className="w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />

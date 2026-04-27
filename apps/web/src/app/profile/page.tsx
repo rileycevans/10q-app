@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { getSession, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
@@ -9,7 +10,7 @@ import { SignInModal } from '@/components/SignInModal';
 import { ProfileStatsCard } from '@/components/ProfileStatsCard';
 import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
 import { getProfileByHandle, type Profile } from '@/domains/profile';
-import { resetIdentity, trackSignOut, trackScreenView } from '@/lib/analytics';
+import { resetIdentity, trackSignOut, trackScreenView, trackAppError } from '@/lib/analytics';
 
 interface ProfileData {
   email: string | undefined;
@@ -60,12 +61,20 @@ export default function ProfilePage() {
           try {
             const fullProfile = await getProfileByHandle(player.handle_canonical);
             setStats(fullProfile);
-          } catch {
-            // Stats are optional; fail silently
+          } catch (statsErr) {
+            // Stats are optional — degrade gracefully but log so we can see
+            // when users hit empty stats due to a real failure vs. no games yet.
+            trackAppError({
+              location: 'profile_load_stats',
+              message: statsErr instanceof Error ? statsErr.message : 'Failed to load stats',
+            });
           }
         }
-      } catch {
-        // Non-critical
+      } catch (err) {
+        trackAppError({
+          location: 'profile_load',
+          message: err instanceof Error ? err.message : 'Failed to load profile',
+        });
       } finally {
         setLoading(false);
       }
@@ -143,11 +152,14 @@ export default function ProfilePage() {
               {/* Avatar */}
               {profile.avatarUrl && (
                 <div className="flex justify-center">
-                  <img
+                  <Image
                     src={profile.avatarUrl}
                     alt="Profile"
+                    width={80}
+                    height={80}
                     className="w-20 h-20 rounded-full border-[4px] border-ink object-cover"
                     referrerPolicy="no-referrer"
+                    unoptimized={false}
                   />
                 </div>
               )}
