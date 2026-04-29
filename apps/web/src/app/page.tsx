@@ -10,6 +10,7 @@ import { trackScreenView, trackAppError } from '@/lib/analytics';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
 import { supabase } from '@/lib/supabase/client';
+import { ensureSession } from '@/lib/auth';
 import { formatTimeUntilNextQuiz } from '@/lib/time';
 
 export default function HomePage() {
@@ -28,10 +29,20 @@ export default function HomePage() {
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
 
+    // Warm Next.js route bundles for the destinations users are most likely
+    // to hit next. These are the BottomDock targets (which use router.push,
+    // so they don't auto-prefetch like <Link> does) plus /play. Each prefetch
+    // pulls the JS chunk into cache so the click → "Loading..." gap shrinks.
+    router.prefetch('/play');
+    router.prefetch('/leaderboard');
+    router.prefetch('/leagues');
+    router.prefetch('/profile');
+    router.prefetch('/settings');
+    router.prefetch('/results');
+
     async function warmSessionAndCheckCompletion() {
       try {
         // Warm the session early so /play doesn't have to wait for it
-        const { ensureSession } = await import('@/lib/auth');
         const session = await ensureSession();
         if (!session) {
           setIsSignedIn(false);
@@ -73,7 +84,7 @@ export default function HomePage() {
       }
     }
     warmSessionAndCheckCompletion();
-  }, []);
+  }, [router]);
 
   // Countdown timer for next quiz refresh
   useEffect(() => {
