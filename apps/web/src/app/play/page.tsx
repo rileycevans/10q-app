@@ -25,7 +25,15 @@ export default function PlayPage() {
   useEffect(() => {
     trackScreenView({ screen: 'play', route: '/play' });
     store.prepare();
-  }, [store]);
+
+    // Warm the routes the user will hit during/after a play session, so the
+    // first question render and the post-quiz finalize/results jumps don't
+    // block on chunk downloads.
+    router.prefetch('/play/q/1');
+    router.prefetch('/play/finalize');
+    router.prefetch('/results');
+    router.prefetch('/tomorrow');
+  }, [store, router]);
 
   // ── React to game state changes ──────────────────────────────────────────
   useEffect(() => {

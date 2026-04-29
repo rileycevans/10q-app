@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useGameStore, useGameState } from '@/components/GameProvider';
 import { submitAnswer, resumeAttempt } from '@/domains/attempt';
+import { edgeFunctions } from '@/lib/api/edge-functions';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { HUD } from '@/components/HUD';
 import { QuestionCard } from '@/components/QuestionCard';
@@ -102,7 +103,6 @@ export default function QuestionPage() {
 
       (async () => {
         try {
-          const { edgeFunctions } = await import('@/lib/api/edge-functions');
           const res = await edgeFunctions.startQuestionTimer(attempt.attempt_id);
           if (res.ok && res.data?.question_expires_at) {
             // Mirror into the store so server-authoritative scoring sees it.

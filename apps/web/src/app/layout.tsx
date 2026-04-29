@@ -42,8 +42,22 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Warm the connection to Supabase as early as possible. The TLS+TCP
+  // handshake to the edge-functions host costs ~50–150ms on a cold tab;
+  // doing it during initial HTML parse means the first edge function call
+  // (warm session, getCurrentQuiz, startAttempt) skips that handshake.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
   return (
     <html lang="en">
+      <head>
+        {supabaseUrl && (
+          <>
+            <link rel="preconnect" href={supabaseUrl} crossOrigin="anonymous" />
+            <link rel="dns-prefetch" href={supabaseUrl} />
+          </>
+        )}
+      </head>
       <body className={`${rubik.variable} ${bungee.variable} font-body antialiased`}>
         <ErrorBoundary>
           <ToastProvider>
