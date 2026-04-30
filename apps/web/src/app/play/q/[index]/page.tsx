@@ -378,22 +378,32 @@ export default function QuestionPage() {
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen relative">
         {/* Unified top bar: progress + timer */}
-        <div className="flex items-center gap-3 w-full px-4 py-2">
-          <HUD progress={questionIndex} />
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="flex-1 h-3 bg-paper/40 border-[2px] border-ink rounded-full overflow-hidden">
-              <div
-                className="h-full bg-cyanA rounded-full"
-                style={{
-                  width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
-                }}
-              />
+        {(() => {
+          // Treat "low time" as ≤3s remaining — switches the bar fill and
+          // the timer readout to red so the urgency is visually obvious.
+          const displaySeconds = timeRemaining !== null ? timeRemaining / 1000 : totalTime / 1000;
+          const isLowTime = timeRemaining !== null && timeRemaining <= 3000;
+          return (
+            <div className="flex items-center gap-3 w-full px-4 py-3">
+              <HUD progress={questionIndex} />
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="flex-1 h-5 bg-paper/40 border-[3px] border-ink rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-colors duration-200 ${isLowTime ? 'bg-red' : 'bg-cyanA'}`}
+                    style={{
+                      width: `${Math.max(0, Math.min(100, ((timeRemaining || 0) / totalTime) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <span
+                  className={`font-display text-3xl font-bold tabular-nums whitespace-nowrap drop-shadow-[0_2px_0_var(--ink)] transition-colors duration-200 ${isLowTime ? 'text-red' : 'text-paper'}`}
+                >
+                  {displaySeconds.toFixed(1)}s
+                </span>
+              </div>
             </div>
-            <span className="text-xs font-bold text-paper tabular-nums whitespace-nowrap">
-              {timeRemaining !== null ? (timeRemaining / 1000).toFixed(1) : (totalTime / 1000).toFixed(1)}s
-            </span>
-          </div>
-        </div>
+          );
+        })()}
 
         <div
           key={questionIndex}
