@@ -200,18 +200,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create new attempt
-    const now = new Date();
-    const questionExpiresAt = new Date(now.getTime() + 12000); // 12 seconds
-
+    // Create new attempt. Intentionally leave the Q1 timer NULL — start-question-timer
+    // sets it when the client mounts Q1, so the server's clock matches the moment
+    // the user actually sees the question (rather than including the navigation
+    // / mount delay between start-attempt and the Q1 page becoming visible,
+    // which would falsely time out fast first answers).
     const { data: newAttempt, error: createAttemptError } = await supabase
       .from("attempts")
       .insert({
         quiz_id,
         player_id: userId,
         current_index: 1,
-        current_question_started_at: now.toISOString(),
-        current_question_expires_at: questionExpiresAt.toISOString(),
       })
       .select("id, quiz_id, current_index, current_question_started_at, current_question_expires_at")
       .single();
