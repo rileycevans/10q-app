@@ -37,7 +37,7 @@ export default function LeagueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [leagueDetails, setLeagueDetails] = useState<LeagueDetails | null>(null);
   const [leaderboardData, setLeaderboardData] = useState<LeagueLeaderboardResponse | null>(null);
-  const [timeWindow, setTimeWindow] = useState<LeaderboardWindow>('7d');
+  const [timeWindow, setTimeWindow] = useState<LeaderboardWindow>('today');
   const [scoreType, setScoreType] = useState<ScoreType>('cumulative');
   const [mode, _setMode] = useState<LeaderboardMode>('top');
   const [userPlayerId, setUserPlayerId] = useState<string | null>(null);

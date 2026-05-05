@@ -25,7 +25,7 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GlobalLeaderboardResponse | null>(null);
-  const [window, setWindow] = useState<LeaderboardWindow>('7d');
+  const [window, setWindow] = useState<LeaderboardWindow>('today');
   const [scoreType, setScoreType] = useState<ScoreType>('cumulative');
   const [mode, setMode] = useState<LeaderboardMode>('top');
   const [userPlayerId, setUserPlayerId] = useState<string | null>(null);
