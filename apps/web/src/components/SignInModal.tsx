@@ -103,7 +103,20 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
-  const redirectTo = `${window.location.origin}/auth/callback`;
+  const callbackUrl = new URL('/auth/callback', window.location.origin);
+  // Preserve the page the user was on so /auth/callback can return them there
+  // after the OAuth round-trip. Only forward internal paths to avoid open
+  // redirects, and skip the home page and the callback itself (no point).
+  const currentPath = window.location.pathname + window.location.search;
+  if (
+    currentPath.startsWith('/') &&
+    !currentPath.startsWith('//') &&
+    !currentPath.startsWith('/auth/') &&
+    currentPath !== '/'
+  ) {
+    callbackUrl.searchParams.set('next', currentPath);
+  }
+  const redirectTo = callbackUrl.toString();
 
   const handleOAuth = async (provider: OAuthProvider) => {
     setLoadingProvider(provider);
@@ -118,7 +131,9 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
         // provider identity is already attached to another account (the
         // link fails server-side, not via an SDK error here).
         trackAuthUpgradeStarted({ provider });
-        const linkRedirect = `${redirectTo}?link_provider=${provider}`;
+        const linkUrl = new URL(redirectTo);
+        linkUrl.searchParams.set('link_provider', provider);
+        const linkRedirect = linkUrl.toString();
         const result = await linkIdentityToAnonymous(provider, linkRedirect);
 
         if (result.ok) {

@@ -22,6 +22,15 @@ export default function AuthCallbackPage() {
         const errorCode = queryParams.get('error');
         const errorDescription = queryParams.get('error_description');
         const linkProvider = queryParams.get('link_provider');
+        const nextParam = queryParams.get('next');
+        // Only honor same-origin internal paths to avoid open redirects.
+        const safeNext =
+          nextParam &&
+          nextParam.startsWith('/') &&
+          !nextParam.startsWith('//') &&
+          !nextParam.startsWith('/auth/')
+            ? nextParam
+            : '/';
 
         if (errorCode || errorDescription) {
           // Recovery path: user tapped Sign In on an anonymous session and
@@ -99,8 +108,8 @@ export default function AuthCallbackPage() {
           }
         }
 
-        // Success - redirect to home
-        router.push('/');
+        // Success - redirect to the page the user came from, or home.
+        router.push(safeNext);
       } catch (err) {
         console.error('Callback error:', err);
         Sentry.captureException(err);
