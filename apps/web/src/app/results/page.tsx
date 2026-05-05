@@ -517,10 +517,11 @@ function ResultsContent() {
               BACK TO HOME
             </Link>
             <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="h-14 w-full bg-paper border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
+              onClick={handleShare}
+              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-yellow'
+                }`}
             >
-              BACK TO TOP
+              {copied ? '✓ COPIED!' : '📤 CHALLENGE YOUR FRIENDS'}
             </button>
           </div>
         </div>
