@@ -28,12 +28,18 @@ export default function QuestionPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<AnswerFeedback>('idle');
   const [recoveryError, _setRecoveryError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<{ code: string; message: string } | null>(null);
 
   // Wall-clock-based timer. `deadlineRef` is the absolute time the question
   // expires. A single requestAnimationFrame loop keeps `timeRemaining` in
   // sync. This avoids the drift and jitter of setInterval-based tickers
   // that restart every 100ms as timeRemaining state changes.
   const deadlineRef = useRef<number | null>(null);
+  // Synchronous re-entry guard. `setIsSubmitting(true)` is a state update —
+  // two clicks in the same React batch both see `isSubmitting === false` and
+  // can both fire submit-answer for the same question. A ref flips in the
+  // same tick, blocking the second call before it issues a request.
+  const submittingRef = useRef(false);
 
   // Derive current question from store
   const currentQuestion: QuizQuestion | null =
@@ -82,6 +88,9 @@ export default function QuestionPage() {
     setSelectedAnswerId(null);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsSubmitting(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSubmitError(null);
+    submittingRef.current = false;
   }, [questionIndex]);
 
   // ── Initialize timer deadline on question mount ──────────────────────────
@@ -183,7 +192,24 @@ export default function QuestionPage() {
   useEffect(() => {
     if (timeRemaining === null || timeRemaining > 0) return;
     if (isSubmitting || !currentQuestion || !attempt) return;
+    if (submittingRef.current) return;
 
+    // Staleness assertion: the three things we send must all describe the
+    // same question. If they don't, a stale closure or out-of-order render
+    // is about to submit a wrong question_id — bail and let the redirect
+    // useEffect ([attempt, questionIndex]) push us to the right URL.
+    if (
+      currentQuestion.order_index !== questionIndex ||
+      attempt.current_index !== questionIndex
+    ) {
+      trackAppError({
+        location: 'timeout_stale_question',
+        message: `route=${questionIndex} currentQuestion.order_index=${currentQuestion.order_index} attempt.current_index=${attempt.current_index} question_id=${currentQuestion.question_id}`,
+      });
+      return;
+    }
+
+    submittingRef.current = true;
     setIsSubmitting(true);
 
     const nextIndex = questionIndex + 1;
@@ -212,10 +238,16 @@ export default function QuestionPage() {
             return result;
           })
           .catch((err) => {
+            const apiErr = (err as { error?: { code?: string; message?: string }; status?: number })?.error;
+            const code = apiErr?.code || 'UNKNOWN';
+            const message = apiErr?.message || (err instanceof Error ? err.message : 'Failed to submit timeout answer');
             trackAppError({
               location: 'timeout_submit',
-              message: err instanceof Error ? err.message : 'Failed to submit timeout answer',
+              message: `${code}: ${message}`,
             });
+            submittingRef.current = false;
+            setIsSubmitting(false);
+            setSubmitError({ code, message });
             return null;
           })
       : Promise.resolve(null);
@@ -263,6 +295,26 @@ export default function QuestionPage() {
   // ── Answer handler ──────────────────────────────────────────────────────
   const handleAnswerClick = async (answerId: string) => {
     if (!currentQuestion || !attempt || isSubmitting) return;
+    if (submittingRef.current) return;
+
+    // Staleness assertion (see timeout effect for context). If route,
+    // currentQuestion, and attempt disagree on the question we're on, we'd
+    // be about to submit a wrong question_id — surface it and bail.
+    if (
+      currentQuestion.order_index !== questionIndex ||
+      attempt.current_index !== questionIndex
+    ) {
+      trackAppError({
+        location: 'click_stale_question',
+        message: `route=${questionIndex} currentQuestion.order_index=${currentQuestion.order_index} attempt.current_index=${attempt.current_index} question_id=${currentQuestion.question_id} answer_id=${answerId}`,
+      });
+      setSubmitError({
+        code: 'STALE_QUESTION',
+        message: `Question mismatch (route ${questionIndex}, store ${attempt.current_index}). Reloading.`,
+      });
+      return;
+    }
+    submittingRef.current = true;
 
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
@@ -294,11 +346,28 @@ export default function QuestionPage() {
         return result;
       })
       .catch((err) => {
+        const apiErr = (err as { error?: { code?: string; message?: string }; status?: number })?.error;
+        const code = apiErr?.code || 'UNKNOWN';
+        const message = apiErr?.message || (err instanceof Error ? err.message : 'Failed to submit answer');
         console.error('Failed to submit answer:', err);
         trackAppError({
           location: 'question_submit',
-          message: err instanceof Error ? err.message : 'Failed to submit answer',
+          message: `${code}: ${message}`,
         });
+        submittingRef.current = false;
+        setSelectedAnswerId(null);
+        setFeedback('idle');
+        setIsSubmitting(false);
+        setSubmitError({ code, message });
+        store.setAttempt({
+          attempt_id: attempt.attempt_id,
+          quiz_id: attempt.quiz_id,
+          current_index: questionIndex,
+          current_question_started_at: attempt.current_question_started_at,
+          current_question_expires_at: attempt.current_question_expires_at,
+          state: 'IN_PROGRESS',
+        });
+        router.replace(`/play/q/${questionIndex}`);
         return null;
       });
 
@@ -377,6 +446,20 @@ export default function QuestionPage() {
   return (
     <ArcadeBackground>
       <div className="flex flex-col min-h-screen relative">
+        {submitError && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+            <div className="bg-red border-[4px] border-ink rounded-[18px] shadow-sticker-sm p-3 text-paper">
+              <p className="font-bold text-sm">Submit failed: {submitError.code}</p>
+              <p className="text-xs mt-1 break-words">{submitError.message}</p>
+              <button
+                onClick={() => setSubmitError(null)}
+                className="mt-2 text-xs underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         {/* Unified top bar: progress + timer */}
         {(() => {
           // Treat "low time" as ≤3s remaining — switches the bar fill and
