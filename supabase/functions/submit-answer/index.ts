@@ -51,6 +51,11 @@ Deno.serve(async (req) => {
     const { attempt_id, question_id, selected_answer_id } = body;
 
     if (!attempt_id || !question_id || !selected_answer_id) {
+      logStructured(requestId, "submit_answer_missing_fields", {
+        has_attempt_id: !!attempt_id,
+        has_question_id: !!question_id,
+        has_selected_answer_id: !!selected_answer_id,
+      });
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
         "attempt_id, question_id, and selected_answer_id are required",
@@ -70,6 +75,11 @@ Deno.serve(async (req) => {
       .single();
 
     if (attemptError || !attempt) {
+      logStructured(requestId, "submit_answer_attempt_not_found", {
+        attempt_id,
+        user_id: userId,
+        error: attemptError?.message,
+      });
       return errorResponse(
         ErrorCodes.ATTEMPT_NOT_FOUND,
         "Attempt not found",
@@ -87,6 +97,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (questionError || !quizQuestion) {
+      logStructured(requestId, "submit_answer_question_not_in_quiz", {
+        attempt_id,
+        question_id,
+        attempt_quiz_id: attempt.quiz_id,
+        attempt_current_index: attempt.current_index,
+        error: questionError?.message,
+      });
       return errorResponse(
         ErrorCodes.QUESTION_NOT_FOUND,
         "Question not found in quiz",
@@ -97,6 +114,17 @@ Deno.serve(async (req) => {
 
     const stateCheck = validateSubmitAnswer(attempt, quizQuestion);
     if (!stateCheck.ok) {
+      logStructured(requestId, "submit_answer_state_rejected", {
+        attempt_id,
+        code: stateCheck.code,
+        message: stateCheck.message,
+        attempt_current_index: attempt.current_index,
+        attempt_finalized_at: attempt.finalized_at,
+        question_id,
+        question_order_index: quizQuestion.order_index,
+        question_quiz_id: quizQuestion.quiz_id,
+        attempt_quiz_id: attempt.quiz_id,
+      });
       return errorResponse(
         stateCheck.code,
         stateCheck.message,
@@ -162,8 +190,11 @@ Deno.serve(async (req) => {
 
     if (answerCheckError || !selectedAnswer) {
       logStructured(requestId, "submit_answer_invalid_answer", {
+        attempt_id,
         question_id,
         selected_answer_id,
+        attempt_current_index: attempt.current_index,
+        question_order_index: quizQuestion.order_index,
         error: answerCheckError?.message,
       });
       return errorResponse(

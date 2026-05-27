@@ -1,101 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import * as Sentry from '@sentry/nextjs';
-import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
+import { startOAuth, buildOAuthRedirect, type OAuthProvider } from '@/lib/auth/oauth';
 
 interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-type OAuthProvider = 'google' | 'apple';
-
-function captureOAuthStartFailure(
-  provider: OAuthProvider,
-  redirectTo: string,
-  reason: string,
-  error: unknown
-) {
-  Sentry.withScope((scope) => {
-    scope.setTag('auth.provider', provider);
-    scope.setTag('auth.flow', 'oauth_start');
-    scope.setContext('auth', {
-      provider,
-      redirectTo,
-      reason,
-    });
-    if (error instanceof Error) {
-      Sentry.captureException(error);
-    } else {
-      Sentry.captureMessage(String(reason), { level: 'error', extra: { error } });
-    }
-  });
-}
-
-async function signInWithOAuthOrReport(
-  provider: OAuthProvider,
-  redirectTo: string
-): Promise<void> {
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo },
-  });
-
-  if (error) {
-    captureOAuthStartFailure(provider, redirectTo, 'signInWithOAuth returned error', error);
-    return;
-  }
-
-  if (data?.url) {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      type: 'default',
-      level: 'info',
-      message: 'OAuth redirect URL issued',
-      data: { provider, hasUrl: true },
-    });
-  }
-}
-
-// Attempt to link the provider to the current anonymous session.
-// If Supabase rejects because the identity is already attached to another
-// user, the caller should sign out of the anonymous session and do a fresh
-// OAuth flow — the anonymous data is lost, but the user ends up in their
-// existing account instead of creating yet another split account.
-async function linkIdentityToAnonymous(
-  provider: OAuthProvider,
-  redirectTo: string
-): Promise<{ ok: true } | { ok: false; reason: 'identity_taken' | 'unknown'; error: unknown }> {
-  const { data, error } = await supabase.auth.linkIdentity({
-    provider,
-    options: { redirectTo },
-  });
-
-  if (error) {
-    const message = error.message?.toLowerCase() ?? '';
-    const identityTaken =
-      message.includes('already') ||
-      message.includes('exists') ||
-      message.includes('registered');
-    return {
-      ok: false,
-      reason: identityTaken ? 'identity_taken' : 'unknown',
-      error,
-    };
-  }
-
-  if (data?.url) {
-    Sentry.addBreadcrumb({
-      category: 'auth',
-      type: 'default',
-      level: 'info',
-      message: 'OAuth link redirect URL issued',
-      data: { provider, hasUrl: true },
-    });
-  }
-  return { ok: true };
 }
 
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
@@ -103,67 +13,12 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
-  const callbackUrl = new URL('/auth/callback', window.location.origin);
-  // Preserve the page the user was on so /auth/callback can return them there
-  // after the OAuth round-trip. Only forward internal paths to avoid open
-  // redirects, and skip the home page and the callback itself (no point).
-  const currentPath = window.location.pathname + window.location.search;
-  if (
-    currentPath.startsWith('/') &&
-    !currentPath.startsWith('//') &&
-    !currentPath.startsWith('/auth/') &&
-    currentPath !== '/'
-  ) {
-    callbackUrl.searchParams.set('next', currentPath);
-  }
-  const redirectTo = callbackUrl.toString();
+  const redirectTo = buildOAuthRedirect();
 
   const handleOAuth = async (provider: OAuthProvider) => {
     setLoadingProvider(provider);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (user?.is_anonymous) {
-        // Try to upgrade the anonymous session by linking the provider identity.
-        // Supabase preserves the auth user id on a successful link, so attempts
-        // and memberships stay attached to the same account. We tag the
-        // redirect URL with link_provider so /auth/callback can recover if the
-        // provider identity is already attached to another account (the
-        // link fails server-side, not via an SDK error here).
-        trackAuthUpgradeStarted({ provider });
-        const linkUrl = new URL(redirectTo);
-        linkUrl.searchParams.set('link_provider', provider);
-        const linkRedirect = linkUrl.toString();
-        const result = await linkIdentityToAnonymous(provider, linkRedirect);
-
-        if (result.ok) {
-          return;
-        }
-
-        if (result.reason === 'identity_taken') {
-          // User already has an account with this provider. Discard the
-          // anonymous session and sign into the existing account. The
-          // anonymous data is intentionally dropped in this branch.
-          Sentry.addBreadcrumb({
-            category: 'auth',
-            message: 'linkIdentity rejected (identity already exists); falling back to fresh OAuth',
-            data: { provider },
-          });
-          await supabase.auth.signOut();
-          trackSignIn({ provider, is_upgrade: false });
-          await signInWithOAuthOrReport(provider, redirectTo);
-          return;
-        }
-
-        captureOAuthStartFailure(provider, redirectTo, 'linkIdentity failed', result.error);
-        return;
-      }
-
-      trackSignIn({ provider, is_upgrade: false });
-      await signInWithOAuthOrReport(provider, redirectTo);
-    } catch (error) {
-      console.error('Sign in error:', error);
-      captureOAuthStartFailure(provider, redirectTo, 'unexpected throw', error);
+      await startOAuth(provider, redirectTo);
     } finally {
       setLoadingProvider(null);
     }
@@ -196,33 +51,55 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
           Pick a provider to save progress across devices.
         </p>
 
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={() => void handleOAuth('google')}
-            disabled={isLoading}
-            className="w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center gap-3 transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] disabled:opacity-50"
-          >
-            {loadingProvider === 'google' ? 'Signing in...' : 'Continue with Google'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleOAuth('apple')}
-            disabled={isLoading}
-            className="w-full h-14 bg-ink border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-paper flex items-center justify-center gap-3 transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] disabled:opacity-50"
-          >
-            {loadingProvider === 'apple' ? (
-              'Signing in...'
-            ) : (
-              <>
-                <AppleMark className="h-6 w-6 shrink-0" aria-hidden />
-                Continue with Apple
-              </>
-            )}
-          </button>
-        </div>
+        <OAuthButtons
+          onSelect={handleOAuth}
+          loadingProvider={loadingProvider}
+          disabled={isLoading}
+        />
       </div>
+    </div>
+  );
+}
+
+/**
+ * Shared OAuth button pair used by SignInModal and TutorialModal. Keeping the
+ * markup in one place ensures the two surfaces stay visually identical.
+ */
+export function OAuthButtons({
+  onSelect,
+  loadingProvider,
+  disabled,
+}: {
+  onSelect: (provider: OAuthProvider) => void;
+  loadingProvider: OAuthProvider | null;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <button
+        type="button"
+        onClick={() => void onSelect('google')}
+        disabled={disabled}
+        className="w-full h-14 bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center gap-3 transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] disabled:opacity-50"
+      >
+        {loadingProvider === 'google' ? 'Signing in...' : 'Continue with Google'}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => void onSelect('apple')}
+        disabled={disabled}
+        className="w-full h-14 bg-ink border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-paper flex items-center justify-center gap-3 transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] disabled:opacity-50"
+      >
+        {loadingProvider === 'apple' ? (
+          'Signing in...'
+        ) : (
+          <>
+            <AppleMark className="h-6 w-6 shrink-0" aria-hidden />
+            Continue with Apple
+          </>
+        )}
+      </button>
     </div>
   );
 }

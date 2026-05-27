@@ -480,7 +480,7 @@ function ResultsContent() {
             </div>
             <button
               onClick={handleShare}
-              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-yellow'
+              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-orange'
                 }`}
             >
               {copied ? '✓ COPIED!' : '📤 SHARE RESULT'}
@@ -518,11 +518,26 @@ function ResultsContent() {
             </Link>
             <button
               onClick={handleShare}
-              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-yellow'
+              className={`h-14 w-full border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-all duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] ${copied ? 'bg-green' : 'bg-orange'
                 }`}
             >
               {copied ? '✓ COPIED!' : '📤 CHALLENGE YOUR FRIENDS'}
             </button>
+            {/* Matches the Leaderboard / Leagues buttons on the home page —
+                same colors, classes, and destinations so users get a
+                consistent navigation surface. */}
+            <Link
+              href="/leaderboard"
+              className="block w-full h-14 bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
+            >
+              LEADERBOARD
+            </Link>
+            <Link
+              href="/leagues"
+              className="block w-full h-14 bg-yellow border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-yellow focus-visible:outline-offset-2"
+            >
+              LEAGUES
+            </Link>
           </div>
         </div>
       </div>
