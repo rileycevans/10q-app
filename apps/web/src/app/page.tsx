@@ -6,12 +6,14 @@ import { useRouter } from 'next/navigation';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { BottomDock } from '@/components/BottomDock';
 import { SignInModal } from '@/components/SignInModal';
+import { TutorialModal } from '@/components/TutorialModal';
 import { trackScreenView, trackAppError } from '@/lib/analytics';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { getCurrentQuiz } from '@/domains/quiz';
 import { supabase } from '@/lib/supabase/client';
 import { ensureSession } from '@/lib/auth';
 import { formatTimeUntilNextQuiz } from '@/lib/time';
+import { recordAnonymousView, tutorialOnMount } from '@/lib/tutorial';
 
 export default function HomePage() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function HomePage() {
   const [countdown, setCountdown] = useState('');
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(true);
+  const [sessionResolved, setSessionResolved] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState<'welcome' | 'handle' | null>(null);
 
   useEffect(() => {
     trackScreenView({ screen: 'home', route: '/' });
@@ -47,6 +51,7 @@ export default function HomePage() {
         if (!session) {
           setIsSignedIn(false);
           setIsAnonymous(true);
+          setSessionResolved(true);
           return;
         }
         setIsSignedIn(true);
@@ -81,10 +86,28 @@ export default function HomePage() {
         });
         setIsSignedIn(false);
         setIsAnonymous(true);
+      } finally {
+        setSessionResolved(true);
       }
     }
     warmSessionAndCheckCompletion();
   }, [router]);
+
+  // Open the first-run tutorial once we know whether the user is anonymous
+  // or signed in. tutorialOnMount() reads localStorage view counters and the
+  // tutorial_resume hint to decide between fresh / resume_handle / null.
+  useEffect(() => {
+    if (!sessionResolved) return;
+    if (tutorialStep !== null) return; // already open
+    const decision = tutorialOnMount({ isAnonymous, isSignedIn });
+    if (decision === 'fresh') {
+      recordAnonymousView();
+      setTutorialStep('welcome');
+    } else if (decision === 'resume_handle') {
+      setTutorialStep('handle');
+    }
+    // null → don't open
+  }, [sessionResolved, isAnonymous, isSignedIn, tutorialStep]);
 
   // Countdown timer for next quiz refresh
   useEffect(() => {
@@ -331,6 +354,14 @@ export default function HomePage() {
 
       {/* Sign In Modal */}
       <SignInModal isOpen={showSignInModal} onClose={() => setShowSignInModal(false)} />
+
+      {/* First-run tutorial — anonymous-only, max 2 views, suppressed once
+          a user signs in. See lib/tutorial.ts. */}
+      <TutorialModal
+        isOpen={tutorialStep !== null}
+        initialStep={tutorialStep ?? 'welcome'}
+        onClose={() => setTutorialStep(null)}
+      />
     </ArcadeBackground>
   );
 }
