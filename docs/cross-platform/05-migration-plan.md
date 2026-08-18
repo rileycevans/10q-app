@@ -8,12 +8,31 @@ Phased execution from today's web-only product to web + iOS + Android from one c
 
 ---
 
+## Two tracks, not one
+
+Some of the longest-lead work is not engineering at all. **Start the external track on day one** — it blocks nothing else and nothing else can unblock it.
+
+```
+ENGINEERING TRACK
+Phase 0 preconditions → foundations → export → seam → shell → capabilities → release
+      │
+      │  runs in parallel, start immediately
+      ↓
+EXTERNAL TRACK
+Apple Developer enrollment ─────────────────────────┐
+Google Play account + production-access eligibility ─┴─→ store submission
+```
+
+**The Google Play track is the one that bites.** If the Play developer account is a **personal** account created after 2023-11-13, production access requires a closed test with **12 testers opted in for 14 consecutive days**, followed by a human-reviewed written application (~7 days), before production is reachable at all. That is a **multi-week calendar dependency with no engineering shortcut**.
+
+Nobody should reach "Android is ready!" and only then discover the account needs weeks of maturation. Decide the account type and start recruiting testers before Phase 0 finishes. See [release/ANDROID.md](release/ANDROID.md) §4.4 and [release/FIRST_STORE_RELEASE.md](release/FIRST_STORE_RELEASE.md).
+
 ## Phase overview
 
 | # | Phase | Blocks | Rough size |
 |---|---|---|---|
-| 0 | Prove the export runs in a WebView | Everything | 2–3 d |
-| 1 | Security + correctness fixes | Any external build | 1–2 wk |
+| **0** | **Preconditions — 0A…0E** | **Everything** | **2–3 wk** |
+| 1 | Remaining correctness fixes | Mobile timer + notification work | 1 wk |
 | 2 | Foundations: versioning, environments, CI | Observability, releases | 1–2 wk |
 | 3 | Static export compatibility | Capacitor shell | 1 wk |
 | 4 | Platform seam + auth port | Native sign-in | 1.5–2 wk |
@@ -23,51 +42,124 @@ Phased execution from today's web-only product to web + iOS + Android from one c
 | 8 | Store compliance | Submission | 1–2 wk |
 | 9 | Release machinery + first submission | Launch | 2–3 wk |
 
-Sizes assume one engineer working with an agent. Phases 1 and 2 are substantially parallelizable with each other; 6 and 7 can overlap with 8.
+Sizes assume one engineer working with an agent. Within Phase 0, 0A and 0D are independent of 0B and 0C and can run concurrently. Phase 2 parallelizes with Phase 0. Phases 6 and 7 can overlap with 8.
 
 ---
 
-## Phase 0 — Prove it
+## Phase 0 — Preconditions
 
-**Entry:** none. Do this first.
-**Branch:** throwaway. Nothing here gets merged.
+**No substantive migration implementation begins until every item here passes.**
 
-The gate from [ADR-001](01-architecture-decision.md). One prototype, no product changes.
+Phase 0 answers two questions that must not be assumed: *does the architecture work at all?* and *is the product safe to package?* Both have a real chance of changing the plan. Getting the answer after a week of downstream implementation is the expensive outcome.
 
-1. `output: 'export'`, `trailingSlash: true`, `images.unoptimized: true`.
-2. Temporarily stub the four dynamic routes. **Do not delete them to make the build go green** — a green build produced by deleting the routes under test proves nothing. This happened during the audit and produced a false positive that took a second pass to catch.
-3. Wrap the export in a bare Capacitor shell. Run on a real iOS device and an Android emulator.
-4. **Measure the HEAD probe.** Under `output: 'export'` Next fires `fetch(url, {method:'HEAD'})` before every route-cache fill. In Capacitor these go through the iOS `WKURLSchemeHandler` / Android `WebViewAssetLoader`, not an HTTP server. If HEAD does not return 2xx, the router degrades to full document navigation — which unmounts `GameProvider` and destroys in-flight quiz state between questions.
+0A and 0D are architectural go/no-go. 0B and 0C are security preconditions — they are not "Capacitor migration work", but shipping an IPA/APK turns hidden client behavior into something anyone can unzip and read, so they cannot be deferred to "after mobile ships".
 
-   A `python3 -m http.server` test **cannot** detect this; it handles HEAD correctly.
+---
 
-5. Separately, add a `webkit` + mobile-viewport Playwright project against the current app. Cheap, and it converts the central assumption of the Capacitor case into a measurement.
+### 0A — Prove the packaged Capacitor routing model
+
+**This is the architectural go/no-go.** Throwaway branch, no product changes, nothing merged.
+
+1. Set `output: 'export'`, `trailingSlash: true`, `images.unoptimized: true`.
+2. Temporarily stub the four dynamic routes. **Do not delete them to make the build go green** — a green build produced by deleting the routes under test proves nothing. This happened during the audit and produced a false positive that took a second verification pass to catch.
+3. Wrap the export in a bare Capacitor shell. Run on a **real iOS device** and an Android emulator.
+4. **Measure the HEAD probe.** Under `output: 'export'` Next fires `fetch(url, {method:'HEAD'})` before every route-cache fill, on every `<Link>` prefetch and `router.prefetch()`. In Capacitor these go through the iOS `WKURLSchemeHandler` / Android `WebViewAssetLoader`, not an HTTP server. If HEAD does not return 2xx, `rejectRouteCacheEntry` fires, the router degrades to a full document load, and that **unmounts `GameProvider` and destroys in-flight quiz state between `/play/q/N` and `/play/q/N+1`.**
+
+   A `python3 -m http.server` test **cannot** detect this — it handles HEAD correctly. Only a real WebView answers the question.
+
+5. Separately: add a `webkit` + mobile-viewport Playwright project against the current app. Cheap, and it converts the central assumption of the Capacitor case into a measurement.
 
 **Exit:**
 - [ ] `/play/q/1/ → /play/q/2/` is a client transition on a real device — `GameProvider` not remounted, no white flash
 - [ ] A cold boot at a non-root path resolves (validates `trailingSlash`)
 - [ ] Avatars render (validates `images.unoptimized`)
-- [ ] Findings written up, including anything that contradicts [02-current-state.md](02-current-state.md)
+- [ ] Findings written up in [STATUS.md](STATUS.md), including anything contradicting [02-current-state.md](02-current-state.md)
 
-**If the HEAD probe fails** and no Capacitor server plugin fixes it, the fallback is hoisting game state above the router into module scope + Preferences so an MPA navigation is survivable. That is a real cost — re-weigh against Expo before continuing.
+**If 0A fails** and no Capacitor server plugin fixes it, the fallback is hoisting game state above the router into module scope + Preferences so an MPA navigation is survivable. That is a real cost. **Revise the architecture before anyone implements downstream work** — re-open [ADR-001](01-architecture-decision.md) rather than treating the plan as settled.
 
 ---
 
-## Phase 1 — Security and correctness
+### 0B — Fix server-side attempt integrity
 
-**Entry:** none. Parallel with Phase 0.
-**Branches:** `fix/security-*`, `fix/game-*` — several small PRs, not one.
+[03-blocking-fixes.md](03-blocking-fixes.md) A1, A3, A5.
 
-Everything in [03-blocking-fixes.md](03-blocking-fixes.md) sections A and C. These are live web defects; packaging just makes several of them trivially discoverable.
+**A1 — `delete-attempt`.** Any signed-in user can finalize an attempt, read the full answer key from `get-attempt-results`, delete the attempt, and replay for a perfect 100. Daily, repeatably, indistinguishable from a real score. The only thing stopping them today is a client-side `if (!isAdmin)` that hides a button. Delete the function, or move the check server-side, or refuse deletion once `finalized_at` is set.
 
-**Section A must land before any external build exists** — before TestFlight, before an internal Play track. `delete-attempt` (A1) is the one to do first: any signed-in user can currently score a perfect 100 daily, protected only by a client-side `if (!isAdmin)`.
+**A3 — Q1's clock is client-triggered.** `start-attempt` returns all ten questions while leaving Q1's timer unstamped, so a scripted client can research Q1 indefinitely, then fire `start-question-timer` and `submit-answer` back-to-back for the maximum speed bonus. Clamp server-side.
 
-**Section C should land before the phases that inherit the bug.** In particular C1 (the DB trigger forcing a 16s expiry against 12s code) must land before any mobile timer work, because a native client that trusts `question_expires_at` inherits a timer 4 seconds longer than the one the server scores against.
+**A5 — the RLS suite never runs.** `supabase/tests` is not in the root `workspaces` array, so `npm test` never reaches ~85 tests including all RLS coverage. It is also stale and hardcodes production credentials as defaults. **This is how A1 and A2 survived** — without it, 0B and 0C cannot be verified, only asserted.
 
 **Exit:**
-- [ ] A1–A6 resolved; A7 triaged with decisions recorded
+- [ ] The finalize → read key → delete → replay path is closed, with a test proving it
+- [ ] `start-question-timer` rejects or clamps a late start
+- [ ] `supabase/tests` runs in CI against a local stack, production defaults removed, stale assertions rewritten
+
+---
+
+### 0C — Secure quiz publishing
+
+[03-blocking-fixes.md](03-blocking-fixes.md) A2.
+
+`publish-quiz` has no auth check at all, and `supabase/config.toml` sets `verify_jwt = false`. Any anonymous POST publishes the newest eligible quiz. It is also **vestigial** — the cron moved to the in-database `publish_scheduled_quiz()`, and that migration was careful to revoke the SQL function from `anon`/`authenticated` while leaving the Edge Function wide open.
+
+Note the fleet-wide posture: `verify_jwt = false` everywhere means **a missing in-function auth check fails OPEN, not closed.** Audit every function for an explicit check while here.
+
+**Exit:**
+- [ ] `publish-quiz` deleted, or authenticated and admin-gated
+- [ ] Every Edge Function audited for an explicit auth check; findings recorded
+- [ ] C9 resolved — verify whether the `scheduled` status actually exists, or the daily cron has been matching zero rows since 2026-04-02
+
+---
+
+### 0D — Prove Capacitor-origin CORS behavior
+
+`supabase/functions/_shared/cors.ts` emits a **single static** `Access-Control-Allow-Origin`, documented to be `https://play10q.com` in production. Capacitor sends `capacitor://localhost` (iOS) or `http://localhost` (Android). One static value cannot serve all three.
+
+Twelve functions import it — and they are exactly the game loop. The other ten hardcode `"*"` inline. **The failure mode is the worst possible shape: leagues and profiles load fine while the quiz dies on every request.** An engineer who hits this mid-Phase-5 will spend a day blaming the client.
+
+Make `corsHeaders` take `req`, echo the Origin when it matches an allow-list, and add `Vary: Origin`. Then **prove it from a real device**, not from a curl with a spoofed header.
+
+**Exit:**
+- [ ] `corsHeaders(req)` shipped across all 12 importers and the 10 inline copies consolidated
+- [ ] `Access-Control-Allow-Headers` verified to include everything the client sends — a new request header silently fails preflight
+- [ ] The full game loop completes from a Capacitor WebView on both platforms, against production CORS config
+
+---
+
+### 0E — Gate: native work may now begin
+
+Not a work item. The explicit checkpoint that 0A–0D all passed.
+
+**Do not create `ios/`, `android/`, or add any `@capacitor/*` dependency to the main branch before this gate clears.** Native project scaffolding is the point of no return for reviewer attention and for the cost of reversing course.
+
+**Gate:**
+- [ ] 0A passed on real hardware, or the architecture was revised and [ADR-001](01-architecture-decision.md) updated to match
+- [ ] 0B and 0C closed, with tests that run in CI
+- [ ] 0D proven from a device
+- [ ] [STATUS.md](STATUS.md) records the outcome of each, including anything that changed the plan
+
+---
+
+## Phase 1 — Remaining correctness and hardening
+
+**Entry:** Phase 0 gate cleared (the urgent security work is already done in 0B/0C).
+**Branches:** `fix/security-*`, `fix/game-*` — several small PRs, not one.
+
+What is left from [03-blocking-fixes.md](03-blocking-fixes.md) after Phase 0: section A's non-urgent items and all of section C.
+
+**Security hardening** — A4 (`players` is world-readable in full, including `linked_auth_user_id`), A6 (answer secrecy rests on one untested column grant), and the A7 list: no rate limiting anywhere, the unauthenticated and unthrottled `get-profile-by-handle`, the unbounded leaderboard `limit`, and the still-exposed empty `private` schema.
+
+**Correctness** — these are live bugs the native client inherits unless fixed:
+
+- **C1 must land before any mobile timer work.** The DB trigger forces a 16s expiry while all code uses 12s, so a native client that trusts `question_expires_at` shows a timer 4 seconds longer than the one the server scores against.
+- **C2** — a timed-out question is submitted as answer A and can be scored as a deliberate correct answer.
+- **C3** — the resume adapter reads field names the server does not return, so resume always hands back a fresh timer.
+- **C7 blocks Phase 7.** Streaks are computed only at finalize and nothing expires them, so the database cannot tell you a streak is dead — and streak-at-risk push is the highest-value native feature.
+- C4, C5, C6, C8, C10 as capacity allows.
+
+**Exit:**
+- [ ] A4 and A6 resolved; A7 triaged with decisions recorded
 - [ ] C1, C2, C3, C7 fixed with tests
-- [ ] `supabase/tests` runs in CI against a local stack, with production defaults removed
 - [ ] An RLS test asserts `is_correct` is unreadable by `anon` and `authenticated`
 
 ---
@@ -272,5 +364,7 @@ Then execute [release/FIRST_STORE_RELEASE.md](release/FIRST_STORE_RELEASE.md). M
 **Do not start Phase 5 before Phase 4.** A shell without working auth on device produces confident-looking progress on an app nobody can sign into.
 
 **Phase 2 is the one most likely to be skipped and most expensive to skip.** Without a version source of truth there is no Sentry `dist`, so a crash from a four-month-old binary cannot be symbolicated; without a staging environment the first TestFlight build points at production; without the minimum-version gate there is no lever at all when a shipped binary misbehaves.
+
+**Re-evaluate at the 0E gate, then again after Phase 3.** 0E is the first honest checkpoint and the cheapest place to change course.
 
 **Re-evaluate after Phase 3.** That is the honest checkpoint: the export works or it does not, and the real cost of the routing divergence is known rather than estimated. If Phase 3 substantially overruns, that is the signal to revisit [ADR-001](01-architecture-decision.md) — not a sunk-cost reason to push on.

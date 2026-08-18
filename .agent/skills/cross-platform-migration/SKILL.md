@@ -67,7 +67,7 @@ Paths are relative to the repository root.
 
 | Document | What it holds |
 |---|---|
-| [01-architecture-decision.md](../../../docs/cross-platform/01-architecture-decision.md) | ADR-001. The decision, the Phase 0 gate that validates it, and the App Store review posture. |
+| [01-architecture-decision.md](../../../docs/cross-platform/01-architecture-decision.md) | ADR-001. The decision, precondition 0A that validates it, and the App Store review posture. |
 | [02-current-state.md](../../../docs/cross-platform/02-current-state.md) | Pre-migration audit evidence. What the repository actually was before work started. |
 | [03-blocking-fixes.md](../../../docs/cross-platform/03-blocking-fixes.md) | Security, store-compliance and correctness blockers that must land before any external build. |
 | [04-shared-code-architecture.md](../../../docs/cross-platform/04-shared-code-architecture.md) | What is shared vs. platform-specific, **the platform seam**, native capabilities, two builds from one tree. |
@@ -100,6 +100,17 @@ Do not create these as new files — you would fork the source of truth:
 - **Acceptance tests / definition of done** — these are the per-phase **Exit**
   checklists in [05-migration-plan.md](../../../docs/cross-platform/05-migration-plan.md).
   The phase gate *is* the acceptance test.
+
+### The 0E gate is absolute
+
+No substantive migration implementation begins until preconditions **0A–0D** all pass:
+0A proves the packaged Capacitor routing model on real hardware, 0B fixes server-side
+attempt integrity, 0C secures quiz publishing, 0D proves Capacitor-origin CORS from a
+device. **Do not create `ios/`, `android/`, or add any `@capacitor/*` dependency to the
+main branch before 0E clears.**
+
+If 0A fails, revise the architecture and update ADR-001 — do not implement downstream
+work against an architecture that has been disproved.
 
 > **When this skill and a referenced document appear inconsistent, stop and resolve
 > the discrepancy. Do not silently choose one.** Drift is a finding, not a nuisance.

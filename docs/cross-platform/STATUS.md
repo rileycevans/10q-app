@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 0 — Prove it** (not started)
+**Current phase: Phase 0 — Preconditions (0A–0E)** (not started)
 
 Planning and documentation are complete. No migration code has landed. `check-docs`
 reports the static export, Capacitor, both native projects, the platform seam and the
@@ -38,20 +38,34 @@ release scripts as absent — consistent with a migration that has not begun.
 
 ## Blocked
 
-- Nothing.
+- Nothing blocked. But see the external track below — it is the longest lead time in the
+  program and it is not engineering work.
 
 ## Next gate
 
-**Phase 0 exit** — see [05-migration-plan.md](05-migration-plan.md#phase-0--prove-it):
+**The 0E gate** — no substantive migration implementation begins until 0A–0D all pass.
+See [05-migration-plan.md](05-migration-plan.md#phase-0--preconditions).
 
-- [ ] `/play/q/1/ → /play/q/2/` is a client transition on a real device — `GameProvider`
-      not remounted, no white flash
-- [ ] A cold boot at a non-root path resolves (validates `trailingSlash`)
-- [ ] Avatars render (validates `images.unoptimized`)
-- [ ] Findings written up, including anything that contradicts [02-current-state.md](02-current-state.md)
+| | Precondition | Kind |
+|---|---|---|
+| **0A** | Prove the packaged Capacitor routing model on real hardware | architectural go/no-go |
+| **0B** | Fix server-side attempt integrity (`delete-attempt`, Q1 clock, run the RLS suite) | security |
+| **0C** | Secure quiz publishing (`publish-quiz` is unauthenticated) | security |
+| **0D** | Prove Capacitor-origin CORS from a device | architectural go/no-go |
+| **0E** | Gate — native work may now begin | checkpoint |
 
-Phase 1 (security/correctness) and the Apple/Google account setup from Phase 9 can start
-in parallel — the accounts have long lead times and block nothing.
+**Do not create `ios/`, `android/`, or add any `@capacitor/*` dependency before 0E clears.**
+
+0A and 0D are independent of 0B and 0C and can run concurrently. Phase 2 (foundations)
+parallelizes with all of Phase 0.
+
+### External track — start now, in parallel
+
+Apple Developer enrollment, and especially **Google Play production-access eligibility**.
+If the Play account is a personal account created after 2023-11-13, production requires a
+closed test with **12 testers opted in for 14 consecutive days**, then a human-reviewed
+written application. That is a multi-week calendar dependency with no engineering
+shortcut. Decide the account type and start recruiting testers before Phase 0 finishes.
 
 ## Important discoveries
 
@@ -66,6 +80,16 @@ in parallel — the accounts have long lead times and block nothing.
   a second pass to catch. Stub them; do not delete them.
 - **Phase 2 is the most likely to be skipped and the most expensive to skip.** No version
   source of truth means no Sentry `dist`, so an old binary's crash cannot be symbolicated.
+- **CORS fails in the worst possible shape.** `_shared/cors.ts` emits a single static
+  origin. Under Capacitor, leagues and profiles would keep working while the entire game
+  loop fails on every request. Proven in 0D, before anyone can waste a day blaming the
+  client.
+- **Security findings are preconditions, not cleanup.** `delete-attempt` lets an
+  authenticated user read the answer key and replay for a perfect score; `publish-quiz`
+  is unauthenticated. Neither is "Capacitor work", but shipping an IPA/APK makes hidden
+  client behavior trivially inspectable — so they land in 0B/0C, not "after mobile ships".
+- **Google Play account maturation can be a four-week gate.** Scheduling, not
+  architecture — but it must run in parallel from day one.
 
 ## Known documentation gaps
 

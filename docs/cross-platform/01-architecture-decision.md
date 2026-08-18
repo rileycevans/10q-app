@@ -1,6 +1,6 @@
 # ADR-001 — Cross-Platform Client Architecture
 
-**Status:** Accepted (pending Gate 0, see below)
+**Status:** Accepted (pending precondition 0A, see below)
 **Date:** 2026-08-18
 **Decision:** Ship iOS and Android with **Capacitor**, wrapping a statically-exported build of the existing Next.js frontend. Keep one React codebase, one backend, three platform outputs.
 
@@ -75,9 +75,15 @@ None of these is architectural. All are bounded, well-understood work. See [04-m
 
 ---
 
-## Gate 0 — prove it before building anything native
+## Precondition 0A — prove it before building anything native
 
-**Do not start native work until this passes.** One prototype, no product changes, throwaway branch:
+**No substantive migration implementation begins until this passes.** It is precondition **0A** in
+[05-migration-plan.md](05-migration-plan.md), and it sits behind the **0E gate** alongside three others —
+two security preconditions (`delete-attempt`, `publish-quiz`) and one more architectural probe
+(Capacitor-origin CORS). **Do not create `ios/`, `android/`, or add any `@capacitor/*` dependency until
+0E clears.**
+
+One prototype, no product changes, throwaway branch:
 
 1. Set `output: 'export'`, `trailingSlash: true`, `images.unoptimized: true`.
 2. Temporarily stub the four dynamic routes (do **not** delete them to make the build go green — a green build produced by deleting the routes under test proves nothing; this happened during our audit and produced a false positive).
@@ -86,7 +92,7 @@ None of these is architectural. All are bounded, well-understood work. See [04-m
 
    Confirm `/play/q/1/ → /play/q/2/` is a client transition with `GameProvider` intact and no white flash. A `python3 -m http.server` test cannot detect this, because it handles HEAD correctly.
 
-**If Gate 0 fails on the HEAD probe** and cannot be fixed with a Capacitor server plugin, the fallback is to hoist game state above the router (module scope + Capacitor Preferences) so an MPA navigation is survivable. That is a real cost and should be re-weighed against Expo before proceeding.
+**If 0A fails on the HEAD probe** and cannot be fixed with a Capacitor server plugin, the fallback is to hoist game state above the router (module scope + Capacitor Preferences) so an MPA navigation is survivable. That is a real cost and should be re-weighed against Expo before proceeding.
 
 Also worth running as a cheap, high-information probe: add a `webkit` + Mobile Safari project to the existing Playwright config and point it at the current app. Capacitor's iOS runtime *is* WKWebView and its viewport *is* mobile — the two configurations with zero test coverage today. This converts the central assumption of the Capacitor case into a measurement.
 
