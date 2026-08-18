@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# verify — Report the version and build currently live on each channel.
+# Public impact: none
+# Source of truth: docs/cross-platform/release/RELEASE_ARCHITECTURE.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: verify
+
+Report the version and build currently live on each channel.
+
+Intended steps:
+  1. web: deployed Worker version + app_version/app_build
+  2. ios: App Store live version, TestFlight builds, phased-release state
+  3. android: Play production version, track states, staged rollout percentage
+  4. Print the CHANNEL/VERSION/BUILD/STATE/ROLLOUT table
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/RELEASE_ARCHITECTURE.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

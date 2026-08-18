@@ -1,304 +1,91 @@
-# Deployment Guide
+# Deployment
 
-This guide covers deploying the 10Q application to production.
+How 10Q ships today. For the multi-platform release architecture — web + iOS + Android as three independently controllable channels — see [cross-platform/release/](cross-platform/release/).
 
-## Prerequisites
+> This document describes **what exists now**. It deliberately does not describe the target state.
 
-- Supabase project (free tier or higher)
-- Vercel account (or similar hosting for Next.js)
-- Node.js 20+ installed locally
-- Supabase CLI installed (`npm install -g supabase`)
+## Targets
 
-## Environment Variables
+| Component | Target | Trigger |
+|---|---|---|
+| Web app | Cloudflare Workers via OpenNext | automatic, on push to `main` |
+| Supabase migrations | hosted Supabase project | **manual** |
+| Supabase Edge Functions (22) | hosted Supabase project | **manual** |
 
-### Supabase Project Setup
+There is **one environment: production.** No staging exists in Cloudflare, Supabase, Sentry or PostHog. Local development writes into the production PostHog project.
 
-1. Create a new Supabase project at https://supabase.com
-2. Note your project URL and anon key from Settings → API
+## Web
 
-### Required Environment Variables
+`.github/workflows/ci.yml` defines both jobs.
 
-#### For Next.js App (`apps/web/.env.local`)
+**Job `ci`** — runs on every PR and every push to `main`:
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+npm ci → lint → typecheck → test → build → playwright install → test:e2e
 ```
 
-#### For Supabase Edge Functions
-
-Edge Functions automatically have access to:
-- `SUPABASE_URL` (auto-injected)
-- `SUPABASE_ANON_KEY` (auto-injected)
-- `SUPABASE_SERVICE_ROLE_KEY` (auto-injected)
-
-#### For Google OAuth (Optional)
-
-If using Google OAuth:
-1. Create OAuth credentials in Google Cloud Console
-2. Add to Supabase Dashboard → Authentication → Providers → Google
-3. Set redirect URL: `https://your-domain.com/auth/callback`
-
-## Database Setup
-
-### 1. Run Migrations
+**Job `deploy`** — `needs: ci`, and only on push to `main`:
 
 ```bash
-# Link to your Supabase project
-supabase link --project-ref your-project-ref
+npm run deploy --workspace=apps/web
+```
 
-# Run all migrations
+which is `opennextjs-cloudflare build && opennextjs-cloudflare deploy`.
+
+`apps/web/wrangler.jsonc` declares worker `10q-web`, `main: ".open-next/worker.js"`, assets from `.open-next/assets`, and routes `play10q.com/*` and `www.play10q.com/*`. There are no `[env.*]` blocks, no `vars`, and no KV/D1/R2/Queue bindings — all runtime config is inlined at build time through `NEXT_PUBLIC_*`.
+
+`apps/web/open-next.config.ts` is a bare `defineCloudflareConfig()`. Note `patches/@opennextjs+cloudflare+1.17.1.patch`, applied by the root `postinstall` — the adapter is locally patched and version-pinned, which is a standing upgrade cost.
+
+### Known defect
+
+`NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST` are supplied to the **deploy** job but not the **ci** build job. Because `NEXT_PUBLIC_*` is inlined at build time, **the artifact CI verifies has analytics compiled out while the artifact users receive has it compiled in.** Both jobs also carry `SENTRY_AUTH_TOKEN`, so each merge can produce two source-map uploads from two non-identical builds. Fix before adding a third build target.
+
+### Rollback
+
+Cloudflare Workers keeps prior versions; roll back through the Cloudflare dashboard or `wrangler`. There is no scripted rollback and no post-deploy smoke test. See [cross-platform/release/ROLLBACKS.md](cross-platform/release/ROLLBACKS.md).
+
+## Supabase
+
+Not in CI. Deployed by hand against the single hosted project.
+
+```bash
 supabase db push
+supabase functions deploy <name>
 ```
 
-### 2. Verify Schema
+**Ordering rule:** backward-compatible backend changes deploy **before** the clients that need them — never after. This matters more once store binaries exist, because an installed app can lag a contract change by weeks. See the version-skew rule in [cross-platform/release/RELEASE_ARCHITECTURE.md](cross-platform/release/RELEASE_ARCHITECTURE.md).
 
-Check that all tables are created:
-- `quizzes`
-- `questions`
-- `question_choices`
-- `question_tags`
-- `profiles`
-- `attempts`
-- `attempt_answers`
-- `daily_results`
-- `leagues`
-- `league_members`
+**Verify before assuming the daily publish works.** `publish_scheduled_quiz()` selects `WHERE status = 'scheduled'`, but the only CHECK constraint in migration history is `CHECK (status IN ('draft','published','archived'))`. Either the constraint was changed by hand in the dashboard — making migrations non-reproducible — or the cron has matched zero rows since 2026-04-02. See C9 in [cross-platform/03-blocking-fixes.md](cross-platform/03-blocking-fixes.md).
 
-### 3. Enable RLS Policies
+### Scheduled job
 
-All RLS policies are included in the initial migration. Verify they're active:
-```sql
-SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public';
-```
+One pg_cron job, `publish-quiz-daily`, at `30 11 * * *` (11:30 UTC), calling `public.publish_scheduled_quiz()` in-database. It no longer goes over HTTP.
 
-## Edge Functions Deployment
+The `publish-quiz` **Edge Function** is therefore vestigial — and it is **unauthenticated**, so anyone who knows the URL can publish a quiz early. See A2 in [cross-platform/03-blocking-fixes.md](cross-platform/03-blocking-fixes.md).
 
-### Deploy All Functions
+## Environment variables
 
-```bash
-# Deploy all functions at once
-supabase functions deploy
+`apps/web/.env.example` is the reference. Seven variables:
 
-# Or deploy individually
-supabase functions deploy get-current-quiz
-supabase functions deploy start-attempt
-supabase functions deploy submit-answer
-supabase functions deploy resume-attempt
-supabase functions deploy finalize-attempt
-supabase functions deploy get-attempt-results
-supabase functions deploy publish-quiz
-supabase functions deploy get-global-leaderboard
-supabase functions deploy get-league-leaderboard
-supabase functions deploy create-league
-supabase functions deploy get-my-leagues
-supabase functions deploy get-league-details
-supabase functions deploy add-league-member
-supabase functions deploy remove-league-member
-supabase functions deploy delete-league
-supabase functions deploy update-handle
-supabase functions deploy get-profile-by-handle
-```
+| Variable | Used by |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | client + Edge Function base URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client |
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry (absent locally, so Sentry is production-only) |
+| `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | source-map upload at build time |
+| `NEXT_PUBLIC_POSTHOG_KEY` / `NEXT_PUBLIC_POSTHOG_HOST` | analytics |
 
-### Verify Functions
+`SUPABASE_SERVICE_ROLE_KEY` is used only by Edge Functions and `scripts/`. It must never appear under `apps/web/src`.
 
-Check function status in Supabase Dashboard → Edge Functions
+The release identifiers (`app_version`, `app_build`, `release_sha`, `client_platform`, `environment`) do **not exist yet** — see [cross-platform/OBSERVABILITY.md](cross-platform/OBSERVABILITY.md).
 
-## Next.js App Deployment
+## Gaps
 
-### Option 1: Vercel (Recommended)
+Carried into [cross-platform/05-migration-plan.md](cross-platform/05-migration-plan.md) Phase 2:
 
-1. **Connect Repository**
-   - Import your GitHub repository to Vercel
-   - Vercel will auto-detect Next.js
-
-2. **Configure Build Settings**
-   - Root Directory: `apps/web`
-   - Build Command: `npm run build`
-   - Output Directory: `.next`
-
-3. **Add Environment Variables**
-   - Go to Project Settings → Environment Variables
-   - Add:
-     - `NEXT_PUBLIC_SUPABASE_URL`
-     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-4. **Deploy**
-   - Push to main branch (auto-deploys)
-   - Or manually deploy from Vercel dashboard
-
-### Option 2: Self-Hosted
-
-1. **Build the App**
-   ```bash
-   cd apps/web
-   npm run build
-   ```
-
-2. **Start Production Server**
-   ```bash
-   npm start
-   ```
-
-3. **Use Process Manager** (PM2 recommended)
-   ```bash
-   npm install -g pm2
-   pm2 start npm --name "10q-web" -- start
-   pm2 save
-   pm2 startup
-   ```
-
-## Post-Deployment Checklist
-
-### 1. Database
-- [ ] All migrations applied
-- [ ] RLS policies active
-- [ ] Indexes created
-- [ ] Unique constraints in place
-
-### 2. Edge Functions
-- [ ] All functions deployed
-- [ ] Functions accessible via API
-- [ ] CORS headers configured
-- [ ] Error responses follow standard format
-
-### 3. Authentication
-- [ ] Anonymous auth enabled (if using)
-- [ ] Google OAuth configured (if using)
-- [ ] Redirect URLs set correctly
-- [ ] Auth callback route working
-
-### 4. Application
-- [ ] Environment variables set
-- [ ] App builds successfully
-- [ ] Home page loads
-- [ ] Auth flow works
-- [ ] Quiz flow works
-- [ ] Leaderboards load
-- [ ] Profile pages work
-
-### 5. Monitoring
-- [ ] Error logging configured
-- [ ] Performance monitoring set up
-- [ ] Uptime monitoring enabled
-
-## Cron Job Setup
-
-### Quiz Publishing (11:30 UTC Daily)
-
-The quiz publishing is handled by a Supabase cron job defined in:
-`supabase/migrations/20250101000001_publish_quiz_cron.sql`
-
-Verify it's active:
-```sql
-SELECT * FROM cron.job WHERE jobname = 'publish_quiz';
-```
-
-If not active, enable it:
-```sql
-SELECT cron.schedule(
-  'publish_quiz',
-  '30 11 * * *',  -- 11:30 UTC daily
-  $$
-  SELECT net.http_post(
-    url := 'https://your-project.supabase.co/functions/v1/publish-quiz',
-    headers := '{"Authorization": "Bearer YOUR_SERVICE_ROLE_KEY"}'::jsonb
-  ) AS request_id;
-  $$
-);
-```
-
-## Troubleshooting
-
-### Edge Functions Not Working
-
-1. Check function logs in Supabase Dashboard
-2. Verify environment variables are set
-3. Test function directly with curl:
-   ```bash
-   curl -X POST https://your-project.supabase.co/functions/v1/function-name \
-     -H "Authorization: Bearer YOUR_ANON_KEY" \
-     -H "Content-Type: application/json"
-   ```
-
-### Database Connection Issues
-
-1. Verify project URL and keys
-2. Check RLS policies aren't blocking access
-3. Test connection with Supabase client
-
-### Build Failures
-
-1. Check Node.js version (20+ required)
-2. Verify all dependencies installed
-3. Check TypeScript errors: `npm run typecheck`
-4. Review build logs for specific errors
-
-### Authentication Issues
-
-1. Verify auth providers enabled in Supabase Dashboard
-2. Check redirect URLs match exactly
-3. Verify OAuth credentials are correct
-4. Check browser console for errors
-
-## Production Best Practices
-
-### Security
-- Never commit `.env.local` files
-- Use service role key only in Edge Functions (never in client)
-- Enable RLS on all tables
-- Use HTTPS only
-- Set secure cookie flags
-
-### Performance
-- Enable Supabase connection pooling
-- Use database indexes effectively
-- Cache leaderboard data when possible
-- Optimize Edge Function cold starts
-
-### Monitoring
-- Set up error tracking (Sentry, etc.)
-- Monitor Edge Function execution times
-- Track database query performance
-- Set up uptime alerts
-
-## Rollback Procedure
-
-### Rollback Database Migration
-
-```bash
-# List migrations
-supabase migration list
-
-# Rollback to specific migration
-supabase db reset
-supabase db push --version <target-version>
-```
-
-### Rollback Edge Function
-
-```bash
-# Deploy previous version
-supabase functions deploy function-name --version <previous-version>
-```
-
-### Rollback Next.js App
-
-- Vercel: Use deployment history to rollback
-- Self-hosted: Deploy previous build
-
-## Support
-
-For issues or questions:
-1. Check Supabase logs
-2. Review Edge Function logs
-3. Check browser console
-4. Review application logs
-
-## Additional Resources
-
-- [Supabase Documentation](https://supabase.com/docs)
-- [Next.js Deployment](https://nextjs.org/docs/deployment)
-- [Vercel Documentation](https://vercel.com/docs)
-- [Playwright Testing](https://playwright.dev)
-
+- No staging environment anywhere
+- No version source of truth; zero git tags; all `package.json` files frozen at `0.1.0`
+- Supabase not in CI
+- No post-deploy smoke test
+- No scripted rollback
+- CI/deploy build divergence (above)

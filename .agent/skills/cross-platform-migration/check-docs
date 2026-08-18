@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# check-docs — Prove the migration documentation map is intact and report the
+# observed implementation state.
+#
+# The migration skill points agents at authoritative documents and claims the
+# repository is the source of truth. This script tests that claim instead of
+# trusting it: it discovers what actually exists, finds cross-references that
+# point at nothing, and probes the implementation state directly.
+#
+# Run it every time the skill is invoked, before reading anything else.
+# Public impact: none. Read-only.
+set -uo pipefail
+
+cd "$(git rev-parse --show-toplevel)" 2>/dev/null || { echo "not in a git repo"; exit 1; }
+
+fail=0
+red()   { printf '\033[31m%s\033[0m\n' "$*"; }
+green() { printf '\033[32m%s\033[0m\n' "$*"; }
+bold()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
+
+# --- 1. The navigation spine ------------------------------------------------
+# Only the documents this skill navigates by are hardcoded. Everything else is
+# discovered, so a growing doc set does not make this script lie.
+bold "== Navigation spine =="
+SPINE=(
+  docs/cross-platform/STATUS.md
+  docs/cross-platform/01-architecture-decision.md
+  docs/cross-platform/02-current-state.md
+  docs/cross-platform/03-blocking-fixes.md
+  docs/cross-platform/04-shared-code-architecture.md
+  docs/cross-platform/05-migration-plan.md
+)
+for f in "${SPINE[@]}"; do
+  if [ -f "$f" ]; then printf '  ok       %s\n' "$f"
+  else red "  MISSING  $f"; fail=1; fi
+done
+
+# --- 2. What else is actually there -----------------------------------------
+bold "== Discovered migration documents =="
+find docs/cross-platform -name '*.md' 2>/dev/null | sort | while IFS= read -r f; do
+  case " ${SPINE[*]} " in *" $f "*) continue;; esac
+  printf '  %s\n' "$f"
+done
+
+# --- 3. Do the cross-references resolve? ------------------------------------
+bold "== Cross-references =="
+tmp=$(mktemp)
+find docs/cross-platform .agent/skills/cross-platform-migration .agent/skills/release scripts/release \
+     -name '*.md' 2>/dev/null | sort -u | while IFS= read -r src; do
+  dir=$(dirname "$src")
+  grep -oE '\]\([^)]+\)' "$src" 2>/dev/null \
+    | sed -E 's/^\]\(//; s/\)$//; s/#.*$//' \
+    | grep -vE '^(https?:|mailto:|#|$)' \
+    | sort -u \
+    | while IFS= read -r target; do
+        [ -z "$target" ] && continue
+        [ -e "$dir/$target" ] || printf '  BROKEN   %s -> %s\n' "$src" "$target"
+      done
+done > "$tmp"
+
+if [ -s "$tmp" ]; then
+  red "$(cat "$tmp")"
+  echo
+  printf '  %s broken reference(s).\n' "$(wc -l < "$tmp" | tr -d ' ')"
+  echo "  Each is either a document still to be written, or a stale link."
+  echo "  Resolve it — do not silently route around it."
+  fail=1
+else
+  green "  all relative links resolve"
+fi
+rm -f "$tmp"
+
+# --- 4. Observed implementation state ---------------------------------------
+bold "== Implementation state (observed, not assumed) =="
+probe() {
+  if eval "$2" >/dev/null 2>&1; then printf '  present  %s\n' "$1"
+  else                               printf '  absent   %s\n' "$1"; fi
+}
+probe "static export (output: 'export')"        "grep -qE \"output: *['\\\"]export\" apps/web/next.config.ts"
+probe "Capacitor dependency"                    "grep -rqs '@capacitor/core' apps/web/package.json package.json"
+probe "native iOS project"                      "test -d apps/web/ios -o -d ios"
+probe "native Android project"                  "test -d apps/web/android -o -d android"
+probe "platform seam package"                   "test -d packages/platform"
+probe "release scripts implemented"             "test -x scripts/release/preflight && ! grep -qs 'NOT IMPLEMENTED' scripts/release/preflight"
+
+# --- 5. Declared phase ------------------------------------------------------
+bold "== Declared phase (docs/cross-platform/STATUS.md) =="
+if [ -f docs/cross-platform/STATUS.md ]; then
+  grep -m1 -iE '^\*\*Current phase|^Current phase' docs/cross-platform/STATUS.md \
+    || echo "  (no 'Current phase' line found)"
+else
+  red "  STATUS.md missing — the migration has no checkpoint"
+fi
+
+echo
+if [ "$fail" -ne 0 ]; then
+  red "FAIL — the documentation map is not intact."
+  echo "Report this before continuing migration work. A missing document is a real gap,"
+  echo "not a formatting problem."
+  exit 1
+fi
+green "OK — documentation map intact."

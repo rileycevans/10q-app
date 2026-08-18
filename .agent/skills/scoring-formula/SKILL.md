@@ -17,17 +17,17 @@ description: Implement and enforce the single-source scoring formula with step-b
 
 | Area | Files / Paths |
 |------|--------------|
-| **Single source of truth** | `packages/contracts/scoring.ts` |
+| **Single source of truth** | `packages/contracts/src/scoring.ts` |
 | Edge Functions (consumers) | `supabase/functions/submit-answer/`, `supabase/functions/finalize-attempt/` |
-| Tests | Any test file importing from `packages/contracts/scoring.ts` |
+| Tests | Any test file importing from `packages/contracts/src/scoring.ts` |
 
 ## Guidelines
 
-### Constants (All in `packages/contracts/scoring.ts`)
+### Constants (All in `packages/contracts/src/scoring.ts`)
 
 ```typescript
-QUESTION_TIME_LIMIT_MS = 16000
-BONUS_WINDOW_MS       = 10000
+QUESTION_TIME_LIMIT_MS = 12000
+BONUS_WINDOW_MS       = 11000
 BASE_POINTS_CORRECT   = 5
 BASE_POINTS_INCORRECT = 0
 MAX_BONUS_POINTS      = 5
@@ -45,12 +45,12 @@ Never scatter magic numbers. Import from contracts only.
 
 | Elapsed Time | Bonus |
 |-------------|-------|
-| 0–2s | 5 |
-| 2–4s | 4 |
-| 4–6s | 3 |
-| 6–8s | 2 |
-| 8–10s | 1 |
-| 10s+ | 0 |
+| 0–3s | 5 |
+| 3–5s | 4 |
+| 5–7s | 3 |
+| 7–9s | 2 |
+| 9–11s | 1 |
+| 11s+ | 0 |
 
 - Clamp input: `clamped_time_ms = min(max(elapsed_ms, 0), BONUS_WINDOW_MS)`.
 - Convert: `elapsed_seconds = clamped_time_ms / 1000`.
@@ -59,11 +59,11 @@ Never scatter magic numbers. Import from contracts only.
 
 ### Timeout Behavior
 
-If question expired (no answer within 16s):
+If question expired (no answer within 12s):
 - `is_correct = false`
 - `base_points = 0`
 - `bonus_points = 0`
-- `elapsed_ms = 16000`
+- `elapsed_ms = 12000`
 
 ### Per-Question Score
 
@@ -81,13 +81,21 @@ If question expired (no answer within 16s):
 
 ### Implementation Rule
 
-The scoring formula is implemented **once** in `packages/contracts/scoring.ts`. Edge Functions and tests **import and reuse** this implementation. No duplicated formulas.
+The scoring formula has **two** implementations that must be kept identical:
+`packages/contracts/src/scoring.ts` (constants in `packages/contracts/src/constants.ts`) and
+`supabase/functions/_shared/scoring.ts`, a hand-maintained Deno copy that exists because edge
+functions cannot import from the Node workspace package.
+
+**Change one, change the other.** Nothing enforces agreement today.
+
+Note also that `packages/contracts/src/scoring.ts` currently has **zero runtime importers** —
+only its own test imports it. The scoring that actually runs in production is the Deno copy.
 
 ## Anti-Patterns
 
 - Edge Function implements its own bonus calculation instead of importing from contracts
 - Different rounding logic in tests vs. production
-- Magic numbers like `10000` or `5` scattered in code outside `scoring.ts`
+- Magic numbers like `11000` or `5` scattered in code outside `scoring.ts`
 - Bonus calculated as float without integer result
 - Score validation missing or inconsistent
 - `scoring_version` omitted from score records
@@ -96,19 +104,19 @@ The scoring formula is implemented **once** in `packages/contracts/scoring.ts`. 
 
 **Valid implementation:**
 ```typescript
-// packages/contracts/scoring.ts
+// packages/contracts/src/scoring.ts
 export function calculateBonus(elapsed_ms: number): number {
   const clamped = Math.min(Math.max(elapsed_ms, 0), BONUS_WINDOW_MS);
   const elapsedSeconds = clamped / 1000;
 
-  if (elapsedSeconds < 2) return 5;
-  else if (elapsedSeconds < 4) return 4;
-  else if (elapsedSeconds < 6) return 3;
-  else if (elapsedSeconds < 8) return 2;
-  else if (elapsedSeconds < 10) return 1;
+  if (elapsedSeconds < 3) return 5;
+  else if (elapsedSeconds < 5) return 4;
+  else if (elapsedSeconds < 7) return 3;
+  else if (elapsedSeconds < 9) return 2;
+  else if (elapsedSeconds < 11) return 1;
   else return 0;
 }
 
 // Edge Function — imports, does not re-implement
-import { calculateBonus } from "packages/contracts/scoring.ts";
+import { calculateBonus } from "packages/contracts/src/scoring.ts";
 ```

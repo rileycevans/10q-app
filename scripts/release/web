@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# web — Build, deploy and smoke-test the web channel.
+# Public impact: YES - deploys to production
+# Source of truth: docs/cross-platform/release/WEB.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: web
+
+Build, deploy and smoke-test the web channel.
+
+Intended steps:
+  1. preflight
+  2. Build with release identifiers stamped in
+  3. opennextjs-cloudflare build && deploy
+  4. Post-deploy smoke test
+  5. Report the Worker version id for rollback
+  6. Print observability links filtered to this release
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/WEB.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

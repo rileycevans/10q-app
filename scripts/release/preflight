@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# preflight — Verify the repo, gates and credentials are ready for a release.
+# Public impact: none
+# Source of truth: docs/cross-platform/release/RELEASE_ARCHITECTURE.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: preflight
+
+Verify the repo, gates and credentials are ready for a release.
+
+Intended steps:
+  1. Working tree clean; branch current with origin/main
+  2. Version identifiers resolve (see VERSIONING.md)
+  3. Gates pass for the target channel (see docs/cross-platform/TESTING.md)
+  4. Both build targets compile (web + native)
+  5. Required credentials present for the target channel
+  6. Backend compatibility: no Edge Function change that breaks a client
+     version still in the field
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/RELEASE_ARCHITECTURE.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

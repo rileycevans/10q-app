@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# android-build — Produce a signed Android AAB from the native static export.
+# Public impact: none
+# Source of truth: docs/cross-platform/release/ANDROID.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: android-build
+
+Produce a signed Android AAB from the native static export.
+
+Intended steps:
+  1. preflight
+  2. scripts/build-native.sh
+  3. npx cap sync android
+  4. gradle bundleRelease with the upload key
+  5. Upload sourcemaps to Sentry pinned to release + dist
+  6. ARCHIVE the bundle and sourcemaps for this versionCode
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/ANDROID.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

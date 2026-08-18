@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# ios-build — Produce a signed iOS IPA from the native static export.
+# Public impact: none
+# Source of truth: docs/cross-platform/release/IOS.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: ios-build
+
+Produce a signed iOS IPA from the native static export.
+
+Intended steps:
+  1. preflight
+  2. scripts/build-native.sh  (output:'export', middleware moved aside)
+  3. npx cap sync ios
+  4. xcodebuild archive && export IPA
+  5. Upload sourcemaps to Sentry pinned to release + dist
+  6. ARCHIVE the bundle and sourcemaps for this app_build - they must stay
+     retrievable long after the branch moves on
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/IOS.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

@@ -2,74 +2,84 @@
 
 A high-stakes daily trivia game.
 
+**Live:** [play10q.com](https://play10q.com)
+**Agents:** start at [CLAUDE.md](CLAUDE.md).
+
 ## Overview
 
-10Q is a daily trivia game where:
-- Every day at **11:30 UTC**, a new quiz of **10 multiple-choice questions** is released
-- Each user gets **one attempt only** per day
-- Questions have a 16-second time limit with speed bonuses
+Every day at **11:30 UTC** a new quiz of **10 multiple-choice questions** drops, simultaneously worldwide. Every player gets identical questions in identical order. One attempt per player per day.
 
-## MVP Features
+Each question has a **12-second** limit with a step-based speed bonus. Timing and scoring are server-authoritative — the client never computes a score and never sends timing data.
 
-### Core Gameplay
-- 10 questions per day
-- 4 multiple-choice answers per question
-- 16 second max per question
-- Linear speed bonus in first 10 seconds
-- Immediate correctness feedback
-- Automatic advance after answer
+| | |
+|---|---|
+| Base points | 5 correct / 0 incorrect |
+| Speed bonus | 5 under 3s · 4 under 5s · 3 under 7s · 2 under 9s · 1 under 11s · 0 after |
+| Max score | 100 (10 × 10) |
 
-### Identity
-- Anonymous play by default
-- Auto-generated handles (Xbox-style)
-- Google sign-in upgrade
-- Handle customization (once every 30 days)
+## Features
 
-### Results
-- Breakdown per question
-- Time bonus per question
-- Total daily score
+**Gameplay** — 10 questions, 4 answers each, immediate correctness feedback, automatic advance, resumable attempts, permanent results for that day.
 
-### Persistence
-- Attempt is saved and resumable
-- Results are permanently viewable for that day
+**Identity** — anonymous play by default; Google and Apple sign-in upgrade the anonymous account in place, preserving scores, streaks and leagues. Handle customization once every 30 days.
 
-### Leaderboards
-Global leaderboards:
-- Today
-- Last 7 days
-- Last 30 days
-- Last 365 days
+**Streaks** — current and longest, keyed to the quiz's UTC date so they are immune to the player's timezone.
 
-### Leagues
-- Create private leagues
-- Owner can add/remove members
-- League-scoped leaderboards
+**Leaderboards** — global, over today / 7 / 30 / 365 days, cumulative or average, top-100 or around-me.
 
-### Stats
-- All-time best score
-- All-time worst score
-- Category performance
+**Leagues** — private, invite-code based, with league-scoped leaderboards.
 
-## Getting Started
+**Stats** — all-time best and worst, per-category performance, public profile at `/u/<handle>`.
 
-_More details coming soon as the project develops._
+## Stack
 
-## Production domain & DNS
+| Layer | Tech |
+|---|---|
+| Client | Next.js 16 (App Router), React 19, Tailwind 4, framer-motion |
+| Backend | Supabase — Postgres + RLS, 22 Edge Functions, pg_cron |
+| Hosting | Cloudflare Workers via OpenNext |
+| Analytics | PostHog |
+| Errors | Sentry |
 
-- **Primary domain**: `https://play10q.com`
-- **Registrar**: GoDaddy (registration and renewal stay here)
-- **DNS host**: Cloudflare (authoritative nameservers `emma.ns.cloudflare.com`, `vicente.ns.cloudflare.com`)
-- **Key records in Cloudflare** (mirroring the original GoDaddy DNS):
-  - **A** `play10q.com` → `199.36.158.100`
-  - **CNAME** `www.play10q.com` → `rileycevans.github.io`
-  - **CNAME** `pay.play10q.com` → `paylinks.commerce.godaddy.com`
-  - **TXT** `play10q.com` → `google-site-verification=MEeCxPSRZARu8lAXR_uNkY1DxCTpE36ciRqMon3WMNc`
-  - **TXT** `play10q.com` → `hosting-site=q-production-e4848`
+Admin authoring lives in a separate repo, `10q-db`.
 
-If the Cloudflare zone ever needs to be recreated, `scripts/cloudflare-dns-setup.sh` can be run (with a valid Cloudflare API token and the `play10q.com` zone ID) to restore this baseline DNS configuration.
+## Getting started
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Copy `apps/web/.env.example` to `apps/web/.env.local` and fill in the Supabase, Sentry and PostHog values.
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+```
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for how it ships.
 
 ## Documentation
 
-See the [Notion Product Hub](https://www.notion.so/2d49608dd8f3813eb948ef0afa7e511f) for full specifications.
+| | |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Agent entry point — architecture rules and repo map |
+| [docs/cross-platform/](docs/cross-platform/) | Web + iOS + Android program |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | How deployment works today |
+| `.agent/skills/` | Conventions, as agent skills |
+| `.cursor/rules/` | The same conventions for Cursor |
 
+Product specifications live in Confluence (space `MFS`).
+
+## Production domain and DNS
+
+- **Domain:** `play10q.com` · registrar GoDaddy · DNS on Cloudflare (`emma.ns.cloudflare.com`, `vicente.ns.cloudflare.com`)
+- Traffic for `play10q.com/*` and `www.play10q.com/*` is served by the **`10q-web` Cloudflare Worker** (`apps/web/wrangler.jsonc`).
+
+`scripts/cloudflare-dns-setup.sh` can restore a baseline DNS configuration if the zone is ever recreated.
+
+> **Note:** the DNS baseline in that script predates the move to Cloudflare Workers and still contains records from an earlier GitHub Pages / Firebase Hosting setup — including `CNAME www → rileycevans.github.io` and `TXT hosting-site=…`. Reconcile it against the live zone before running it.
