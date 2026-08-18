@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Rubik, Bungee } from "next/font/google";
 import "./globals.css";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
@@ -35,6 +35,24 @@ export const metadata: Metadata = {
     title: "10Q - Daily Trivia Game",
     description: "10 questions. One attempt. Every day at 11:30 UTC. How much do you really know?",
   },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "10Q",
+    // Matches --ink, so the iOS status bar blends with the app chrome.
+    statusBarStyle: "black-translucent",
+  },
+};
+
+// Brand purple behind the status/nav bars in installed and native shells.
+export const viewport: Viewport = {
+  themeColor: "#1A1A21",
 };
 
 export default function RootLayout({
