@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# android-submit — Upload an AAB to a Play testing track.
+# Public impact: none for the public - does NOT publish to production
+# Source of truth: docs/cross-platform/release/ANDROID.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: android-submit
+
+Upload an AAB to a Play testing track.
+
+Intended steps:
+  1. Verify the AAB matches the expected version/versionCode
+  2. Upload to the named track (internal | closed | open)
+  3. Report review state; respect Managed Publishing if enabled
+  4. Print the track smoke checklist
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/ANDROID.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

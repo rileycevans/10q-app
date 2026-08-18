@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# ios-submit — Upload an IPA to TestFlight.
+# Public impact: none for the public - does NOT submit to App Store review
+# Source of truth: docs/cross-platform/release/IOS.md
+set -euo pipefail
+
+cat >&2 <<'MSG'
+NOT IMPLEMENTED: ios-submit
+
+Upload an IPA to TestFlight.
+
+Intended steps:
+  1. Verify the IPA matches the expected version/build
+  2. Upload via App Store Connect API
+  3. Wait for processing; report status
+  4. Report which internal/external groups receive it
+  5. Print the TestFlight smoke checklist (the native-only paths
+     Playwright cannot cover)
+
+Until this is implemented, follow the procedure in
+docs/cross-platform/release/IOS.md manually, and say explicitly that
+you did so rather than reporting that this script passed.
+MSG
+exit 1

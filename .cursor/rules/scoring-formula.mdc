@@ -14,9 +14,9 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 
 ### Constants Location
 
-- Define all scoring constants in `packages/contracts/scoring.ts`:
-  - `QUESTION_TIME_LIMIT_MS = 16000`
-  - `BONUS_WINDOW_MS = 10000`
+- Define all scoring constants in `packages/contracts/src/scoring.ts`:
+  - `QUESTION_TIME_LIMIT_MS = 12000`
+  - `BONUS_WINDOW_MS = 11000`
   - `BASE_POINTS_CORRECT = 5`
   - `BASE_POINTS_INCORRECT = 0`
   - `MAX_BONUS_POINTS = 5`
@@ -25,7 +25,7 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 
 ### Scoring Implementation
 
-- Implement scoring formula once in `packages/contracts/scoring.ts`.
+- Implement scoring formula once in `packages/contracts/src/scoring.ts`.
 - Edge Functions and tests must import and reuse this implementation.
 - No duplicated formulas allowed.
 
@@ -38,12 +38,12 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 
 - Bonus uses step-based tiers from 0–10 seconds, 0 after 10 seconds.
 - Step-based bonus tiers:
-  - 0–2s: 5 bonus points
-  - 2–4s: 4 bonus points
-  - 4–6s: 3 bonus points
-  - 6–8s: 2 bonus points
-  - 8–10s: 1 bonus point
-  - 10s+: 0 bonus points
+  - 0–3s: 5 bonus points
+  - 3–5s: 4 bonus points
+  - 5–7s: 3 bonus points
+  - 7–9s: 2 bonus points
+  - 9–11s: 1 bonus point
+  - 11s+: 0 bonus points
 - `clamped_time_ms = min(max(elapsed_ms, 0), BONUS_WINDOW_MS)`.
 - Convert to seconds: `elapsed_seconds = clamped_time_ms / 1000`.
 - Bonus is an integer value (no rounding needed).
@@ -51,11 +51,11 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 
 ### Timeout Behavior
 
-- If question expired (no answer within 16s):
+- If question expired (no answer within 12s):
   - `is_correct = false`.
   - `base_points = 0`.
   - `bonus_points = 0`.
-  - `elapsed_ms = 16000`.
+  - `elapsed_ms = 12000`.
 
 ### Score Invariants
 
@@ -75,16 +75,16 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
 <example>
   Valid implementation:
   ```typescript
-  // packages/contracts/scoring.ts
+  // packages/contracts/src/scoring.ts
   export function calculateBonus(elapsed_ms: number): number {
     const clamped = Math.min(Math.max(elapsed_ms, 0), BONUS_WINDOW_MS);
     const elapsedSeconds = clamped / 1000;
     
-    if (elapsedSeconds < 2) return 5;
-    else if (elapsedSeconds < 4) return 4;
-    else if (elapsedSeconds < 6) return 3;
-    else if (elapsedSeconds < 8) return 2;
-    else if (elapsedSeconds < 10) return 1;
+    if (elapsedSeconds < 3) return 5;
+    else if (elapsedSeconds < 5) return 4;
+    else if (elapsedSeconds < 7) return 3;
+    else if (elapsedSeconds < 9) return 2;
+    else if (elapsedSeconds < 11) return 1;
     else return 0;
   }
   ```
@@ -96,7 +96,7 @@ description: "Implement scoring formula once in contracts; enforce exact math, r
   Invalid implementation:
   - Edge Function implements its own bonus calculation
   - Different rounding logic in tests vs production
-  - Magic numbers like `10000` or `5` scattered in code
+  - Magic numbers like `11000` or `5` scattered in code
   - Bonus calculated as float without rounding
   - Score validation missing or inconsistent
 </example>

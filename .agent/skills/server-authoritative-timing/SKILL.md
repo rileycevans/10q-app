@@ -5,6 +5,18 @@ description: Enforce server-only timestamps for question timing, answer submissi
 
 # Server-Authoritative Timing & Anti-Cheat
 
+
+> ⚠️ **KNOWN DRIFT — the database does not match this doc.** The trigger
+> `enforce_question_timing` still forces `current_question_expires_at :=
+> current_question_started_at + INTERVAL '16 seconds'`, and
+> `attempt_answers.time_ms` still has `CHECK (time_ms BETWEEN 0 AND 16000)`.
+> Every code path uses 12000ms, so the persisted expiry is 4 seconds longer
+> than the window the server actually scores against. Tracked as C1 in
+> `docs/cross-platform/03-blocking-fixes.md`. **Fix the migration, not this doc.**
+>
+> Note also that `supabase/functions/start-question-timer` now owns per-question
+> timer stamping (commit `0f9413d`), which this doc predates.
+
 ## When This Skill Applies
 
 - Implementing question timing or countdown UI
@@ -26,10 +38,10 @@ description: Enforce server-only timestamps for question timing, answer submissi
 
 ### Canonical Timestamps (All Server `now()`)
 
-- Store `question_presented_at` TIMESTAMPTZ in `attempts` table — set to server `now()` when question starts.
-- Store `current_question_expires_at` TIMESTAMPTZ = `question_presented_at + 16 seconds`.
+- Store `current_question_started_at` TIMESTAMPTZ in `attempts` table — set to server `now()` when question starts.
+- Store `current_question_expires_at` TIMESTAMPTZ = `current_question_started_at + 12 seconds`.
 - On answer submission, store `answered_at` TIMESTAMPTZ = server `now()`.
-- Compute `elapsed_ms = clamp(answered_at - question_presented_at, 0, 16000)`.
+- Compute `elapsed_ms = clamp(answered_at - current_question_started_at, 0, 12000)`.
 
 **Why server-only:** Client clocks can be manipulated. In a competitive quiz game, even milliseconds of bonus depend on honest timing. Server `now()` is the only trustworthy source.
 
@@ -41,12 +53,12 @@ The client may send **only**:
 - `selected_choice`
 - Optional `seen_at` (for telemetry only — never used for scoring)
 
-The server **ignores** all client-provided timing data and computes everything from stored `question_presented_at` + server `now()`.
+The server **ignores** all client-provided timing data and computes everything from stored `current_question_started_at` + server `now()`.
 
 ### Resume Behavior
 
 - On resume, server computes remaining time: `remaining_ms = max(0, current_question_expires_at - now())`.
-- If `now() - question_presented_at >= 16000`, the question is expired:
+- If `now() - current_question_started_at >= 12000`, the question is expired:
   - Mark as `answer_kind = 'timeout'` with `selected_answer_id = NULL`.
   - Set `is_correct = false`, `base_points = 0`, `bonus_points = 0`.
   - Auto-advance to next question (increment `current_index`).
@@ -60,8 +72,8 @@ The server **ignores** all client-provided timing data and computes everything f
 
 ### Database Constraints
 
-- `attempts.current_question_expires_at` must equal `current_question_started_at + INTERVAL '16 seconds'` — enforce via CHECK constraint or trigger.
-- `attempt_answers.time_ms` must be `BETWEEN 0 AND 16000`.
+- `attempts.current_question_expires_at` must equal `current_question_started_at + INTERVAL '12 seconds'` — enforce via CHECK constraint or trigger.
+- `attempt_answers.time_ms` must be `BETWEEN 0 AND 12000`.
 
 ## Anti-Patterns
 
@@ -78,7 +90,7 @@ The server **ignores** all client-provided timing data and computes everything f
 ```
 1. Edge Function receives: { attempt_id, question_id, selected_choice }
 2. Server reads attempts.current_question_started_at from DB
-3. Server computes: elapsed_ms = clamp(now() - current_question_started_at, 0, 16000)
+3. Server computes: elapsed_ms = clamp(now() - current_question_started_at, 0, 12000)
 4. Server writes attempt_answers with server-computed time_ms
 5. Server increments attempts.current_index
 ```
