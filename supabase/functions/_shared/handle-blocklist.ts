@@ -1,26 +1,11 @@
 /**
- * Handle content filtering.
+ * Handle content filtering (for Edge Functions).
  *
- * Handles are public: they appear on global leaderboards and in leagues, which
- * makes them user-generated content under App Store Guideline 1.2 and Google
- * Play's user-generated content policy. Both expect a filter for objectionable
- * content in addition to a way to report what slips through.
- *
- * This is deliberately a small, high-confidence list rather than an exhaustive
- * profanity filter. Handles are alphanumeric with no separators, so substring
- * matching produces false positives that are worse than the misses: the classic
- * "Scunthorpe problem" would reject a legitimate handle and the player has no
- * idea why. Two rules keep that in check:
- *
- *   1. Slurs and sexual terms match as substrings — there is no innocent handle
- *      containing them, and they are what actually has to be kept off a
- *      leaderboard.
- *   2. Milder profanity matches only as a whole word or with digits around it
- *      ("Shit", "Shit42"), so "Bassist", "Assassin", "Cocktail", "Analyst" and
- *      "Titan" are all accepted.
- *
- * Anything this misses is caught by user reports, which is the other half of
- * the requirement.
+ * Deno cannot import the @10q/contracts workspace package, so this mirrors
+ * packages/contracts/src/handle-blocklist.ts. The two must stay in sync:
+ * client-side validation is a convenience, but this copy is the one that
+ * actually enforces the rule, since a direct API call skips the browser
+ * entirely. Tests for the shared logic live with the contracts copy.
  */
 
 /**

@@ -3,6 +3,8 @@
  * Allows users to customize their handle (once every 30 days)
  */
 
+import { containsBlockedContent } from "../_shared/handle-blocklist.ts";
+
 // Inline CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,6 +99,12 @@ function validateHandle(handle: string): { valid: boolean; error?: string } {
 
   if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(trimmed)) {
     return { valid: false, error: 'Handle must start with a letter and contain only letters and numbers' };
+  }
+
+  // Enforced here rather than only in the browser: the client check is a
+  // convenience, but a direct call to this endpoint would otherwise skip it.
+  if (containsBlockedContent(trimmed)) {
+    return { valid: false, error: "That handle isn't available. Please choose another." };
   }
 
   return { valid: true };
