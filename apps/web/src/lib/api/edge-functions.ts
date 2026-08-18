@@ -584,6 +584,20 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  // Permanently deletes the caller's account and all personal data.
+  // Not retried: deletion is irreversible, so a retry after an ambiguous
+  // failure risks acting on an account that is already gone.
+  deleteAccount: () =>
+    callEdgeFunction<{
+      success: boolean;
+      transferred_leagues: number;
+    }>('delete-account', {
+      method: 'POST',
+      body: { confirm: true },
+      requireAuth: true,
+      retry: false,
+    }),
+
   getProfileByHandle: (handle: string) =>
     callEdgeFunction<{
       player_id: string;

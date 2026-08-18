@@ -48,3 +48,18 @@ export async function updateHandle(handle: string) {
   }
   return response.data;
 }
+
+/**
+ * Permanently deletes the signed-in account and every piece of personal data
+ * attached to it. Leagues the player owns are handed to the longest-standing
+ * remaining member; leagues where they were the only member are removed.
+ *
+ * Irreversible. Callers must confirm with the user first.
+ */
+export async function deleteAccount() {
+  const response = await edgeFunctions.deleteAccount();
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message || 'Failed to delete account');
+  }
+  return response.data;
+}

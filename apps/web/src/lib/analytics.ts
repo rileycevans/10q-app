@@ -159,6 +159,12 @@ export function trackHandleUpdate(props: {
   capture('handle_update', props);
 }
 
+// Fired before the account is destroyed — afterwards there is no session left
+// to attribute the event to.
+export function trackAccountDeleted() {
+  capture('account_deleted');
+}
+
 // ── Auth events ─────────────────────────────────────────────────────
 
 export function trackSignIn(props: {
