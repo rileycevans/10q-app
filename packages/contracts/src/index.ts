@@ -7,4 +7,5 @@ export * from "./constants";
 export * from "./scoring";
 export * from "./errors";
 export * from "./handles";
+export * from "./handle-blocklist";
 
