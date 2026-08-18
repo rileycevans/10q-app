@@ -584,6 +584,16 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  reportHandle: (handle: string, reason: string, details?: string) =>
+    callEdgeFunction<{
+      success: boolean;
+      duplicate: boolean;
+    }>('report-handle', {
+      method: 'POST',
+      body: { handle, reason, details },
+      requireAuth: true,
+    }),
+
   // Permanently deletes the caller's account and all personal data.
   // Not retried: deletion is irreversible, so a retry after an ambiguous
   // failure risks acting on an account that is already gone.

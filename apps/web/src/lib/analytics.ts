@@ -165,6 +165,14 @@ export function trackAccountDeleted() {
   capture('account_deleted');
 }
 
+// Deliberately records only the reason, never who was reported: the reported
+// handle is personal data and doesn't belong in analytics.
+export function trackHandleReported(props: {
+  reason: string;
+}) {
+  capture('handle_reported', props);
+}
+
 // ── Auth events ─────────────────────────────────────────────────────
 
 export function trackSignIn(props: {

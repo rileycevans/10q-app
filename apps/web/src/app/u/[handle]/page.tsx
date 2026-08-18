@@ -8,6 +8,8 @@ import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
 import { ProfileStatsCard } from '@/components/ProfileStatsCard';
 import dynamic from 'next/dynamic';
 import { trackScreenView, trackProfileView, trackAppError } from '@/lib/analytics';
+import { ReportHandleModal } from '@/components/ReportHandleModal';
+import { getSession } from '@/lib/auth';
 
 const AuthButton = dynamic(
   () => import('@/components/AuthButton').then((mod) => mod.AuthButton),
@@ -22,6 +24,25 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  // Null until the session resolves; used to hide the report control on the
+  // viewer's own profile, where reporting is meaningless.
+  const [viewerId, setViewerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getSession()
+      .then((session) => {
+        if (mounted) setViewerId(session?.user?.id ?? null);
+      })
+      .catch(() => {
+        // Not signed in, or the session failed to load. The report control
+        // stays visible; the endpoint rejects unauthenticated calls anyway.
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -121,6 +142,16 @@ export default function ProfilePage() {
           <p className="font-body text-sm text-ink/80 mb-4">
             Joined {new Date(profile.created_at).toLocaleDateString()}
           </p>
+
+          {viewerId !== profile.player_id && (
+            <button
+              type="button"
+              onClick={() => setReportOpen(true)}
+              className="font-body text-xs font-bold text-ink/50 hover:text-ink underline underline-offset-2"
+            >
+              Report this handle
+            </button>
+          )}
         </div>
 
         {/* Stats */}
@@ -178,6 +209,12 @@ export default function ProfilePage() {
           Go Home
         </button>
       </div>
+
+      <ReportHandleModal
+        handle={profile.handle_display}
+        isOpen={reportOpen}
+        onClose={() => setReportOpen(false)}
+      />
     </ArcadeBackground>
   );
 }
