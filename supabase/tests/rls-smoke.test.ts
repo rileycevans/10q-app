@@ -7,11 +7,36 @@
 import { createClient } from "@supabase/supabase-js";
 import { describe, it, expect, beforeAll } from "vitest";
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "https://zcvwamziybpslpavjljw.supabase.co";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjdndhbXppeWJwc2xwYXZqbGp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczMDI2NDYsImV4cCI6MjA4Mjg3ODY0Nn0.GWoRvLok0PFJNh84EMjyNulyV_k57iHV0OF5gOdu0lE";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+// No defaults. These previously fell back to the *production* URL and anon
+// key, so running the suite with no environment set pointed destructive RLS
+// probes at live user data. The tests now skip unless a stack is named
+// explicitly — see the guard below.
+const SUPABASE_URL = process.env.SUPABASE_URL ?? "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
-describe("RLS Smoke Tests", () => {
+/**
+ * Refuse to run against anything that is not a local stack unless the operator
+ * says so out loud. `supabase start` serves 127.0.0.1:54321; CI uses the same.
+ * Set ALLOW_NON_LOCAL_RLS_TESTS=1 to deliberately target a remote branch.
+ */
+const isLocalStack = /^https?:\/\/(127\.0\.0\.1|localhost|host\.docker\.internal)(:\d+)?$/
+  .test(SUPABASE_URL);
+const allowNonLocal = process.env.ALLOW_NON_LOCAL_RLS_TESTS === "1";
+const hasCredentials = SUPABASE_URL !== "" && SUPABASE_ANON_KEY !== "";
+const shouldRun = hasCredentials && (isLocalStack || allowNonLocal);
+
+if (hasCredentials && !isLocalStack && !allowNonLocal) {
+  throw new Error(
+    `RLS smoke tests refused to run against non-local SUPABASE_URL (${SUPABASE_URL}). ` +
+      "Point them at a local stack, or set ALLOW_NON_LOCAL_RLS_TESTS=1 deliberately.",
+  );
+}
+
+// Skipped rather than failed when no stack is configured, so `npm test` is
+// runnable on a laptop without Docker. CI starts a local stack and therefore
+// runs them for real — see .github/workflows/ci.yml.
+describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
   let anonClient: ReturnType<typeof createClient>;
   let serviceClient: ReturnType<typeof createClient>;
 

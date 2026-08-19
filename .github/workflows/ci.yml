@@ -53,6 +53,56 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
+  # The RLS suite proves the access-control invariants that the Edge Functions
+  # depend on. It needs a real Postgres with the migrations applied, so it runs
+  # against a local Supabase stack rather than in the main job.
+  #
+  # Before blocking-fix A5 this suite was invisible to CI (supabase/tests was
+  # not in the root workspaces array) *and* defaulted to the production URL and
+  # anon key — so the only way it ever ran was against live user data. That is
+  # how A1 and A2 survived. It is now a required check.
+  rls:
+    name: RLS Smoke Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `supabase start` mints per-run keys; capture them rather than
+      # hardcoding, so nothing in the repo carries a usable credential.
+      - name: Start local Supabase stack
+        run: |
+          supabase start
+          {
+            echo "SUPABASE_URL=$(supabase status --output json | jq -r '.API_URL')"
+            echo "SUPABASE_ANON_KEY=$(supabase status --output json | jq -r '.ANON_KEY')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')"
+          } >> "$GITHUB_ENV"
+
+      - name: Run RLS smoke tests
+        # Local stack only. The suite refuses any non-local URL unless
+        # ALLOW_NON_LOCAL_RLS_TESTS is set deliberately.
+        run: npm run test --workspace=supabase/tests
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop
+
   deploy:
     name: Deploy to Cloudflare
     needs: ci

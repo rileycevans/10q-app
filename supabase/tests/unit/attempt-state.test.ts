@@ -3,6 +3,7 @@ import {
   classifyAttempt,
   computeNextQuestionTimings,
   isUniqueViolation,
+  MAX_FIRST_QUESTION_START_DELAY_MS,
   MAX_QUESTIONS_PER_QUIZ,
   planQuestionTimerStart,
   validateFinalize,
@@ -271,5 +272,126 @@ describe("isUniqueViolation", () => {
 
   it("returns false when the error has no code", () => {
     expect(isUniqueViolation({})).toBe(false);
+  });
+});
+
+/**
+ * Blocking-fix A3 — the Q1 clock is client-triggered.
+ *
+ * start-attempt returns all ten questions while leaving Q1's timer unstamped,
+ * so without a bound a scripted client can research Q1 indefinitely and then
+ * fire start-question-timer + submit-answer back-to-back for the maximum speed
+ * bonus. The clamp backdates the clock to the attempt's start rather than
+ * rejecting, so a genuinely slow device is charged the delay instead of being
+ * locked out of the quiz.
+ */
+describe("planQuestionTimerStart — late Q1 start clamp (A3)", () => {
+  const TIME_LIMIT_MS = 12_000;
+  const attemptStartedAt = "2026-04-20T12:00:00.000Z";
+  const attemptStartedMs = Date.parse(attemptStartedAt);
+
+  function planAt(elapsedMs: number) {
+    return planQuestionTimerStart(
+      {
+        finalized_at: null,
+        current_question_started_at: null,
+        current_question_expires_at: null,
+        started_at: attemptStartedAt,
+      },
+      attemptStartedMs + elapsedMs,
+      TIME_LIMIT_MS,
+    );
+  }
+
+  it("starts the clock at now for a prompt request", () => {
+    const plan = planAt(2_000);
+    expect(plan).toEqual({
+      action: "start",
+      questionStartedAt: new Date(attemptStartedMs + 2_000).toISOString(),
+      questionExpiresAt: new Date(attemptStartedMs + 2_000 + TIME_LIMIT_MS)
+        .toISOString(),
+    });
+  });
+
+  it("still starts at now exactly on the boundary", () => {
+    const plan = planAt(MAX_FIRST_QUESTION_START_DELAY_MS);
+    expect(plan).toMatchObject({
+      action: "start",
+      questionStartedAt: new Date(
+        attemptStartedMs + MAX_FIRST_QUESTION_START_DELAY_MS,
+      ).toISOString(),
+    });
+  });
+
+  it("backdates to the attempt start once past the boundary", () => {
+    const plan = planAt(MAX_FIRST_QUESTION_START_DELAY_MS + 1);
+    expect(plan).toEqual({
+      action: "start",
+      questionStartedAt: attemptStartedAt,
+      questionExpiresAt: new Date(attemptStartedMs + TIME_LIMIT_MS)
+        .toISOString(),
+    });
+  });
+
+  it("denies the exploit: a 10-minute stall yields an already-expired window", () => {
+    const tenMinutes = 10 * 60_000;
+    const plan = planAt(tenMinutes);
+    expect(plan.action).toBe("start");
+    if (plan.action !== "start") return;
+
+    // The window is backdated, so by the time the attacker submits, the
+    // server's elapsed is already past the limit — no speed bonus, and the
+    // answer scores as a timeout rather than a sub-3s perfect.
+    const expiresMs = Date.parse(plan.questionExpiresAt);
+    expect(expiresMs).toBeLessThan(attemptStartedMs + tenMinutes);
+  });
+
+  it("is unchanged when started_at is absent (back-compat)", () => {
+    const now = attemptStartedMs + 10 * 60_000;
+    const plan = planQuestionTimerStart(
+      {
+        finalized_at: null,
+        current_question_started_at: null,
+        current_question_expires_at: null,
+      },
+      now,
+      TIME_LIMIT_MS,
+    );
+    expect(plan).toMatchObject({
+      action: "start",
+      questionStartedAt: new Date(now).toISOString(),
+    });
+  });
+
+  it("ignores an unparseable started_at rather than throwing", () => {
+    const now = attemptStartedMs + 10 * 60_000;
+    const plan = planQuestionTimerStart(
+      {
+        finalized_at: null,
+        current_question_started_at: null,
+        current_question_expires_at: null,
+        started_at: "not-a-date",
+      },
+      now,
+      TIME_LIMIT_MS,
+    );
+    expect(plan).toMatchObject({
+      action: "start",
+      questionStartedAt: new Date(now).toISOString(),
+    });
+  });
+
+  it("does not clamp an already-started timer (noop still wins)", () => {
+    const plan = planQuestionTimerStart(
+      {
+        finalized_at: null,
+        current_question_started_at: "2026-04-20T12:00:05.000Z",
+        current_question_expires_at: "2026-04-20T12:00:17.000Z",
+        started_at: attemptStartedAt,
+      },
+      attemptStartedMs + 10 * 60_000,
+      TIME_LIMIT_MS,
+    );
+    expect(plan.action).toBe("noop");
   });
 });
