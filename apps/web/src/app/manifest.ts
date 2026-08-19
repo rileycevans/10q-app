@@ -6,6 +6,11 @@ import type { MetadataRoute } from 'next';
  * Serves the installable-web-app case and doubles as the source of truth for
  * the native shells' name, colours and icons.
  */
+// Required by `output: 'export'`: the manifest is a route handler, and export
+// mode needs to know it can be rendered once at build time. Harmless on the
+// SSR web build — the manifest is static either way.
+export const dynamic = 'force-static';
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: '10Q - Daily Trivia Game',

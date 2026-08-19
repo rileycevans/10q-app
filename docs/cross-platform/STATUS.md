@@ -16,7 +16,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 | | Precondition | State |
 |---|---|---|
-| **0A** | Packaged Capacitor routing model on real hardware | **not started** — unblocked, see below |
+| **0A** | Packaged Capacitor routing model on real hardware | **in progress, blocked on tooling** — see below |
 | **0B** | Server-side attempt integrity | **A1, A3 fixed; A5 partly** — RLS tests still stale |
 | **0C** | Secure quiz publishing | **done** |
 | **0D** | Capacitor-origin CORS from a device | **not started** — latent, not a live break |
@@ -26,13 +26,47 @@ No migration code has landed. `check-docs` still reports the static export,
 Capacitor, both native projects, the platform seam and the release scripts as
 absent.
 
-**0A is no longer blocked on tooling.** Xcode 26.6 previously could not load
-`IDESimulatorFoundation` and could not even list a project's schemes;
-`sudo xcodebuild -runFirstLaunch` fixed it. Verified 2026-08-19: `xcodebuild`
-reaches normal argument validation, the iOS 26.5 device and simulator SDKs are
-present, and simulators enumerate across iOS 18.0, 18.2 and 26.x. Note the plan
-requires 0A on **real hardware**; a simulator exercises the same
-`WKURLSchemeHandler` path and is strong evidence, but is not the gate.
+**0A — prototype built, measurement blocked.** Branch
+`throwaway/0a-head-probe` (never merge) has a working `output: 'export'` build
+wrapped in a Capacitor shell, with the four dynamic routes **stubbed, not
+deleted**. What is proven so far, and what is not:
+
+*Confirmed.* The HEAD probe is real in the version we ship. Next 16.1.6,
+`client/components/segment-cache/cache.js:855-866`: under `isOutputExportMode`
+it issues `fetch(url, {method:'HEAD'})` and calls `rejectRouteCacheEntry` for
+any status `<200` or `>=400`, degrading the navigation to a document load.
+`play/layout.tsx` does wrap every question route in `GameProvider`, so a
+document load would destroy in-flight quiz state exactly as the audit says.
+
+*Confirmed.* The export builds. `/play/q/[index]` is genuinely enumerable —
+all ten routes emit real `index.html` files, and those files are present in the
+synced iOS bundle, so the HEAD targets exist.
+
+*Not proven.* Whether Capacitor's `WKURLSchemeHandler` answers a HEAD request
+with a 2xx. Static inspection of the Capacitor 8 binary is suggestive —
+`WebViewAssetHandler` references `httpMethod`, builds `HTTPURLResponse` with an
+explicit `statusCode`, and the only literal HTTP-method string in the framework
+is `POST` (its bridge), with no HEAD special-case — which is consistent with
+serving any method as 200. **That is inference from a stripped binary, not a
+measurement, and it is precisely the kind of evidence this plan says not to
+accept.** 0A stays open.
+
+**Blocked on:** `xcodebuild` cannot build for any destination because the
+**iOS 26.5 platform is not installed**. Xcode 26.6 ships that SDK; only iOS
+18.0 and 18.2 simulator runtimes exist locally, and the error is explicit —
+*"iOS 26.5 is not installed. Please download and install the platform from
+Xcode > Settings > Components."* This is a separate problem from the earlier
+`IDESimulatorFoundation` plugin failure, which `sudo xcodebuild
+-runFirstLaunch` did fix. Install the platform, then re-run the probe branch.
+
+Note the plan requires 0A on **real hardware**. A simulator exercises the same
+`WKURLSchemeHandler` path and would be strong evidence, but is not the gate.
+
+**Two export blockers found and worth keeping:** `manifest.ts` needs
+`export const dynamic = 'force-static'` (already carried back to the working
+branch — it is correct for the SSR build too), and
+`sentry-test/server/route.ts` is build-fatal under export and must be excluded
+from the native build in Phase 3.
 
 ## Completed
 
