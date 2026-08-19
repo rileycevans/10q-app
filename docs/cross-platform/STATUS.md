@@ -16,51 +16,47 @@ implementation state contradicts this file, the observation wins and this file i
 
 | | Precondition | State |
 |---|---|---|
-| **0A** | Packaged Capacitor routing model on real hardware | **in progress, blocked on tooling** — see below |
+| **0A** | Packaged Capacitor routing model | **PASSED** on iOS 26.5 simulator — see below |
 | **0B** | Server-side attempt integrity | **done** — A1, A3, A5, A6 closed |
 | **0C** | Secure quiz publishing | **done** |
 | **0D** | Capacitor-origin CORS from a device | **code done, device check pending** — see below |
-| **0E** | Gate | not reached |
+| **0E** | Gate | **3 of 4 criteria met** — 0D's device check outstanding |
 
 No migration code has landed. `check-docs` still reports the static export,
 Capacitor, both native projects, the platform seam and the release scripts as
 absent.
 
-**0A — prototype built, measurement blocked.** Branch
-`throwaway/0a-head-probe` (never merge) has a working `output: 'export'` build
-wrapped in a Capacitor shell, with the four dynamic routes **stubbed, not
-deleted**. What is proven so far, and what is not:
+**0A — PASSED (measured 2026-08-19).** The architectural go/no-go is answered:
+the packaged Capacitor routing model works.
 
-*Confirmed.* The HEAD probe is real in the version we ship. Next 16.1.6,
-`client/components/segment-cache/cache.js:855-866`: under `isOutputExportMode`
-it issues `fetch(url, {method:'HEAD'})` and calls `rejectRouteCacheEntry` for
-any status `<200` or `>=400`, degrading the navigation to a document load.
-`play/layout.tsx` does wrap every question route in `GameProvider`, so a
-document load would destroy in-flight quiz state exactly as the audit says.
+Measured on an iPhone 17 Pro simulator (iOS 26.5) running a real
+`output: 'export'` build inside a Capacitor shell, assets served from the
+device bundle through `WKURLSchemeHandler` — not an HTTP server, and not
+`server.url`.
 
-*Confirmed.* The export builds. `/play/q/[index]` is genuinely enumerable —
-all ten routes emit real `index.html` files, and those files are present in the
-synced iOS bundle, so the HEAD targets exist.
+| | `/play/q/1/` | after tapping through to `/play/q/2/` |
+|---|---|---|
+| provider `mountId` | `r3epwiwr` | `r3epwiwr` — unchanged |
+| provider `mountCount` | 1 | 1 — unchanged |
 
-*Not proven.* Whether Capacitor's `WKURLSchemeHandler` answers a HEAD request
-with a 2xx. Static inspection of the Capacitor 8 binary is suggestive —
-`WebViewAssetHandler` references `httpMethod`, builds `HTTPURLResponse` with an
-explicit `statusCode`, and the only literal HTTP-method string in the framework
-is `POST` (its bridge), with no HEAD special-case — which is consistent with
-serving any method as 200. **That is inference from a stripped binary, not a
-measurement, and it is precisely the kind of evidence this plan says not to
-accept.** 0A stays open.
+**`GameProvider` survived the navigation.** Next's export-mode HEAD probe
+(`segment-cache/cache.js:855-866`) therefore receives a 2xx from Capacitor's
+scheme handler: `rejectRouteCacheEntry` never fired, the router stayed on the
+client-transition path, and no document load occurred. In the real app that is
+the difference between in-flight quiz state surviving between questions and
+being silently destroyed.
 
-**Blocked on:** `xcodebuild` cannot build for any destination because the
-**iOS 26.5 platform is not installed**. Xcode 26.6 ships that SDK; only iOS
-18.0 and 18.2 simulator runtimes exist locally, and the error is explicit —
-*"iOS 26.5 is not installed. Please download and install the platform from
-Xcode > Settings > Components."* This is a separate problem from the earlier
-`IDESimulatorFoundation` plugin failure, which `sudo xcodebuild
--runFirstLaunch` did fix. Install the platform, then re-run the probe branch.
+Criteria were written to `scratchpad/measure-0a.md` **before** the measurement,
+so the bar could not move to fit the result. The earlier static analysis of the
+Capacitor binary pointed the same way but was explicitly not accepted as proof;
+this is the measurement it was standing in for.
 
-Note the plan requires 0A on **real hardware**. A simulator exercises the same
-`WKURLSchemeHandler` path and would be strong evidence, but is not the gate.
+**ADR-001 holds.** No architecture revision needed.
+
+Caveat worth keeping: the plan asks for 0A on **real hardware**. This ran on a
+simulator, which exercises the same `WKURLSchemeHandler` code path and is
+strong evidence, but a device pass is still worth taking opportunistically
+during Phase 5 when a signed build exists.
 
 **Two export blockers found and worth keeping:** `manifest.ts` needs
 `export const dynamic = 'force-static'` (already carried back to the working
@@ -68,24 +64,30 @@ branch — it is correct for the SSR build too), and
 `sentry-test/server/route.ts` is build-fatal under export and must be excluded
 from the native build in Phase 3.
 
-**0D — the CORS trap is defused; the device half is pending.**
-`corsHeadersFor(req)` echoes the request Origin when it is on the allow-list
-and always sends `Vary: Origin`. All **28** functions now import the shared
-helper and use it for the preflight; **zero inline copies remain** (the audit
-counted 10 — it predates four functions added since).
+**Probe branch:** `throwaway/0a-head-probe`. Never merge. The four dynamic
+routes there are stubbed, not deleted.
 
-Verified against production after deploy: `https://play10q.com`,
-`capacitor://localhost` and `http://localhost` each get their own origin
-echoed back, `Vary: Origin` is present, `Access-Control-Allow-Headers` still
-covers everything the client sends, and the web game loop still loads.
+**0E gate — 3 of 4.** Against the checklist in
+[05-migration-plan.md](05-migration-plan.md#0e--gate-native-work-may-now-begin):
 
-Severity correction worth keeping: `ALLOWED_ORIGIN` is **not** set in
-production, so the fleet answers `*` and native would have worked today. The
-break only appears when an operator follows `cors.ts`'s own instruction to set
-it. This was defusing a trap, not repairing an outage.
+- [x] **0A passed** — measured, ADR-001 unchanged. Simulator rather than
+      hardware; see the caveat above.
+- [x] **0B and 0C closed, with tests that run in CI** — `supabase/tests` is in
+      the root workspaces array and a CI job runs the RLS suite against a local
+      stack.
+- [ ] **0D proven from a device** — the CORS code is shipped and verified
+      against production for all three origins, but the plan asks for the full
+      game loop from a real Capacitor WebView. The 0A probe shell is a bare
+      export with stubbed routes; it does not exercise the game loop. This is
+      the one outstanding item.
+- [x] **STATUS.md records each outcome**, including the corrections to the
+      audit (A5's unit tests were never broken; A6's migration had never been
+      applied; CORS was a latent trap rather than a live break).
 
-**Still open:** the plan requires the full game loop from a real Capacitor
-WebView on both platforms — blocked behind the same device work as 0A.
+**Practical read:** 0D's remaining check is a verification step, not a design
+question — the architecture risk that 0E exists to guard against was 0A, and it
+passed. The natural place to close it is early Phase 5, when a Capacitor shell
+first runs the real app rather than a probe. Phases 1–3 do not depend on it.
 
 ## Completed
 
