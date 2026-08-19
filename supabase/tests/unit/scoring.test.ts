@@ -124,3 +124,47 @@ describe("computeElapsed", () => {
     });
   });
 });
+
+/**
+ * C2 — a timed-out question could be scored as a deliberate correct answer.
+ *
+ * The client's countdown and the server's window do not start together: the
+ * server stamps its start one round-trip after the UI begins counting. So a
+ * genuine client timeout can arrive with server elapsed still under the limit.
+ * Because submit-answer hard-required a non-null selected_answer_id, the client
+ * substituted answers[0] — and with server elapsed under the limit, that was
+ * recorded as a real selection, scoring 5 base points whenever answer A
+ * happened to be correct.
+ *
+ * The fix is an explicit is_timeout flag. These assert the scoring half of it:
+ * once anything marks the answer a timeout, it is worth zero regardless of
+ * correctness.
+ */
+describe("calculateQuestionScore — timeout precedence (C2)", () => {
+  it("scores zero for a timeout even when the answer was correct", () => {
+    const score = calculateQuestionScore(true, 3_000, true);
+    expect(score.totalPoints).toBe(0);
+    expect(score.basePoints).toBe(0);
+    expect(score.bonusPoints).toBe(0);
+  });
+
+  it("scores zero for a timeout that arrives FAST on the server clock", () => {
+    // The exact C2 shape: the client timed out, but the server's window began
+    // later so its elapsed is only 3s. Without the flag this scored points.
+    const score = calculateQuestionScore(true, 3_000, true);
+    expect(score.totalPoints).toBe(0);
+  });
+
+  it("records a timeout at the full time limit, not the elapsed value", () => {
+    // Keeps timeouts indistinguishable from one another in the data, and keeps
+    // time_ms inside the CHECK tightened in the C1 migration.
+    const score = calculateQuestionScore(false, 500, true);
+    expect(score.elapsedMs).toBe(12_000);
+  });
+
+  it("still scores a genuine fast correct answer", () => {
+    const score = calculateQuestionScore(true, 3_000, false);
+    expect(score.totalPoints).toBeGreaterThan(0);
+    expect(score.basePoints).toBe(5);
+  });
+});

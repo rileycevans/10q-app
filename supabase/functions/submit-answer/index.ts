@@ -48,17 +48,35 @@ Deno.serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { attempt_id, question_id, selected_answer_id } = body;
+    const { attempt_id, question_id, selected_answer_id, is_timeout } = body;
 
-    if (!attempt_id || !question_id || !selected_answer_id) {
+    // C2 — the client may declare a timeout explicitly.
+    //
+    // Previously selected_answer_id was hard-required, so a client whose
+    // countdown expired had nothing to send and submitted answers[0] instead.
+    // The server only reclassified that as a timeout if its OWN elapsed was
+    // past the limit — and the server's window always starts one round-trip
+    // later than the UI's, so a genuine client timeout could land with server
+    // elapsed under the limit. Answer A was then recorded as a deliberate
+    // selection, scoring 5 base points whenever A happened to be correct
+    // (~25% of the time) for a question the player never answered.
+    //
+    // The flag is a claim, not an instruction: it can only ever turn an answer
+    // INTO a timeout (worth zero), never out of one, so a malicious client
+    // gains nothing by sending it. The server's own clock still independently
+    // marks a late answer as a timeout.
+    const clientClaimsTimeout = is_timeout === true;
+
+    if (!attempt_id || !question_id || (!selected_answer_id && !clientClaimsTimeout)) {
       logStructured(requestId, "submit_answer_missing_fields", {
         has_attempt_id: !!attempt_id,
         has_question_id: !!question_id,
         has_selected_answer_id: !!selected_answer_id,
+        is_timeout: clientClaimsTimeout,
       });
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
-        "attempt_id, question_id, and selected_answer_id are required",
+        "attempt_id, question_id, and either selected_answer_id or is_timeout are required",
         requestId,
         400
       );
@@ -180,15 +198,18 @@ Deno.serve(async (req) => {
       nowMs,
     );
 
-    // Get selected answer and check if correct (Notion plan: is_correct on question_answers)
-    const { data: selectedAnswer, error: answerCheckError } = await supabase
-      .from("question_answers")
-      .select("id, is_correct")
-      .eq("id", selected_answer_id)
-      .eq("question_id", question_id)
-      .single();
+    // A declared timeout carries no answer to validate. Skip the lookup rather
+    // than requiring the client to invent one — inventing one is the bug.
+    const { data: selectedAnswer, error: answerCheckError } = selected_answer_id
+      ? await supabase
+          .from("question_answers")
+          .select("id, is_correct")
+          .eq("id", selected_answer_id)
+          .eq("question_id", question_id)
+          .single()
+      : { data: null, error: null };
 
-    if (answerCheckError || !selectedAnswer) {
+    if (selected_answer_id && (answerCheckError || !selectedAnswer)) {
       logStructured(requestId, "submit_answer_invalid_answer", {
         attempt_id,
         question_id,
@@ -205,11 +226,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Determine if answer is correct (from is_correct field per Notion plan)
-    const isCorrect = !isTimeout && selectedAnswer.is_correct;
+    // A timeout is either the client declaring one, or the server's own clock
+    // being past the limit. Either is sufficient; neither can un-timeout the
+    // other, so the strictest reading always wins.
+    const effectiveTimeout = isTimeout || clientClaimsTimeout;
 
-    // Calculate score
-    const score = calculateQuestionScore(isCorrect, elapsedMs, isTimeout);
+    const isCorrect = !effectiveTimeout && selectedAnswer?.is_correct === true;
+
+    const score = calculateQuestionScore(isCorrect, elapsedMs, effectiveTimeout);
 
     // Insert answer (idempotent via PRIMARY KEY constraint)
     const { data: answer, error: answerError } = await supabase
@@ -217,8 +241,8 @@ Deno.serve(async (req) => {
       .insert({
         attempt_id,
         question_id,
-        answer_kind: isTimeout ? "timeout" : "selected",
-        selected_answer_id: isTimeout ? null : selected_answer_id,
+        answer_kind: effectiveTimeout ? "timeout" : "selected",
+        selected_answer_id: effectiveTimeout ? null : selected_answer_id,
         is_correct: isCorrect,
         time_ms: score.elapsedMs,
         base_points: score.basePoints,

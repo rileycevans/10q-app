@@ -321,7 +321,15 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
-  submitAnswer: (attemptId: string, questionId: string, selectedAnswerId: string) =>
+  // selectedAnswerId is null for a timeout — see C2. The client must NOT
+  // invent an answer when the countdown expires; it declares the timeout and
+  // lets the server record it as one.
+  submitAnswer: (
+    attemptId: string,
+    questionId: string,
+    selectedAnswerId: string | null,
+    isTimeout = false,
+  ) =>
     callEdgeFunction<{
       attempt_id: string;
       current_index: number;
@@ -341,6 +349,7 @@ export const edgeFunctions = {
         attempt_id: attemptId,
         question_id: questionId,
         selected_answer_id: selectedAnswerId, // Notion plan: answer instead of choice
+        is_timeout: isTimeout,
       },
       requireAuth: true,
     }),

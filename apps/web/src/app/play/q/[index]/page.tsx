@@ -214,12 +214,21 @@ export default function QuestionPage() {
 
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
-    const firstAnswerId = currentQuestion.answers[0]?.answer_id;
 
-    // Fire the submit in the background. If the first answer is missing
-    // (shouldn't happen on real data), fall back to resumeAttempt.
-    const submitPromise = firstAnswerId
-      ? submitAnswer(attempt.attempt_id, currentQuestion.question_id, firstAnswerId)
+    // C2 — declare the timeout instead of substituting an answer.
+    //
+    // This used to send currentQuestion.answers[0], because submit-answer
+    // hard-required a non-null selected_answer_id. The server only reclassified
+    // it as a timeout if its own elapsed was past the limit, and the server's
+    // window starts one round-trip after the UI's — so a real timeout could be
+    // recorded as a deliberate choice of answer A, scoring 5 base points
+    // whenever A happened to be correct.
+    const submitPromise = submitAnswer(
+      attempt.attempt_id,
+      currentQuestion.question_id,
+      null,
+      true,
+    )
           .then((result) => {
             trackAnswerSubmit({
               quiz_id: game.quizId || currentQuestion.quiz_id,
@@ -249,8 +258,7 @@ export default function QuestionPage() {
             setIsSubmitting(false);
             setSubmitError({ code, message });
             return null;
-          })
-      : Promise.resolve(null);
+          });
 
     if (isLastQuestion) {
       // Last question: await so finalize-attempt sees READY_TO_FINALIZE.
