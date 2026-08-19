@@ -14,11 +14,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-// Optional second accepted credential, for the window where a caller still
-// holds an older service-role key. Empty by default: with the Vault secret
-// rotated to match SUPABASE_SERVICE_ROLE_KEY, nothing needs it. Kept because
-// the two-valid-keys situation is exactly what broke the cron the first time,
-// and a future rotation will hit it again.
+// The legacy 219-character service-role JWT — the credential pg_cron actually
+// sends, read from Vault by run_transfer_poll_batch(). SUPABASE_SERVICE_ROLE_KEY
+// above is the newer 41-character `sb_secret_…` form. Both are genuine and they
+// are NOT equal, so both must be accepted.
+//
+// Set it with `supabase secrets set --env-file`, not by pasting the value into
+// a shell command: a paste through a terminal stored a 220-character value with
+// a mangled tail (smart quotes), which failed the comparison in a way that
+// looked identical to "the secret is missing".
 const legacyServiceRoleJwt = Deno.env.get("LEGACY_SERVICE_ROLE_JWT") ?? "";
 
 export async function getAuthenticatedUser(
