@@ -56,10 +56,14 @@ export default function HomePage() {
         }
         setIsSignedIn(true);
         setIsAnonymous(session.user.is_anonymous ?? true);
+        // C7: read from player_streaks, not players. players.current_streak is
+        // the value as of the last finalize and never expires, so a player who
+        // last played months ago still read a live-looking streak. The view
+        // applies the expiry rule.
         const { data: player } = await supabase
-          .from('players')
+          .from('player_streaks')
           .select('current_streak')
-          .eq('id', session.user.id)
+          .eq('player_id', session.user.id)
           .single();
         if (player) setStreak(player.current_streak);
         if (session.user.app_metadata?.role === 'admin') setIsAdmin(true);
