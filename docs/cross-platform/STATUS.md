@@ -8,7 +8,7 @@ Read this immediately after invoking the
 Verify it against `.agent/skills/cross-platform-migration/check-docs` — **if the observed
 implementation state contradicts this file, the observation wins and this file is wrong.**
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-19
 
 ---
 
@@ -17,7 +17,7 @@ implementation state contradicts this file, the observation wins and this file i
 | | Precondition | State |
 |---|---|---|
 | **0A** | Packaged Capacitor routing model on real hardware | **in progress, blocked on tooling** — see below |
-| **0B** | Server-side attempt integrity | **A1, A3 fixed; A5 partly** — RLS tests still stale |
+| **0B** | Server-side attempt integrity | **done** — A1, A3, A5, A6 closed |
 | **0C** | Secure quiz publishing | **done** |
 | **0D** | Capacitor-origin CORS from a device | **not started** — latent, not a live break |
 | **0E** | Gate | not reached |
@@ -116,9 +116,7 @@ branch. It closes part of [03-blocking-fixes.md](03-blocking-fixes.md) section B
   as substrings; milder terms word-matched, so "Scunthorpe" and "Assassin"
   still work — tuned against `/usr/share/dict/words`, 657 → 82 false
   positives); a `handle_reports` table with a `report-handle` function and
-  report UI on `/u/[handle]`; an admin queue at `/admin/reports`. The
-  remaining gap is **block/hide abusive users**, which is B3 (leagues are
-  non-consensual and non-exitable) — still open.
+  report UI on `/u/[handle]`; an admin queue at `/admin/reports`.
 - **B4 privacy policy — done.** `/privacy` and `/terms`, server-rendered and
   reachable without auth. The policy discloses that PostHog receives the
   signed-in user's email, which the code does today
@@ -134,7 +132,7 @@ and UGC moderation are "currently missing entirely" is likewise now stale.
 
 ### Phase 0 work landed
 
-**0B — attempt integrity (A1, A3 done; A5 partly).**
+**0B — attempt integrity: done (A1, A3, A5, and A6 found in passing).**
 
 - **A1 closed.** `delete-attempt` now has a server-side admin check *and*
   refuses to delete a finalized attempt. The second gate is what kills the
@@ -147,14 +145,44 @@ and UGC moderation are "currently missing entirely" is likewise now stale.
   than rejecting, so a genuinely slow device is charged the delay instead of
   being locked out. Verified against production: a simulated 10-minute stall
   returned an already-expired window instead of a fresh 12s one.
+- **A6 — the answer key was live-readable, and is now closed.** Found while
+  rewriting the RLS assertions: migration `20260310100000_restrict_is_correct_column.sql`
+  existed in the repo but had **never been applied to production** — it is
+  absent from `supabase_migrations.schema_migrations`. 10Q's migrations were
+  pushed by hand, and this one was missed.
+
+  Consequence, verified before fixing: the publishable anon key that ships in
+  the client bundle could read `question_answers.is_correct` for every
+  published quiz, **including the current day's**. One HTTP request returned
+  every correct answer, with no attempt and no replay — strictly worse than
+  A1. Applied 2026-08-19; anon and authenticated now get `42501`, the five
+  non-secret columns still read, `quiz_play_view` is unaffected, and a full
+  game loop (start → timer → submit) still scores correctly under the service
+  role.
+
+  This is the concrete cost of the audit's "Supabase is not in CI" finding:
+  a security migration sat unapplied for five months with nothing to catch it.
+  Worth an explicit drift check before submission — the repo and the live
+  database are not known to agree elsewhere either.
 - **A5 partly.** `supabase/tests` is now in the root `workspaces` array, so
   `npm test` reaches it — 183 → **259 tests**. The production URL and anon key
   defaults are gone, the suite refuses any non-local `SUPABASE_URL` unless
   `ALLOW_NON_LOCAL_RLS_TESTS=1`, and a CI job runs it against a real local
-  stack. **Still open:** the 16 RLS assertions are stale (they reference
-  `correct_answers`, `daily_results`, `choice_text` and assert
-  `anon cannot read players`, which contradicts the live policy). They are
-  skipped, not passing. Rewriting them is the remainder of 0B.
+  stack.
+- **A5 complete — the RLS assertions are rewritten.** 17 assertions across six
+  groups, every one checked against the live policies and grants before being
+  written, and all 17 verified passing against production (read-only; the
+  insert/update cases were confirmed non-destructive). They cover answer-key
+  secrecy, attempt and score isolation, quiz visibility, and the admin-only
+  moderation queue.
+
+  Two lessons are encoded in them. **RLS filters, it does not error** — an
+  unauthenticated SELECT returns `[]` with `error: null`, and a blocked UPDATE
+  returns success with zero rows affected. Asserting on `error` was the
+  original suite's central mistake, and I repeated it once before the test
+  caught me. And `players` is genuinely world-readable, so the suite now
+  documents that exposure (A4) rather than asserting the opposite; when A4 is
+  fixed those tests flip and must be updated deliberately.
 
 **0C — quiz publishing: done.**
 
