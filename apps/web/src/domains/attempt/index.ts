@@ -126,8 +126,14 @@ export async function resumeAttempt(attemptId: string): Promise<AttemptState> {
     attempt_id: data.attempt_id,
     quiz_id: '', // Not returned by resume
     current_index: data.current_index,
-    current_question_started_at: data.current_question_started_at,
-    current_question_expires_at: data.current_question_expires_at,
+    // C3: resume-attempt returns question_started_at / question_expires_at
+    // (resume-attempt/index.ts:212-213), NOT current_question_*. Reading the
+    // wrong names made both undefined on every resume, so the client fell into
+    // the Q1 branch and handed the player a fresh 12s window on a question
+    // whose server clock had already been running. On mobile, resume is the
+    // common path rather than the rare one.
+    current_question_started_at: data.question_started_at,
+    current_question_expires_at: data.question_expires_at,
     state,
   };
 }

@@ -294,12 +294,16 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  // C3: these field names must match resume-attempt/index.ts:212-213 exactly.
+  // They previously declared current_question_* while the server sends
+  // question_*, so the adapter read undefined on every resume and TypeScript
+  // could not catch it — the type asserted a shape the server never returns.
   resumeAttempt: (attemptId: string) =>
     callEdgeFunction<{
       attempt_id: string;
       current_index: number;
-      current_question_started_at: string | null;
-      current_question_expires_at: string | null;
+      question_started_at: string | null;
+      question_expires_at: string | null;
       state: string;
     }>(`resume-attempt?attempt_id=${encodeURIComponent(attemptId)}`, {
       method: 'GET',
