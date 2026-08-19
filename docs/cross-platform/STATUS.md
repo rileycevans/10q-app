@@ -63,7 +63,21 @@ branch. It closes part of [03-blocking-fixes.md](03-blocking-fixes.md) section B
   longest-standing remaining member**; solo-owner leagues cascade away.
   Without this, four of six live leagues would have been destroyed by their
   owner deleting an account.
-- **B2 UGC moderation — three of four mechanisms now exist.** A two-tier
+- **B2 UGC moderation — all four mechanisms now exist**, and **B3 is closed.**
+  League names are filtered on the server (`create-league` validated length
+  only, so any slur passed verbatim), and `leave-league` gives every member an
+  exit from a league they were added to without consent — which is the concrete
+  form Apple's "block abusive users" requirement takes here. An owner who
+  leaves hands the league to its longest-standing member rather than destroying
+  it under everyone else, matching the account-deletion rule.
+
+  League names are free text, so the handle blocklist alone was not enough:
+  "F.U.C.K United", "shit_lords", Cyrillic lookalikes, zero-width joiners and
+  full-width forms all passed it. Names are now normalised to an ASCII skeleton
+  before matching, with runs of isolated letters rejoined so the spelled-out
+  form is caught too. Verified not to over-block: initial-heavy names like
+  "F C Barcelona" and "S H I E L D" still pass.
+- **B2 handle moderation — a two-tier
   handle blocklist enforced *server-side* in `update-handle` (slurs matched
   as substrings; milder terms word-matched, so "Scunthorpe" and "Assassin"
   still work — tuned against `/usr/share/dict/words`, 657 → 82 false

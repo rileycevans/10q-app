@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { validateLeagueName } from '@10q/contracts';
 import { createLeague } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import dynamic from 'next/dynamic';
@@ -20,6 +21,13 @@ export default function CreateLeaguePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || loading) return;
+
+    // Same rules the server enforces, surfaced before the round-trip.
+    const validation = validateLeagueName(name);
+    if (!validation.valid) {
+      setError(validation.error);
+      return;
+    }
 
     setLoading(true);
     setError(null);

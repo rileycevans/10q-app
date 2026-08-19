@@ -573,6 +573,20 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  // Leaving is the mechanism by which a player escapes a league they were
+  // added to without consent — Apple Guideline 1.2's "block abusive users".
+  leaveLeague: (leagueId: string) =>
+    callEdgeFunction<{
+      left: boolean;
+      league_deleted: boolean;
+      transferred_to: string | null;
+    }>('leave-league', {
+      method: 'POST',
+      body: { league_id: leagueId },
+      requireAuth: true,
+      retry: false,
+    }),
+
   updateHandle: (handle: string) =>
     callEdgeFunction<{
       handle_display: string;

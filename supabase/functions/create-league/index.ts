@@ -3,6 +3,8 @@
  * Creates a new private league with the authenticated user as owner
  */
 
+import { validateLeagueName } from "../_shared/league-names.ts";
+
 // Inline CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -187,19 +189,16 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { name } = body;
 
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
+    // League names are public to every member, which makes them user-generated
+    // content under App Store Guideline 1.2 and Google Play's UGC policy.
+    // Validation was length-only, so any slur passed through verbatim.
+    // Enforced here rather than only in the browser: a direct call to this
+    // endpoint would otherwise skip the check entirely.
+    const nameValidation = validateLeagueName(name);
+    if (!nameValidation.valid) {
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
-        "League name is required",
-        requestId,
-        400
-      );
-    }
-
-    if (name.length > 100) {
-      return errorResponse(
-        ErrorCodes.VALIDATION_ERROR,
-        "League name must be 100 characters or less",
+        nameValidation.error,
         requestId,
         400
       );

@@ -8,4 +8,5 @@ export * from "./scoring";
 export * from "./errors";
 export * from "./handles";
 export * from "./handle-blocklist";
+export * from "./league-names";
 

@@ -7,6 +7,7 @@ import {
   addLeagueMember,
   removeLeagueMember,
   deleteLeague,
+  leaveLeague,
   type LeagueDetails,
 } from '@/domains/league';
 import {
@@ -42,6 +43,8 @@ export default function LeagueDetailPage() {
   const [mode, _setMode] = useState<LeaderboardMode>('top');
   const [userPlayerId, setUserPlayerId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
@@ -123,6 +126,21 @@ export default function LeagueDetailPage() {
     // Refresh league details
     const details = await getLeagueDetails(leagueId);
     setLeagueDetails(details);
+  }
+
+  async function handleLeaveLeague() {
+    if (!leagueDetails || leaving) return;
+
+    setLeaving(true);
+    setError(null);
+    try {
+      await leaveLeague(leagueId);
+      router.push('/leagues');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to leave league');
+      setLeaving(false);
+      setShowLeaveConfirm(false);
+    }
   }
 
   async function handleDeleteLeague() {
@@ -345,6 +363,52 @@ export default function LeagueDetailPage() {
             />
           </div>
         )}
+
+        {/* Leave League — available to every member, not just non-owners.
+            Being added to a league does not require consent, so leaving is the
+            only exit a member has (Apple Guideline 1.2). An owner who leaves
+            hands the league to its longest-standing member rather than
+            destroying it under everyone else. */}
+        <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-2xl mb-6 text-center">
+          {!showLeaveConfirm ? (
+            <button
+              type="button"
+              onClick={() => setShowLeaveConfirm(true)}
+              className="h-12 px-6 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+            >
+              Leave League
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <p className="font-body font-bold text-sm text-ink">
+                Leave {leagueDetails.name}?
+              </p>
+              <p className="font-body text-sm text-ink/80">
+                {leagueDetails.is_owner
+                  ? 'You own this league. It will pass to its longest-standing member, or be deleted if you are the only one left.'
+                  : 'Your scores stay on the global leaderboard. You can rejoin with an invite code.'}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLeaveConfirm(false)}
+                  disabled={leaving}
+                  className="flex-1 h-12 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLeaveLeague}
+                  disabled={leaving}
+                  className="flex-1 h-12 bg-orange border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50"
+                >
+                  {leaving ? 'Leaving...' : 'Yes, Leave'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Delete League (Owner Only) */}
         {leagueDetails.is_owner && (
