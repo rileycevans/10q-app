@@ -3,13 +3,9 @@
  * Creates a new private league with the authenticated user as owner
  */
 
-import { validateLeagueName } from "../_shared/league-names.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 
-// Inline CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { validateLeagueName } from "../_shared/league-names.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -164,7 +160,7 @@ function generateInviteCode(): string {
 // Main function
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {

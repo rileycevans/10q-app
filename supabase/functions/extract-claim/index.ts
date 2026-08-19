@@ -15,7 +15,7 @@
  * Requires secret: OPENAI_API_KEY
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
 import { requireServiceRole } from "../_shared/auth.ts";
@@ -50,7 +50,7 @@ const TYPE_SET = new Set<string>(TRANSFER_TYPES);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();

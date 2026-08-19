@@ -3,7 +3,7 @@
  * Returns leaderboard entries for a specific league with time windows, score types, and modes
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -12,7 +12,7 @@ import { getAuthenticatedUser } from "../_shared/auth.ts";
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();

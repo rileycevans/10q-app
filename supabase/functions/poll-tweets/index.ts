@@ -14,7 +14,7 @@
  * ingest-claim), SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -31,7 +31,7 @@ interface PollBody {
 const COLD_START_DAYS_DEFAULT = 7;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
   const requestId = generateRequestId();
   if (req.method !== "POST")
     return errorResponse(ErrorCodes.VALIDATION_ERROR, "Method not allowed", requestId, 405);

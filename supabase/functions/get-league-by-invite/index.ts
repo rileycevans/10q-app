@@ -3,11 +3,7 @@
  * Returns public league information by invite code (no auth required)
  */
 
-// Inline CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -94,7 +90,7 @@ async function createServiceClient() {
 // Main function
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();

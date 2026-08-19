@@ -11,7 +11,7 @@
  *   { "batch_size"?: 32 }
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -29,7 +29,7 @@ const DEFAULT_BATCH_SIZE = 50;
 const SEQUENTIAL_GAP_MS = 5500;
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeadersFor(req) });
   const requestId = generateRequestId();
   if (req.method !== "POST")
     return errorResponse(ErrorCodes.VALIDATION_ERROR, "Method not allowed", requestId, 405);
