@@ -75,8 +75,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.join-league]
 verify_jwt = false
-[functions.publish-quiz]
-verify_jwt = false
 [functions.remove-league-member]
 verify_jwt = false
 [functions.resume-attempt]
