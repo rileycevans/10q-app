@@ -19,7 +19,7 @@ implementation state contradicts this file, the observation wins and this file i
 | **0A** | Packaged Capacitor routing model on real hardware | **in progress, blocked on tooling** — see below |
 | **0B** | Server-side attempt integrity | **done** — A1, A3, A5, A6 closed |
 | **0C** | Secure quiz publishing | **done** |
-| **0D** | Capacitor-origin CORS from a device | **not started** — latent, not a live break |
+| **0D** | Capacitor-origin CORS from a device | **code done, device check pending** — see below |
 | **0E** | Gate | not reached |
 
 No migration code has landed. `check-docs` still reports the static export,
@@ -67,6 +67,25 @@ Note the plan requires 0A on **real hardware**. A simulator exercises the same
 branch — it is correct for the SSR build too), and
 `sentry-test/server/route.ts` is build-fatal under export and must be excluded
 from the native build in Phase 3.
+
+**0D — the CORS trap is defused; the device half is pending.**
+`corsHeadersFor(req)` echoes the request Origin when it is on the allow-list
+and always sends `Vary: Origin`. All **28** functions now import the shared
+helper and use it for the preflight; **zero inline copies remain** (the audit
+counted 10 — it predates four functions added since).
+
+Verified against production after deploy: `https://play10q.com`,
+`capacitor://localhost` and `http://localhost` each get their own origin
+echoed back, `Vary: Origin` is present, `Access-Control-Allow-Headers` still
+covers everything the client sends, and the web game loop still loads.
+
+Severity correction worth keeping: `ALLOWED_ORIGIN` is **not** set in
+production, so the fleet answers `*` and native would have worked today. The
+break only appears when an operator follows `cors.ts`'s own instruction to set
+it. This was defusing a trap, not repairing an outage.
+
+**Still open:** the plan requires the full game loop from a real Capacitor
+WebView on both platforms — blocked behind the same device work as 0A.
 
 ## Completed
 
