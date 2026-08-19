@@ -32,6 +32,42 @@ release scripts as absent — consistent with a migration that has not begun.
 - Release operator skill and `scripts/release/` contract stubs
 - Migration control skill — `.agent/skills/cross-platform-migration/`
 
+### Store-compliance work landed ahead of the plan
+
+Built and deployed before this plan was written, on the `store-compliance`
+branch. It closes part of [03-blocking-fixes.md](03-blocking-fixes.md) section B.
+**None of it is migration work and none of it touches the 0E gate** — no
+`ios/`, no `android/`, no `@capacitor/*`, no `output: 'export'`.
+
+- **B1 account deletion — done.** `delete-account` Edge Function (deployed),
+  in-app Danger Zone in `/settings`, and a migration fixing the two foreign
+  keys that would have aborted the delete (`outbox_events.actor_user_id` →
+  SET NULL, `players.linked_auth_user_id` → CASCADE). B1's open product
+  question is answered: leagues owned by a deleting user **transfer to the
+  longest-standing remaining member**; solo-owner leagues cascade away.
+  Without this, four of six live leagues would have been destroyed by their
+  owner deleting an account.
+- **B2 UGC moderation — three of four mechanisms now exist.** A two-tier
+  handle blocklist enforced *server-side* in `update-handle` (slurs matched
+  as substrings; milder terms word-matched, so "Scunthorpe" and "Assassin"
+  still work — tuned against `/usr/share/dict/words`, 657 → 82 false
+  positives); a `handle_reports` table with a `report-handle` function and
+  report UI on `/u/[handle]`; an admin queue at `/admin/reports`. The
+  remaining gap is **block/hide abusive users**, which is B3 (leagues are
+  non-consensual and non-exitable) — still open.
+- **B4 privacy policy — done.** `/privacy` and `/terms`, server-rendered and
+  reachable without auth. The policy discloses that PostHog receives the
+  signed-in user's email, which the code does today
+  (`AuthButton.tsx:54`). ⚠️ The support address in `src/lib/legal.ts` is
+  still a placeholder and must point at a monitored inbox before submission.
+- **PWA manifest and icon set** — web only (`manifest.ts`, `public/icons/`).
+
+**Docs these findings correct:** [03-blocking-fixes.md](03-blocking-fixes.md)
+B1 ("does not exist"), B2 ("zero of the four"), B4, and
+[STORE_READINESS.md](STORE_READINESS.md) where it says the same.
+[ADR-001](01-architecture-decision.md)'s closing note that account deletion
+and UGC moderation are "currently missing entirely" is likewise now stale.
+
 ## In progress
 
 - Nothing. Phase 0 has not started.
@@ -90,6 +126,22 @@ shortcut. Decide the account type and start recruiting testers before Phase 0 fi
   client behavior trivially inspectable — so they land in 0B/0C, not "after mobile ships".
 - **Google Play account maturation can be a four-week gate.** Scheduling, not
   architecture — but it must run in parallel from day one.
+- **CORS is a trap, not a live break — measured 2026-08-19.** Production
+  currently answers `Access-Control-Allow-Origin: *` for
+  `Origin: capacitor://localhost`, so `ALLOWED_ORIGIN` is **not set** as an
+  Edge Function secret and the game loop would work from a Capacitor WebView
+  today. That is accidental, not designed: the moment anyone follows
+  `_shared/cors.ts`'s own instruction to set `ALLOWED_ORIGIN=https://play10q.com`,
+  the game loop breaks on native while leagues and profiles keep working.
+  0D is still required — it is defusing a trap rather than fixing a live
+  break, so it can follow 0B/0C rather than blocking them.
+- **A1's exploit needs a session, not anonymity — measured 2026-08-19.** The
+  Supabase gateway 401s an unauthenticated POST to `delete-attempt`, so it is
+  not callable by a stranger with no token. This does **not** soften the
+  finding: every visitor is auto-signed-in via `signInAnonymously()`, so any
+  visitor already holds the credential the exploit needs. The function still
+  has no server-side admin check, and `verify_jwt = false` appears 22 times
+  in `config.toml`, so a missing in-function check fails open.
 
 ## Known documentation gaps
 
