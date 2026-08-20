@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 1 complete — Phase 2 (Foundations) is next**
+**Current phase: Phase 2 — Foundations (in progress)**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -106,6 +106,29 @@ a recorded decision per item, not a fix per item.
 | `get-profile-by-handle` unauthenticated and unthrottled | **2.27s per call**, service-role, heavy multi-join, no auth and no throttle. The cheapest DoS surface in the app | **Deferred to Phase 2**, deliberately. The fix is rate limiting, which needs infrastructure that does not exist yet (no staging, no shared limiter). Adding a bespoke per-function limiter now would be thrown away. Tracked as a Phase 2 exit item |
 | No rate limiting or idempotency keys anywhere | `outbox_events.idempotency_key` exists and is **never written** (0 writes across all functions). Nothing throttles attempt cycling or handle enumeration | **Deferred to Phase 2**, same reason. Note the two worst amplifiers are already closed: `delete-attempt` is admin-gated (A1) and `publish-quiz` is deleted (A2), so the unthrottled loop that mattered most is gone |
 | Full answer key released at finalize | Inherent to showing a results breakdown. A1 is closed, so the one-shot-per-player guarantee now holds | **Product decision, not a defect.** Acceptable while the leaderboard carries no stakes. Revisit if prizes or ranked play are ever added |
+
+**Phase 2 — Foundations (in progress).** Three of five exit criteria met.
+
+| Exit criterion | State |
+|---|---|
+| `app_version` / `app_build` readable at runtime on every platform | **done** — `version.json` + `scripts/release/version.mjs`, inlined via `src/lib/version.ts`. Verified in the shipped bundle |
+| PostHog carries `client_platform`; Sentry has `release` + `dist` + `client_platform` | **done** — PostHog super properties registered at init; Sentry `release`/`dist`/tags set, and `environment` now comes from the build config rather than `NODE_ENV` (which made every artifact report as production) |
+| `X-Client-Version` sent and enforced, minimum set permissively | **sent, not yet enforced.** The header is on every edge function call and verified end to end. Server-side gating is the remaining half |
+| Staging exists end to end and a build can be pointed at it | **not started** — the largest remaining item |
+| Both build targets run in CI | **partly** — the web target's env drift is fixed and `version.mjs check` runs; the native target does not exist until Phase 5 |
+
+**Fixed in passing: CI verified a different artifact than production shipped.**
+`NEXT_PUBLIC_POSTHOG_KEY` and `_HOST` were supplied only to the deploy job, and
+`NEXT_PUBLIC_*` is inlined at build time — so CI was type-checking and building
+a bundle with analytics compiled out, then production built a different one.
+Both env blocks now match, with a comment saying they must stay in step.
+
+**Near-miss worth recording:** adding `X-Client-Version` would have broken
+*every* API request, because `_shared/cors.ts` did not list it in
+`Access-Control-Allow-Headers`. Preflight failures are silent — the request
+never leaves the browser and the server logs nothing — so this would have
+looked like a total client outage with no server-side trace. Caught before
+deploy, now asserted in the CORS tests.
 
 ## Completed
 

@@ -33,12 +33,24 @@ jobs:
       - name: Unit Tests
         run: npm test
 
+      # Fails if a generated native version file, or a release tag visible from
+      # HEAD, disagrees with version.json. Cheap, and it catches the class of
+      # drift that only shows up at submission time.
+      - name: Version check
+        run: node scripts/release/version.mjs check
+
+      # NOTE: this env block must stay in step with the deploy job's. PostHog's
+      # two vars were previously supplied only to deploy, and NEXT_PUBLIC_* is
+      # inlined at build time — so CI verified an artifact with analytics
+      # compiled out and production shipped a different one.
       - name: Build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: 10q-1z
           SENTRY_PROJECT: javascript-nextjs
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
