@@ -114,7 +114,7 @@ a recorded decision per item, not a fix per item.
 | `app_version` / `app_build` readable at runtime on every platform | **done** — `version.json` + `scripts/release/version.mjs`, inlined via `src/lib/version.ts`. Verified in the shipped bundle |
 | PostHog carries `client_platform`; Sentry has `release` + `dist` + `client_platform` | **done** — PostHog super properties registered at init; Sentry `release`/`dist`/tags set, and `environment` now comes from the build config rather than `NODE_ENV` (which made every artifact report as production) |
 | `X-Client-Version` sent and enforced, minimum set permissively | **sent, not yet enforced.** The header is on every edge function call and verified end to end. Server-side gating is the remaining half |
-| Staging exists end to end and a build can be pointed at it | **not started** — the largest remaining item |
+| Staging exists end to end and a build can be pointed at it | **partly** — a second free Supabase project exists with all 19 migrations and 24 functions deployed ([ENVIRONMENTS.md](ENVIRONMENTS.md)). No Cloudflare Worker or seeded data yet, so a build cannot be pointed at it end to end |
 | Both build targets run in CI | **partly** — the web target's env drift is fixed and `version.mjs check` runs; the native target does not exist until Phase 5 |
 
 **Fixed in passing: CI verified a different artifact than production shipped.**
@@ -129,6 +129,31 @@ Both env blocks now match, with a comment saying they must stay in step.
 never leaves the browser and the server logs nothing — so this would have
 looked like a total client outage with no server-side trace. Caught before
 deploy, now asserted in the CORS tests.
+
+**Staging exists (Phase 2).** Second Supabase project `yfzylxospvbipnlbwxno`,
+free plan, seeded by applying all 19 repo migrations with `db push` rather than
+copying production — so the repo's claim to be the source of truth is now
+actually tested somewhere. 24 edge functions deployed. Details and the
+relink-to-production discipline in [ENVIRONMENTS.md](ENVIRONMENTS.md).
+
+Two things that shaped this: the free plan caps an org at **two** active
+projects, so a third environment costs money; and free projects **pause after
+7 days idle**, which matters during the Play closed-test window.
+
+**More migration drift found, benign this time.** Three repo migrations are
+absent from production's `schema_migrations` ledger —
+`handle_customization`, `admin_tool_rls_and_snapshots`, `quiz_content_source` —
+but their objects all exist, so they were applied under different names or by
+hand. The schema is right and the ledger is wrong, which is the harmless
+version of the answer-key case where the migration genuinely never ran.
+
+**A false alarm worth recording**, because it nearly became a "finding":
+`anon` and `authenticated` hold INSERT/UPDATE column grants on
+`question_answers.is_correct` and `players.linked_auth_user_id` in both
+environments. Those grants are vestigial — the table-level privilege was
+revoked, so a real `PATCH` returns `42501` (verified against production). Column
+privileges alone do not tell you whether something is reachable; the request
+does.
 
 ## Completed
 
