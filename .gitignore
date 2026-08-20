@@ -47,3 +47,9 @@ lerna-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Playwright output — regenerated on every run, and now on every CI run too
+# since the export project was added. These were tracked, so each test run
+# showed up as a spurious diff.
+apps/web/playwright-report/
+apps/web/test-results/
