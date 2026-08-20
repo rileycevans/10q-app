@@ -74,7 +74,7 @@ jobs:
   # anon key — so the only way it ever ran was against live user data. That is
   # how A1 and A2 survived. It is now a required check.
   rls:
-    name: RLS Smoke Tests
+    name: Schema invariants + RLS
     runs-on: ubuntu-latest
 
     steps:
@@ -105,6 +105,63 @@ jobs:
             echo "SUPABASE_ANON_KEY=$(supabase status --output json | jq -r '.ANON_KEY')"
             echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')"
           } >> "$GITHUB_ENV"
+
+      # Assert the invariants that matter, against the schema the repo just
+      # produced. If a future migration silently drops one of these, this fails
+      # rather than shipping. `db query --local -o csv` talks to the stack
+      # `supabase start` just brought up, so this needs no container names and
+      # no credentials.
+      - name: Assert security invariants hold in the built schema
+        run: |
+          set -euo pipefail
+
+          # Prints a single scalar from a one-row, one-column query.
+          scalar() { supabase db query --local -o csv --agent=no "$1" | tail -n 1 | tr -d '\r"'; }
+
+          fail=0
+          check() { # check <description> <expected> <actual>
+            if [ "$3" = "$2" ]; then
+              echo "  ok    $1"
+            else
+              echo "  FAIL  $1 (expected '$2', got '$3')"
+              fail=1
+            fi
+          }
+
+          echo "Security invariants:"
+
+          # A6 — the answer key. This migration sat unapplied in the repo for
+          # five months; the whole point of this job is that it cannot recur.
+          check "is_correct not SELECTable by anon/authenticated" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.column_privileges
+            WHERE table_schema = 'public' AND table_name = 'question_answers'
+              AND column_name = 'is_correct' AND privilege_type = 'SELECT'
+              AND grantee IN ('anon', 'authenticated')")"
+
+          # A4 — the auth linkage that de-anonymises players.
+          check "linked_auth_user_id not SELECTable by anon/authenticated" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.column_privileges
+            WHERE table_schema = 'public' AND table_name = 'players'
+              AND column_name = 'linked_auth_user_id' AND privilege_type = 'SELECT'
+              AND grantee IN ('anon', 'authenticated')")"
+
+          # RLS on at all, for every table holding player data. A table added
+          # later without RLS is the classic way this goes wrong.
+          check "no public table has RLS disabled" "0" "$(scalar "
+            SELECT count(*) FROM pg_tables
+            WHERE schemaname = 'public' AND NOT rowsecurity")"
+
+          # C1 — the trigger enforced 16s while the code used 12s, so every
+          # attempt was scored against a limit the client never showed.
+          check "enforce_question_timing uses 12 seconds" "1" "$(scalar "
+            SELECT count(*) FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'enforce_question_timing'
+              AND p.prosrc LIKE '%12 seconds%'")"
+
+          [ "$fail" = "0" ] || { echo; echo "Security invariants FAILED."; exit 1; }
+          echo
+          echo "All invariants hold."
 
       - name: Run RLS smoke tests
         # Local stack only. The suite refuses any non-local URL unless
