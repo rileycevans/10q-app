@@ -4,6 +4,7 @@ import "./globals.css";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/components/AuthProvider";
+import { BackButtonHandler } from "@/components/BackButtonHandler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const rubik = Rubik({
@@ -99,6 +100,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
+              <BackButtonHandler />
               <AnalyticsProvider>{children}</AnalyticsProvider>
             </AuthProvider>
           </ToastProvider>

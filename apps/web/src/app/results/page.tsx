@@ -231,7 +231,7 @@ function ResultsContent() {
             attemptId = attemptState.attempt_id;
           } else {
             // Still in progress — send them back to the quiz
-            router.push(`/play/q/${attemptState.current_index}`);
+            router.replace(`/play/q/${attemptState.current_index}`);
             return;
           }
         }
