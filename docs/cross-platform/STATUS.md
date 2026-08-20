@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 4 — Platform seam and auth (web half done; native half blocked on 0E)**
+**Current phase: Phase 5 — shell scaffolded on a branch; 0D device check is the remaining gate**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
