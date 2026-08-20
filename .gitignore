@@ -62,10 +62,12 @@ apps/web/test-results/
 # Capacitor native build output. The projects themselves ARE tracked — they
 # carry hand-edited config (URL schemes, entitlements) that must be reviewed —
 # but their build artifacts and resolved dependencies are not.
-apps/web/ios/App/Pods/
+# (Capacitor 8 uses Swift Package Manager, so there is no Pods/ directory.)
 apps/web/ios/App/build/
 apps/web/ios/App/App/public/
-apps/web/ios/App/Podfile.lock
+apps/web/ios/App/.swiftpm/
+apps/web/ios/App/CapApp-SPM/.build/
+apps/web/ios/DerivedData/
 apps/web/android/.gradle/
 apps/web/android/build/
 apps/web/android/app/build/

@@ -78,6 +78,19 @@ BUILD_TARGET=native npm run build --workspace=apps/web
 OUT="$WEB/out"
 [ -d "$OUT" ] || { echo "expected export at $OUT — not found" >&2; exit 1; }
 
+# Copy the export into the native projects and refresh plugin registrations.
+# Skipped when the platforms are absent so the script still works as an
+# export-only build (which is what CI runs — it validates the export without
+# needing Xcode or the Android SDK).
+if [ -d "$WEB/ios" ] || [ -d "$WEB/android" ]; then
+  echo
+  echo "Syncing native projects..."
+  ( cd "$WEB" && npx cap sync )
+else
+  echo
+  echo "No native projects present — skipping cap sync."
+fi
+
 echo
 echo "Export written to $OUT"
 echo "  $(find "$OUT" -name 'index.html' | wc -l | tr -d ' ') routes"

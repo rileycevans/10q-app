@@ -1,24 +1,62 @@
+import { App } from '@capacitor/app';
+import { Network } from '@capacitor/network';
 import type { Lifecycle } from './types';
-import webLifecycle from './lifecycle.web';
 
 /**
- * Native lifecycle — @capacitor/app appStateChange and @capacitor/network.
- * Gated on 0E.
+ * Native lifecycle.
  *
- * Delegates to the web implementation meanwhile. Inside a WebView,
- * visibilitychange does fire on background/foreground, so this is a genuine
- * partial rather than a stub — the Capacitor events are more reliable and
- * fire in more cases, which is why they replace it later.
+ * Capacitor's appStateChange rather than visibilitychange: the WebView is not
+ * reliably told it is hidden when the OS suspends the app, and on a
+ * server-timed game the resume moment is exactly when the client's clock is
+ * least trustworthy. A player who backgrounds mid-question comes back to a
+ * countdown that kept running on the server.
+ *
+ * Listeners register asynchronously, so the unsubscribe has to wait for the
+ * handle. Returning a function that removes it once resolved keeps the
+ * caller's cleanup synchronous and race-free — an immediate unmount still
+ * removes the listener rather than leaking it.
  */
 const lifecycle: Lifecycle = {
   onAppStateChange(listener) {
-    return webLifecycle.onAppStateChange(listener);
+    let removed = false;
+    const handle = App.addListener('appStateChange', ({ isActive }) => {
+      listener(isActive ? 'active' : 'background');
+    });
+
+    handle.then((h) => {
+      if (removed) void h.remove();
+    });
+
+    return () => {
+      removed = true;
+      void handle.then((h) => h.remove());
+    };
   },
+
   onNetworkChange(listener) {
-    return webLifecycle.onNetworkChange(listener);
+    let removed = false;
+    const handle = Network.addListener('networkStatusChange', (status) => {
+      listener(status.connected);
+    });
+
+    handle.then((h) => {
+      if (removed) void h.remove();
+    });
+
+    return () => {
+      removed = true;
+      void handle.then((h) => h.remove());
+    };
   },
-  isOnline() {
-    return webLifecycle.isOnline();
+
+  async isOnline() {
+    try {
+      return (await Network.getStatus()).connected;
+    } catch {
+      // Assume online: a false negative here would block requests that would
+      // otherwise have worked.
+      return true;
+    }
   },
 };
 

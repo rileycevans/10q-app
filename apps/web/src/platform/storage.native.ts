@@ -1,44 +1,67 @@
+import { Preferences } from '@capacitor/preferences';
 import type { Storage } from './types';
 
 /**
  * Native storage — @capacitor/preferences (NSUserDefaults / SharedPreferences).
  *
- * NOT YET IMPLEMENTED. `@capacitor/*` dependencies cannot be added until the
- * 0E gate clears (see docs/cross-platform/05-migration-plan.md); adding one
- * early is what the gate exists to prevent.
+ * Not localStorage. localStorage lives in the WebView's cache, and iOS evicts
+ * that under storage pressure without warning. Losing the Supabase session
+ * that way would read as "no session" on the next cold start and mint a fresh
+ * anonymous user, orphaning the player's streak, scores and leagues — the
+ * exact failure StorageResult exists to prevent. Preferences is backed by the
+ * OS key-value store and survives cache eviction, backgrounding and updates.
  *
- * Preferences rather than localStorage because localStorage lives in the
- * WebView's cache, and iOS evicts that under storage pressure. A player who
- * lost their session that way would come back as a new anonymous user with no
- * streak — the exact failure StorageResult exists to make impossible.
- *
- * When implementing:
- *   import { Preferences } from '@capacitor/preferences';
- *   get:  const { value } = await Preferences.get({ key })  -> { ok: true, value }
- *   wrap every call, and map a thrown error to { ok: false, error }.
+ * Every call is wrapped so a failure is reported as `ok: false` rather than
+ * collapsing into a null that the caller cannot distinguish from "empty".
  */
 
-const NOT_IMPLEMENTED = new Error(
-  'storage.native is not implemented — @capacitor/preferences is gated on 0E',
-);
+const PROBE_KEY = '__10q_durability_probe__';
 
 const storage: Storage = {
-  async get() {
-    return { ok: false, error: NOT_IMPLEMENTED };
+  async get(key) {
+    try {
+      const { value } = await Preferences.get({ key });
+      return { ok: true, value };
+    } catch (error) {
+      return { ok: false, error: error as Error };
+    }
   },
-  async set() {
-    return { ok: false, error: NOT_IMPLEMENTED };
+
+  async set(key, value) {
+    try {
+      await Preferences.set({ key, value });
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return { ok: false, error: error as Error };
+    }
   },
-  async remove() {
-    return { ok: false, error: NOT_IMPLEMENTED };
+
+  async remove(key) {
+    try {
+      await Preferences.remove({ key });
+      return { ok: true, value: undefined };
+    } catch (error) {
+      return { ok: false, error: error as Error };
+    }
   },
+
   /**
-   * False, not a throw. isDurable() gates anonymous-user creation, and the
-   * safe answer for "is storage durable?" when storage does not work yet is
-   * no — which blocks minting an account rather than orphaning one.
+   * Round-trip a probe rather than trusting that the plugin exists.
+   *
+   * This gates anonymous-user creation, so the question it answers is not
+   * "is Preferences available?" but "did a value I just wrote come back?".
+   * A plugin that resolves without persisting would pass any weaker check.
    */
   async isDurable() {
-    return false;
+    try {
+      const token = String(Date.now());
+      await Preferences.set({ key: PROBE_KEY, value: token });
+      const { value } = await Preferences.get({ key: PROBE_KEY });
+      await Preferences.remove({ key: PROBE_KEY });
+      return value === token;
+    } catch {
+      return false;
+    }
   },
 };
 
