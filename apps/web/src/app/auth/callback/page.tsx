@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import * as Sentry from '@sentry/nextjs';
+import { parseCallback, buildRecoveryRedirect } from '@/lib/auth/callback';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 
 export default function AuthCallbackPage() {
@@ -15,56 +16,42 @@ export default function AuthCallbackPage() {
     const handleCallback = async () => {
       try {
         // Get the code from the URL
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const queryParams = new URLSearchParams(window.location.search);
+        // URL parsing and the branch it drives live in lib/auth/callback.ts:
+        // it is the only part of this flow with real decisions in it, and
+        // native has to make the same ones from a deep link where there is no
+        // window.location to read.
+        const action = parseCallback(window.location.href);
+        const safeNext = action.next;
+        const errorCode = action.type === 'error' ? action.code : null;
+        const errorDescription = action.type === 'error' ? action.message : null;
 
-        const code = queryParams.get('code');
-        const errorCode = queryParams.get('error');
-        const errorDescription = queryParams.get('error_description');
-        const linkProvider = queryParams.get('link_provider');
-        const nextParam = queryParams.get('next');
-        // Only honor same-origin internal paths to avoid open redirects.
-        const safeNext =
-          nextParam &&
-          nextParam.startsWith('/') &&
-          !nextParam.startsWith('//') &&
-          !nextParam.startsWith('/auth/')
-            ? nextParam
-            : '/';
+        if (action.type === 'recover_sign_in') {
+          setRecoveringSignIn(true);
+          setError('Identity already linked to another user. Signing you in to your existing account...');
+          // Give React a moment to paint the message before the OAuth
+          // redirect replaces the page.
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          await supabase.auth.signOut();
+          await supabase.auth.signInWithOAuth({
+            provider: action.provider,
+            options: {
+              // Carries next. This used to be a bare
+              // `${origin}/auth/callback`, so anyone recovering an account
+              // was told they were being signed in to what they asked for and
+              // then landed on the home page instead.
+              redirectTo: buildRecoveryRedirect(window.location.origin, safeNext),
+            },
+          });
+          return;
+        }
 
-        if (errorCode || errorDescription) {
-          // Recovery path: user tapped Sign In on an anonymous session and
-          // the provider identity is already linked to another account. Sign
-          // the anonymous session out and start a fresh OAuth into the
-          // existing account. Anonymous progress is intentionally discarded.
-          const identityAlreadyLinked =
-            (errorDescription?.toLowerCase().includes('already') ?? false) ||
-            (errorDescription?.toLowerCase().includes('identity is already linked') ?? false);
-
-          if (
-            identityAlreadyLinked &&
-            (linkProvider === 'google' || linkProvider === 'apple')
-          ) {
-            setRecoveringSignIn(true);
-            setError('Identity already linked to another user. Signing you in to your existing account...');
-            // Give React a moment to paint the message before the OAuth
-            // redirect replaces the page.
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-            await supabase.auth.signOut();
-            await supabase.auth.signInWithOAuth({
-              provider: linkProvider,
-              options: { redirectTo: `${window.location.origin}/auth/callback` },
-            });
-            return;
-          }
-
+        if (action.type === 'error') {
           Sentry.withScope((scope) => {
             scope.setTag('auth.flow', 'oauth_callback');
             scope.setLevel('error');
             scope.setContext('auth_callback', {
               errorCode,
               errorDescription,
-              linkProvider,
             });
             Sentry.captureMessage('OAuth callback returned error params');
           });
@@ -73,8 +60,8 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (action.type === 'exchange_code') {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(action.code);
 
           if (exchangeError) {
             // The Supabase server-side /callback may have already exchanged
@@ -96,9 +83,8 @@ export default function AuthCallbackPage() {
           }
         }
 
-        // Check for access_token in hash (some OAuth flows use this)
-        const accessToken = hashParams.get('access_token');
-        if (accessToken) {
+        // Implicit flow returns tokens in the fragment instead of a code.
+        if (action.type === 'implicit_session') {
           // Session should already be set by Supabase client
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {

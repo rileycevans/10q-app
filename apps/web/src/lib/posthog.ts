@@ -1,4 +1,5 @@
 import posthog from 'posthog-js';
+import { buildIdentity } from './version';
 
 let initialized = false;
 
@@ -18,6 +19,15 @@ export function initPostHog() {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
     capture_pageview: false,
   });
+
+  // The five identifiers, as super properties so every event carries them
+  // without each call site remembering. Registered immediately after init so
+  // no event can be captured without them.
+  //
+  // client_platform is the one that matters most once native ships: without it
+  // there is no way to tell an iOS regression from a web one, and every funnel
+  // silently blends three platforms.
+  posthog.register(buildIdentity());
 
   initialized = true;
 }

@@ -7,6 +7,7 @@ import { finalizeAttempt } from '@/domains/attempt';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { useGameState } from '@/components/GameProvider';
 import { trackScreenView, trackQuizFinalized, trackAppError, setPersonProperties } from '@/lib/analytics';
+import { readCachedAttemptId, clearCachedAttempt } from '@/lib/attempt-cache';
 
 export default function FinalizePage() {
   return (
@@ -39,22 +40,14 @@ function FinalizeContent() {
 
         // 1. Try store (normal flow from gameplay)
         // 2. Try URL param
-        // 3. Try sessionStorage (hard refresh recovery)
+        // 3. Try the durable attempt cache (hard refresh / killed WebView)
         // 4. Last resort: re-discover from server
         let attemptId = game.attempt?.attempt_id
           || searchParams.get('attempt_id')
           || null;
 
         if (!attemptId) {
-          const cached = sessionStorage.getItem('attempt_state');
-          if (cached) {
-            try {
-              const parsed = JSON.parse(cached);
-              attemptId = parsed.attempt_id;
-            } catch {
-              // Invalid cache
-            }
-          }
+          attemptId = await readCachedAttemptId();
         }
 
         if (!attemptId) {
@@ -95,7 +88,7 @@ function FinalizeContent() {
           longest_streak: result.longest_streak,
         });
 
-        sessionStorage.removeItem('attempt_state');
+        clearCachedAttempt();
 
         const streakParams = result.current_streak > 0
           ? `&streak=${result.current_streak}&longest=${result.longest_streak}`

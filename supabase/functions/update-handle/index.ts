@@ -3,11 +3,10 @@
  * Allows users to customize their handle (once every 30 days)
  */
 
-// Inline CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
+
+import { containsBlockedContent } from "../_shared/handle-blocklist.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -99,6 +98,12 @@ function validateHandle(handle: string): { valid: boolean; error?: string } {
     return { valid: false, error: 'Handle must start with a letter and contain only letters and numbers' };
   }
 
+  // Enforced here rather than only in the browser: the client check is a
+  // convenience, but a direct call to this endpoint would otherwise skip it.
+  if (containsBlockedContent(trimmed)) {
+    return { valid: false, error: "That handle isn't available. Please choose another." };
+  }
+
   return { valid: true };
 }
 
@@ -166,7 +171,7 @@ async function getAuthenticatedUser(
 // Main function
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {
@@ -179,6 +184,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (discretionary write, retryable after updating).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "update_handle_request", {});
 
   try {

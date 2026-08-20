@@ -3,7 +3,8 @@
  * Returns the currently published quiz (latest with release_at_utc <= now())
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 import { successResponse, errorResponse } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -12,10 +13,15 @@ import { ErrorCodes } from "../_shared/response.ts";
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (read-only entry point; a blocked client loses nothing).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "get_current_quiz_request", {});
 
   try {

@@ -33,12 +33,24 @@ jobs:
       - name: Unit Tests
         run: npm test
 
+      # Fails if a generated native version file, or a release tag visible from
+      # HEAD, disagrees with version.json. Cheap, and it catches the class of
+      # drift that only shows up at submission time.
+      - name: Version check
+        run: node scripts/release/version.mjs check
+
+      # NOTE: this env block must stay in step with the deploy job's. PostHog's
+      # two vars were previously supplied only to deploy, and NEXT_PUBLIC_* is
+      # inlined at build time — so CI verified an artifact with analytics
+      # compiled out and production shipped a different one.
       - name: Build
         run: npm run build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: 10q-1z
           SENTRY_PROJECT: javascript-nextjs
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -53,6 +65,179 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
+  # The RLS suite proves the access-control invariants that the Edge Functions
+  # depend on. It needs a real Postgres with the migrations applied, so it runs
+  # against a local Supabase stack rather than in the main job.
+  #
+  # Before blocking-fix A5 this suite was invisible to CI (supabase/tests was
+  # not in the root workspaces array) *and* defaulted to the production URL and
+  # anon key — so the only way it ever ran was against live user data. That is
+  # how A1 and A2 survived. It is now a required check.
+  rls:
+    name: Schema invariants + RLS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `supabase start` mints per-run keys; capture them rather than
+      # hardcoding, so nothing in the repo carries a usable credential.
+      - name: Start local Supabase stack
+        run: |
+          supabase start
+          {
+            echo "SUPABASE_URL=$(supabase status --output json | jq -r '.API_URL')"
+            echo "SUPABASE_ANON_KEY=$(supabase status --output json | jq -r '.ANON_KEY')"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')"
+          } >> "$GITHUB_ENV"
+
+      # Assert the invariants that matter, against the schema the repo just
+      # produced. If a future migration silently drops one of these, this fails
+      # rather than shipping. `db query --local -o csv` talks to the stack
+      # `supabase start` just brought up, so this needs no container names and
+      # no credentials.
+      - name: Assert security invariants hold in the built schema
+        run: |
+          set -euo pipefail
+
+          # Prints a single scalar from a one-row, one-column query.
+          scalar() { supabase db query --local -o csv --agent=no "$1" | tail -n 1 | tr -d '\r"'; }
+
+          fail=0
+          check() { # check <description> <expected> <actual>
+            if [ "$3" = "$2" ]; then
+              echo "  ok    $1"
+            else
+              echo "  FAIL  $1 (expected '$2', got '$3')"
+              fail=1
+            fi
+          }
+
+          echo "Security invariants:"
+
+          # A6 — the answer key. This migration sat unapplied in the repo for
+          # five months; the whole point of this job is that it cannot recur.
+          check "is_correct not SELECTable by anon/authenticated" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.column_privileges
+            WHERE table_schema = 'public' AND table_name = 'question_answers'
+              AND column_name = 'is_correct' AND privilege_type = 'SELECT'
+              AND grantee IN ('anon', 'authenticated')")"
+
+          # A4 — the auth linkage that de-anonymises players.
+          check "linked_auth_user_id not SELECTable by anon/authenticated" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.column_privileges
+            WHERE table_schema = 'public' AND table_name = 'players'
+              AND column_name = 'linked_auth_user_id' AND privilege_type = 'SELECT'
+              AND grantee IN ('anon', 'authenticated')")"
+
+          # RLS on at all, for every table holding player data. A table added
+          # later without RLS is the classic way this goes wrong.
+          check "no public table has RLS disabled" "0" "$(scalar "
+            SELECT count(*) FROM pg_tables
+            WHERE schemaname = 'public' AND NOT rowsecurity")"
+
+          # C1 — the trigger enforced 16s while the code used 12s, so every
+          # attempt was scored against a limit the client never showed.
+          check "enforce_question_timing uses 12 seconds" "1" "$(scalar "
+            SELECT count(*) FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname = 'public' AND p.proname = 'enforce_question_timing'
+              AND p.prosrc LIKE '%12 seconds%'")"
+
+          [ "$fail" = "0" ] || { echo; echo "Security invariants FAILED."; exit 1; }
+          echo
+          echo "All invariants hold."
+
+      - name: Run RLS smoke tests
+        # Local stack only. The suite refuses any non-local URL unless
+        # ALLOW_NON_LOCAL_RLS_TESTS is set deliberately.
+        run: npm run test --workspace=supabase/tests
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: supabase stop
+
+  native-export:
+    name: Static export builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The export is what gets packaged into the iOS and Android bundles, so
+      # it has to build on every commit — not only when someone remembers to
+      # run it before a release. `output: 'export'` fails on things the web
+      # target tolerates (route handlers, middleware, dynamic segments without
+      # generateStaticParams), and those failures otherwise surface weeks later
+      # at packaging time.
+      - name: Build static export
+        run: npm run build:native --workspace=apps/web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
+
+      # Catches what a successful build does not: optimizer URLs that 404
+      # inside the bundle, routes that exported without an index.html, missing
+      # question pages. All silent at runtime.
+      - name: Validate the export
+        run: ./scripts/check-export.sh apps/web/out
+
+      # Playwright against the served export — the one place a
+      # server-dependency shows up as a failure rather than a silent 404 in a
+      # shipped app.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Test the served export
+        run: npm run test:e2e:export --workspace=apps/web
+
+      # The build script hides middleware.ts and the Sentry server configs and
+      # restores them from an EXIT trap. If a bug ever defeated that trap, the
+      # next web deploy would silently ship without middleware — so assert the
+      # tree is clean rather than trusting it.
+      - name: Assert the source tree was restored
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "native build left the tree dirty:"
+            git status --porcelain
+            exit 1
+          fi
+          if find apps/web -name '*.native-hidden' | grep -q .; then
+            echo "hidden files left behind:"
+            find apps/web -name '*.native-hidden'
+            exit 1
+          fi
+          echo "tree clean"
+
   deploy:
     name: Deploy to Cloudflare
     needs: ci
@@ -60,6 +245,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Backend before clients, always. A client that ships before the schema
+      # it depends on is broken for every user; a schema that ships before its
+      # client is merely inert. supabase.yml lives in a separate workflow so
+      # `needs:` cannot reach it — wait on its check instead.
+      #
+      # Only waits when this commit actually touched supabase/**, because
+      # supabase.yml is path-filtered and would otherwise never report a check
+      # for this ref, hanging the deploy until timeout.
+      - name: Check whether this commit touches Supabase
+        id: touched
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${context.payload.before}...${context.sha}`,
+            });
+            const hit = (data.files || []).some(f =>
+              f.filename.startsWith('supabase/migrations/') ||
+              f.filename.startsWith('supabase/functions/'));
+            core.setOutput('supabase', hit ? 'yes' : 'no');
+            core.info(hit ? 'Supabase touched — will wait for its deploy'
+                          : 'No Supabase changes — deploying directly');
+
+      - name: Wait for the Supabase deploy
+        if: steps.touched.outputs.supabase == 'yes'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'Deploy to production'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
       - name: Checkout
         uses: actions/checkout@v4
 

@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { ErrorCode } from '@10q/contracts';
 import { withRetry, getUserFriendlyErrorMessage } from '@/lib/error-handling';
 import { logger } from '@/lib/logger';
+import { CLIENT_VERSION_HEADER } from '@/lib/version';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -40,6 +41,16 @@ async function callEdgeFunction<T>(
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      // Phase 2 — identifies the client build to the backend so a minimum
+      // supported version can be enforced server-side. This is the only lever
+      // that works once store binaries are in the wild: a native client cannot
+      // be rolled back, and an old binary may run for months against a
+      // continuously-deployed backend.
+      //
+      // Format: `<platform>/<version>+<build>`. Sent on every request; the
+      // server currently records it without gating (permissive minimum), so
+      // shipping this now costs nothing and makes the gate available later.
+      'X-Client-Version': CLIENT_VERSION_HEADER,
     };
 
     if (requireAuth) {
@@ -294,12 +305,16 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  // C3: these field names must match resume-attempt/index.ts:212-213 exactly.
+  // They previously declared current_question_* while the server sends
+  // question_*, so the adapter read undefined on every resume and TypeScript
+  // could not catch it — the type asserted a shape the server never returns.
   resumeAttempt: (attemptId: string) =>
     callEdgeFunction<{
       attempt_id: string;
       current_index: number;
-      current_question_started_at: string | null;
-      current_question_expires_at: string | null;
+      question_started_at: string | null;
+      question_expires_at: string | null;
       state: string;
     }>(`resume-attempt?attempt_id=${encodeURIComponent(attemptId)}`, {
       method: 'GET',
@@ -317,7 +332,15 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
-  submitAnswer: (attemptId: string, questionId: string, selectedAnswerId: string) =>
+  // selectedAnswerId is null for a timeout — see C2. The client must NOT
+  // invent an answer when the countdown expires; it declares the timeout and
+  // lets the server record it as one.
+  submitAnswer: (
+    attemptId: string,
+    questionId: string,
+    selectedAnswerId: string | null,
+    isTimeout = false,
+  ) =>
     callEdgeFunction<{
       attempt_id: string;
       current_index: number;
@@ -337,6 +360,7 @@ export const edgeFunctions = {
         attempt_id: attemptId,
         question_id: questionId,
         selected_answer_id: selectedAnswerId, // Notion plan: answer instead of choice
+        is_timeout: isTimeout,
       },
       requireAuth: true,
     }),
@@ -573,6 +597,20 @@ export const edgeFunctions = {
       requireAuth: true,
     }),
 
+  // Leaving is the mechanism by which a player escapes a league they were
+  // added to without consent — Apple Guideline 1.2's "block abusive users".
+  leaveLeague: (leagueId: string) =>
+    callEdgeFunction<{
+      left: boolean;
+      league_deleted: boolean;
+      transferred_to: string | null;
+    }>('leave-league', {
+      method: 'POST',
+      body: { league_id: leagueId },
+      requireAuth: true,
+      retry: false,
+    }),
+
   updateHandle: (handle: string) =>
     callEdgeFunction<{
       handle_display: string;
@@ -582,6 +620,30 @@ export const edgeFunctions = {
       method: 'POST',
       body: { handle },
       requireAuth: true,
+    }),
+
+  reportHandle: (handle: string, reason: string, details?: string) =>
+    callEdgeFunction<{
+      success: boolean;
+      duplicate: boolean;
+    }>('report-handle', {
+      method: 'POST',
+      body: { handle, reason, details },
+      requireAuth: true,
+    }),
+
+  // Permanently deletes the caller's account and all personal data.
+  // Not retried: deletion is irreversible, so a retry after an ambiguous
+  // failure risks acting on an account that is already gone.
+  deleteAccount: () =>
+    callEdgeFunction<{
+      success: boolean;
+      transferred_leagues: number;
+    }>('delete-account', {
+      method: 'POST',
+      body: { confirm: true },
+      requireAuth: true,
+      retry: false,
     }),
 
   getProfileByHandle: (handle: string) =>

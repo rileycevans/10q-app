@@ -3,7 +3,8 @@
  * Returns leaderboard entries for a specific league with time windows, score types, and modes
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -12,10 +13,15 @@ import { getAuthenticatedUser } from "../_shared/auth.ts";
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (read-only, degraded UX only).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "get_league_leaderboard_request", {});
 
   try {
@@ -31,8 +37,20 @@ Deno.serve(async (req) => {
     const leagueId = url.searchParams.get("league_id");
     const window = url.searchParams.get("window") || "7d";
     const mode = url.searchParams.get("mode") || "top";
-    const limit = parseInt(url.searchParams.get("limit") || "100", 10);
-    const count = parseInt(url.searchParams.get("count") || "12", 10);
+    // A7 — same unbounded paging as get-global-leaderboard. Bounded
+    // identically; NaN falls back to the default rather than propagating.
+    const MAX_LIMIT = 200;
+    const MAX_COUNT = 50;
+
+    const rawLimit = parseInt(url.searchParams.get("limit") || "100", 10);
+    const rawCount = parseInt(url.searchParams.get("count") || "12", 10);
+
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(rawLimit, 1), MAX_LIMIT)
+      : 100;
+    const count = Number.isFinite(rawCount)
+      ? Math.min(Math.max(rawCount, 1), MAX_COUNT)
+      : 12;
     const scoreType = url.searchParams.get("score_type") || "cumulative";
 
     // Validate parameters

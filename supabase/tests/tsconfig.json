@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2022"
+    ],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "**/*.ts",
+    "../functions/_shared/attempt-state.ts",
+    "../functions/_shared/auth-core.ts",
+    "../functions/_shared/client-version.ts",
+    "../functions/_shared/cors.ts",
+    "../functions/_shared/scoring.ts",
+    "../functions/_shared/streak.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

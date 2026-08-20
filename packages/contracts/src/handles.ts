@@ -4,6 +4,8 @@
  * Examples: SwiftTiger42, BoldEagle17, CleverWolf93
  */
 
+import { containsBlockedContent } from './handle-blocklist';
+
 const ADJECTIVES = [
   'Swift', 'Bold', 'Clever', 'Mighty', 'Brave', 'Fierce', 'Noble', 'Wise',
   'Quick', 'Sharp', 'Bright', 'Dark', 'Wild', 'Calm', 'Silent', 'Loud',
@@ -60,6 +62,13 @@ export function validateHandle(handle: string): { valid: boolean; error?: string
 
   if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(trimmed)) {
     return { valid: false, error: 'Handle must start with a letter and contain only letters and numbers' };
+  }
+
+  // Handles are public, so they are user-generated content for store-policy
+  // purposes. Deliberately vague message: naming the matched term just tells
+  // someone probing the filter exactly what to work around.
+  if (containsBlockedContent(trimmed)) {
+    return { valid: false, error: 'That handle isn\'t available. Please choose another.' };
   }
 
   return { valid: true };

@@ -85,16 +85,20 @@ DEC-01  bundle id / applicationId  : <DECISION REQUIRED>
 DEC-02  app display name           : <DECISION REQUIRED>   (≤30 chars both stores)
 DEC-03  Apple account type         : <DECISION REQUIRED>   individual | organization
 DEC-03a Apple Team ID              : <fill after APL-01>
-DEC-04  Play account type          : <DECISION REQUIRED>   personal | organization
+DEC-04  Play account type          : personal, created 2026-08-19 -> GPL-15 APPLIES
+                                     (closed test, 12 testers, 14 consecutive days,
+                                      then a human-reviewed written application)
 DEC-05  support URL                : <DECISION REQUIRED>
 DEC-06  marketing URL              : <DECISION REQUIRED>   (optional)
-DEC-07  privacy policy URL         : <DECISION REQUIRED>
+DEC-07  privacy policy URL         : https://play10q.com/privacy  (live)
 DEC-08  deletion request URL       : <DECISION REQUIRED>
 DEC-09  age rating answers         : <DECISION REQUIRED>   see §5
 DEC-10  primary category           : <DECISION REQUIRED>
 DEC-11  Play target age bands      : <DECISION REQUIRED>
 DEC-12  reviewer pre-11:30 plan    : <DECISION REQUIRED>
-DEC-13  owned-leagues rule         : <DECISION REQUIRED>
+DEC-13  owned-leagues rule         : transfer to longest-standing member;
+                                     delete only if the owner is the last member.
+                                     Implemented in delete-account and leave-league.
 ```
 
 ---

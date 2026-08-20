@@ -3,7 +3,7 @@
  * Admin-only: creates a quiz with questions, answers, and optional tags.
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
@@ -27,7 +27,7 @@ interface CreateQuizBody {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {

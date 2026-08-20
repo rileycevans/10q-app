@@ -4,7 +4,8 @@
  * Sets server-authoritative timing for first question
  */
 
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
@@ -14,7 +15,7 @@ import { classifyAttempt, isUniqueViolation } from "../_shared/attempt-state.ts"
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {
@@ -27,6 +28,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (preferred gate point — blocks BEFORE the daily attempt is consumed).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "start_attempt_request", {});
 
   try {

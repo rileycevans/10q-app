@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { validateLeagueName } from '@10q/contracts';
 import { createLeague } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import dynamic from 'next/dynamic';
@@ -21,12 +22,19 @@ export default function CreateLeaguePage() {
     e.preventDefault();
     if (!name.trim() || loading) return;
 
+    // Same rules the server enforces, surfaced before the round-trip.
+    const validation = validateLeagueName(name);
+    if (!validation.valid) {
+      setError(validation.error);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const league = await createLeague(name.trim());
-      router.push(`/leagues/${league.league_id}`);
+      router.push(`/leagues/view?id=${league.league_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create league');
       setLoading(false);

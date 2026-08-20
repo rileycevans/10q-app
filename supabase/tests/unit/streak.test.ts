@@ -139,3 +139,61 @@ describe("computeStreak", () => {
     ).toEqual({ currentStreak: 101, longestStreak: 101 });
   });
 });
+
+/**
+ * C7 — streaks never expired.
+ *
+ * computeStreak only runs at finalize, so players.current_streak is the value
+ * as of the last time someone played, not as of today. Measured before the
+ * fix: 132 of 133 non-zero streaks were already dead by the game's own rule,
+ * and the home screen was reading that column directly — so those players were
+ * shown a streak they no longer had. One had last played four months earlier.
+ *
+ * The fix derives liveness instead of storing it (public.is_streak_alive and
+ * the player_streaks view). These assert the rule the SQL implements; the
+ * boundary is the part worth pinning, since "yesterday still counts" is a
+ * deliberate product choice, not an off-by-one.
+ */
+describe("streak expiry rule (C7)", () => {
+  // Mirrors public.is_streak_alive(). Kept in the test rather than shipped
+  // twice: the SQL is the enforcement point, this is the specification.
+  function isStreakAlive(lastQuizDate: string | null, today: string): boolean {
+    if (!lastQuizDate) return false;
+    const last = Date.parse(`${lastQuizDate}T00:00:00.000Z`);
+    const now = Date.parse(`${today}T00:00:00.000Z`);
+    return Math.round((now - last) / 86_400_000) <= 1;
+  }
+
+  const TODAY = "2026-08-19";
+
+  it("today counts as alive", () => {
+    expect(isStreakAlive("2026-08-19", TODAY)).toBe(true);
+  });
+
+  it("yesterday still counts — today's quiz may not have dropped for them yet", () => {
+    expect(isStreakAlive("2026-08-18", TODAY)).toBe(true);
+  });
+
+  it("two days ago is dead", () => {
+    expect(isStreakAlive("2026-08-17", TODAY)).toBe(false);
+  });
+
+  it("months ago is dead — the real case in production", () => {
+    // A player whose last_quiz_date was 2026-04-21 was reading a 15-day streak.
+    expect(isStreakAlive("2026-04-21", TODAY)).toBe(false);
+  });
+
+  it("never having played is not a live streak", () => {
+    expect(isStreakAlive(null, TODAY)).toBe(false);
+  });
+
+  it("handles a month boundary", () => {
+    expect(isStreakAlive("2026-07-31", "2026-08-01")).toBe(true);
+    expect(isStreakAlive("2026-07-30", "2026-08-01")).toBe(false);
+  });
+
+  it("handles a year boundary", () => {
+    expect(isStreakAlive("2025-12-31", "2026-01-01")).toBe(true);
+    expect(isStreakAlive("2025-12-30", "2026-01-01")).toBe(false);
+  });
+});

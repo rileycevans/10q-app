@@ -48,3 +48,39 @@ export async function updateHandle(handle: string) {
   }
   return response.data;
 }
+
+export type ReportReason = 'offensive' | 'impersonation' | 'spam' | 'other';
+
+/**
+ * Report another player's handle as objectionable.
+ *
+ * Resolves successfully when the caller has already reported this player —
+ * the outcome is the same from their point of view, and distinguishing the
+ * two would leak who has been reported.
+ */
+export async function reportHandle(
+  handle: string,
+  reason: ReportReason,
+  details?: string
+) {
+  const response = await edgeFunctions.reportHandle(handle, reason, details);
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message || 'Failed to submit report');
+  }
+  return response.data;
+}
+
+/**
+ * Permanently deletes the signed-in account and every piece of personal data
+ * attached to it. Leagues the player owns are handed to the longest-standing
+ * remaining member; leagues where they were the only member are removed.
+ *
+ * Irreversible. Callers must confirm with the user first.
+ */
+export async function deleteAccount() {
+  const response = await edgeFunctions.deleteAccount();
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message || 'Failed to delete account');
+  }
+  return response.data;
+}

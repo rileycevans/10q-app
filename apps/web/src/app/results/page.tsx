@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { trackScreenView, trackResultsView, trackShareClicked, trackQuizFinalized, trackAppError, setPersonProperties } from '@/lib/analytics';
 
 import Link from 'next/link';
+import { clearCachedAttempt } from '@/lib/attempt-cache';
 
 function formatTime(ms: number): string {
   const seconds = (ms / 1000).toFixed(1);
@@ -256,7 +257,7 @@ function ResultsContent() {
             longest_streak: finalizeResult.longest_streak,
           });
 
-          sessionStorage.removeItem('attempt_state');
+          clearCachedAttempt();
         } catch (finalizeErr) {
           // Most likely cause: attempt was already finalized server-side, in
           // which case we can still fetch results below. Log so unexpected

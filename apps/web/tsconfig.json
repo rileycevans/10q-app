@@ -30,5 +30,12 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    // Finder-style duplicates of Next's generated types ("routes.d 3.ts").
+    // They redeclare every route type and fail typecheck with duplicate
+    // identifiers — build output, never source, and a clean rebuild drops them.
+    "**/* *.ts",
+    "**/* *.tsx"
+  ]
 }

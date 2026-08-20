@@ -2,7 +2,19 @@
  * Standardized response format for all Edge Functions
  */
 
-import { corsHeaders } from "./cors.ts";
+import { corsHeaders, corsHeadersFor } from "./cors.ts";
+
+/**
+ * Resolve CORS headers for a response.
+ *
+ * Pass the Request wherever possible: a static Access-Control-Allow-Origin
+ * cannot serve the web app and both Capacitor shells at once (precondition
+ * 0D). The static fallback exists so call sites can migrate incrementally
+ * rather than in one 25-function sweep.
+ */
+function resolveCors(req?: Request): Record<string, string> {
+  return req ? corsHeadersFor(req) : corsHeaders;
+}
 
 // Error codes (mirrored from contracts package for Deno compatibility)
 export const ErrorCodes = {
@@ -21,6 +33,11 @@ export const ErrorCodes = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   NO_VIEWER_SCORE: "NO_VIEWER_SCORE",
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+
+  // Returned with HTTP 426. The client build is below the configured minimum
+  // supported version — see _shared/client-version.ts and
+  // docs/cross-platform/release/VERSIONING.md §8.
+  CLIENT_UPDATE_REQUIRED: "CLIENT_UPDATE_REQUIRED",
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
@@ -38,7 +55,8 @@ export interface ApiResponse<T> {
 
 export function successResponse<T>(
   data: T,
-  requestId: string
+  requestId: string,
+  req?: Request,
 ): Response {
   const response: ApiResponse<T> = {
     ok: true,
@@ -49,7 +67,7 @@ export function successResponse<T>(
   return new Response(JSON.stringify(response), {
     headers: { 
       "Content-Type": "application/json",
-      ...corsHeaders,
+      ...resolveCors(req),
     },
     status: 200,
   });
@@ -60,7 +78,8 @@ export function errorResponse(
   message: string,
   requestId: string,
   status: number = 400,
-  details?: unknown
+  details?: unknown,
+  req?: Request,
 ): Response {
   const response: ApiResponse<never> = {
     ok: false,
@@ -75,7 +94,7 @@ export function errorResponse(
   return new Response(JSON.stringify(response), {
     headers: { 
       "Content-Type": "application/json",
-      ...corsHeaders,
+      ...resolveCors(req),
     },
     status,
   });

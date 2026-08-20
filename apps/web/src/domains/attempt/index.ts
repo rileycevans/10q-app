@@ -126,8 +126,14 @@ export async function resumeAttempt(attemptId: string): Promise<AttemptState> {
     attempt_id: data.attempt_id,
     quiz_id: '', // Not returned by resume
     current_index: data.current_index,
-    current_question_started_at: data.current_question_started_at,
-    current_question_expires_at: data.current_question_expires_at,
+    // C3: resume-attempt returns question_started_at / question_expires_at
+    // (resume-attempt/index.ts:212-213), NOT current_question_*. Reading the
+    // wrong names made both undefined on every resume, so the client fell into
+    // the Q1 branch and handed the player a fresh 12s window on a question
+    // whose server clock had already been running. On mobile, resume is the
+    // common path rather than the rare one.
+    current_question_started_at: data.question_started_at,
+    current_question_expires_at: data.question_expires_at,
     state,
   };
 }
@@ -136,12 +142,26 @@ export async function resumeAttempt(attemptId: string): Promise<AttemptState> {
  * Submit an answer for a question
  * Note: Uses selected_answer_id per Notion plan (not selected_choice_id)
  */
+/**
+ * Submit an answer, or declare a timeout.
+ *
+ * Pass `selectedAnswerId: null, isTimeout: true` when the countdown expires.
+ * Do not substitute an arbitrary answer — that was C2, and it scored a
+ * never-answered question as a deliberate correct selection whenever the
+ * substituted answer happened to be the right one.
+ */
 export async function submitAnswer(
   attemptId: string,
   questionId: string,
-  selectedAnswerId: string
+  selectedAnswerId: string | null,
+  isTimeout = false,
 ): Promise<AnswerResult> {
-  const response = await edgeFunctions.submitAnswer(attemptId, questionId, selectedAnswerId);
+  const response = await edgeFunctions.submitAnswer(
+    attemptId,
+    questionId,
+    selectedAnswerId,
+    isTimeout,
+  );
 
   if (!response.ok || !response.data) {
     throw new Error(response.error?.message || 'Failed to submit answer');

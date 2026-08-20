@@ -3,11 +3,10 @@
  * Creates a new private league with the authenticated user as owner
  */
 
-// Inline CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
+
+import { validateLeagueName } from "../_shared/league-names.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -162,7 +161,7 @@ function generateInviteCode(): string {
 // Main function
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {
@@ -175,6 +174,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (discretionary write, retryable after updating).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "create_league_request", {});
 
   try {
@@ -187,19 +191,16 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { name } = body;
 
-    if (!name || typeof name !== "string" || name.trim().length === 0) {
+    // League names are public to every member, which makes them user-generated
+    // content under App Store Guideline 1.2 and Google Play's UGC policy.
+    // Validation was length-only, so any slur passed through verbatim.
+    // Enforced here rather than only in the browser: a direct call to this
+    // endpoint would otherwise skip the check entirely.
+    const nameValidation = validateLeagueName(name);
+    if (!nameValidation.valid) {
       return errorResponse(
         ErrorCodes.VALIDATION_ERROR,
-        "League name is required",
-        requestId,
-        400
-      );
-    }
-
-    if (name.length > 100) {
-      return errorResponse(
-        ErrorCodes.VALIDATION_ERROR,
-        "League name must be 100 characters or less",
+        nameValidation.error,
         requestId,
         400
       );

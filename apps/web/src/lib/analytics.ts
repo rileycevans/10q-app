@@ -159,6 +159,20 @@ export function trackHandleUpdate(props: {
   capture('handle_update', props);
 }
 
+// Fired before the account is destroyed — afterwards there is no session left
+// to attribute the event to.
+export function trackAccountDeleted() {
+  capture('account_deleted');
+}
+
+// Deliberately records only the reason, never who was reported: the reported
+// handle is personal data and doesn't belong in analytics.
+export function trackHandleReported(props: {
+  reason: string;
+}) {
+  capture('handle_reported', props);
+}
+
 // ── Auth events ─────────────────────────────────────────────────────
 
 export function trackSignIn(props: {

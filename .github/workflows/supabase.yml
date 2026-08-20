@@ -1,0 +1,146 @@
+name: Supabase
+
+# Migrations and Edge Functions were deployed entirely by hand. That is how
+# 20260310100000_restrict_is_correct_column.sql sat in the repo for five months
+# without ever being applied, leaving the answer key readable by anyone holding
+# the publishable anon key. This workflow makes the repo, rather than whoever
+# last remembered to run the CLI, the thing that reaches a database.
+#
+# Correctness checks are NOT here. ci.yml's "Schema invariants + RLS" job
+# already boots a local stack from supabase/migrations, so the assertions live
+# there rather than paying for a second Docker boot. This file is only about
+# getting verified migrations onto a hosted project.
+#
+# Ordering rule from the release architecture:
+#
+#     Backend before clients, always, and only ever backward-compatible.
+#
+# A client that ships before the schema it depends on is broken for everyone;
+# a schema that ships before its client is inert. Hence deploy-staging gates on
+# ci.yml passing, and any future production job must gate the Cloudflare deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      - '.github/workflows/supabase.yml'
+  workflow_dispatch:
+
+concurrency:
+  # Two overlapping migration pushes against one database is how ledgers get
+  # into the state production is already in. Never run two of these at once.
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # This workflow triggers on supabase/** while ci.yml triggers on
+      # everything, so without an explicit wait the two race and a migration
+      # can reach staging while the test suite is still red. Block until the
+      # schema-invariant and RLS job for this exact commit has passed.
+      - name: Wait for schema invariants + RLS to pass
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'Schema invariants + RLS'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Staging's ledger was seeded from this repo with `db push --include-all`,
+      # so `db push` is meaningful there: it applies exactly what the repo says
+      # and nothing else. That is not true of production — see the bottom of
+      # this file.
+      - name: Push migrations
+        run: supabase db push --project-ref "$STAGING_REF"
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_STAGING_DB_PASSWORD }}
+
+      # Only the 10Q functions. extract-claim, ingest-claim, poll-tweets and
+      # poll-tweets-batch live in this repo but belong to the separate transfers
+      # project and must not be deployed to a 10Q database.
+      - name: Deploy Edge Functions
+        run: |
+          set -euo pipefail
+          for fn in get-current-quiz start-attempt start-question-timer submit-answer \
+                    finalize-attempt resume-attempt get-attempt-results \
+                    get-global-leaderboard get-league-leaderboard get-league-details \
+                    get-my-leagues get-league-by-invite create-league join-league \
+                    leave-league add-league-member remove-league-member delete-league \
+                    get-profile-by-handle update-handle report-handle \
+                    delete-account delete-attempt create-quiz; do
+            echo "::group::$fn"
+            supabase functions deploy "$fn" --project-ref "$STAGING_REF"
+            echo "::endgroup::"
+          done
+        env:
+          STAGING_REF: ${{ secrets.SUPABASE_STAGING_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  deploy-production:
+    name: Deploy to production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Production's ledger was reconciled with this repo on 2026-08-19 (see
+      # docs/cross-platform/STATUS.md). Before that, `db push` refused to run
+      # here at all: 35 rows, 17 stamped with dashboard timestamps instead of
+      # repo filenames and 18 belonging to the separate transfers project.
+      # It now reports "Remote database is up to date" against the repo's 19.
+      #
+      # If this step ever fails with "Remote migration versions not found in
+      # local migrations directory", something applied a migration outside this
+      # repo. Fix that rather than reaching for `migration repair` in CI —
+      # repair rewrites applied-migration history and belongs in a reviewed
+      # session, not an automated one.
+      - name: Push migrations
+        run: supabase db push --project-ref "$PROD_REF"
+        env:
+          PROD_REF: ${{ secrets.SUPABASE_PROD_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+
+      # Same 24 functions as staging. The four transfers functions
+      # (extract-claim, ingest-claim, poll-tweets, poll-tweets-batch) are
+      # deliberately excluded — they belong to the other project.
+      - name: Deploy Edge Functions
+        run: |
+          set -euo pipefail
+          for fn in get-current-quiz start-attempt start-question-timer submit-answer \
+                    finalize-attempt resume-attempt get-attempt-results \
+                    get-global-leaderboard get-league-leaderboard get-league-details \
+                    get-my-leagues get-league-by-invite create-league join-league \
+                    leave-league add-league-member remove-league-member delete-league \
+                    get-profile-by-handle update-handle report-handle \
+                    delete-account delete-attempt create-quiz; do
+            echo "::group::$fn"
+            supabase functions deploy "$fn" --project-ref "$PROD_REF"
+            echo "::endgroup::"
+          done
+        env:
+          PROD_REF: ${{ secrets.SUPABASE_PROD_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

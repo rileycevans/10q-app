@@ -55,14 +55,40 @@ export function isUniqueViolation(
 }
 
 /**
+ * How long after an attempt is created Q1's timer may still be started
+ * normally. Beyond this the clock is backdated to the attempt's start.
+ *
+ * start-attempt deliberately leaves current_question_started_at NULL so the
+ * player is not charged for navigation latency — but it returns all ten
+ * questions and their choices in the same response. Without a bound, a
+ * scripted client can hold that payload, research Q1 for as long as it likes,
+ * then fire start-question-timer and submit-answer back-to-back for an elapsed
+ * under 3s and the maximum speed bonus (blocking-fix A3). Q2–Q10 are immune
+ * because the server stamps their start when the previous answer lands.
+ *
+ * 60s is far beyond any legitimate navigation delay (the UI starts the timer
+ * on question mount) while still absorbing a slow cold start or a backgrounded
+ * tab resumed a moment later.
+ */
+export const MAX_FIRST_QUESTION_START_DELAY_MS = 60_000;
+
+/**
  * Decide whether start-question-timer should issue a fresh start or
  * return the existing timer values (idempotent).
+ *
+ * When `attemptStartedAt` is supplied and the request arrives more than
+ * MAX_FIRST_QUESTION_START_DELAY_MS after it, the clock is backdated to the
+ * attempt's start rather than rejected: refusing outright would strand a
+ * player whose device genuinely stalled, with no way to complete the quiz.
+ * Backdating removes the incentive (the stall is charged against their time)
+ * without locking anyone out.
  */
 export function planQuestionTimerStart(
   attempt: {
     finalized_at: string | null;
     current_question_started_at: string | null;
     current_question_expires_at: string | null;
+    started_at?: string | null;
   },
   nowMs: number,
   questionTimeLimitMs: number,
@@ -91,8 +117,23 @@ export function planQuestionTimerStart(
     };
   }
 
-  const start = new Date(nowMs).toISOString();
-  const expires = new Date(nowMs + questionTimeLimitMs).toISOString();
+  // A3 clamp. If the client took an implausibly long time to start Q1's
+  // clock, treat the clock as having started when the attempt did, so the
+  // delay is charged to the player rather than banked as free research time.
+  let effectiveStartMs = nowMs;
+
+  if (attempt.started_at) {
+    const attemptStartedMs = Date.parse(attempt.started_at);
+    if (
+      Number.isFinite(attemptStartedMs) &&
+      nowMs - attemptStartedMs > MAX_FIRST_QUESTION_START_DELAY_MS
+    ) {
+      effectiveStartMs = attemptStartedMs;
+    }
+  }
+
+  const start = new Date(effectiveStartMs).toISOString();
+  const expires = new Date(effectiveStartMs + questionTimeLimitMs).toISOString();
   return { action: "start", questionStartedAt: start, questionExpiresAt: expires };
 }
 

@@ -129,6 +129,29 @@ export async function deleteLeague(leagueId: string): Promise<void> {
 }
 
 /**
+ * Leave a league you are a member of.
+ *
+ * An owner who leaves hands the league to its longest-standing remaining
+ * member; an owner who is the last member takes the league with them.
+ * Returns which of those happened so the caller can say so.
+ */
+export async function leaveLeague(leagueId: string): Promise<{
+  league_deleted: boolean;
+  transferred_to: string | null;
+}> {
+  const response = await edgeFunctions.leaveLeague(leagueId);
+
+  if (!response.ok || !response.data) {
+    throw new Error(response.error?.message || 'Failed to leave league');
+  }
+
+  return {
+    league_deleted: response.data.league_deleted,
+    transferred_to: response.data.transferred_to,
+  };
+}
+
+/**
  * Join a league using an invite code
  */
 export async function joinLeague(inviteCode: string): Promise<{

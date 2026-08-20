@@ -8,15 +8,301 @@ Read this immediately after invoking the
 Verify it against `.agent/skills/cross-platform-migration/check-docs` — **if the observed
 implementation state contradicts this file, the observation wins and this file is wrong.**
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-19
 
 ---
 
-**Current phase: Phase 0 — Preconditions (0A–0E)** (not started)
+**Current phase: Phase 4 — Platform seam and auth (web half done; native half blocked on 0E)**
 
-Planning and documentation are complete. No migration code has landed. `check-docs`
-reports the static export, Capacitor, both native projects, the platform seam and the
-release scripts as absent — consistent with a migration that has not begun.
+Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
+check is the one open item, see below) and Phase 1's correctness and hardening
+work is finished. Phase 2 does not depend on the outstanding 0D device check.
+
+| | Precondition | State |
+|---|---|---|
+| **0A** | Packaged Capacitor routing model | **PASSED** on iOS 26.5 simulator — see below |
+| **0B** | Server-side attempt integrity | **done** — A1, A3, A5, A6 closed |
+| **0C** | Secure quiz publishing | **done** |
+| **0D** | Capacitor-origin CORS from a device | **code done, device check pending** — see below |
+| **0E** | Gate | **3 of 4 criteria met** — 0D's device check outstanding |
+
+No migration code has landed. `check-docs` still reports the static export,
+Capacitor, both native projects, the platform seam and the release scripts as
+absent.
+
+**0A — PASSED (measured 2026-08-19).** The architectural go/no-go is answered:
+the packaged Capacitor routing model works.
+
+Measured on an iPhone 17 Pro simulator (iOS 26.5) running a real
+`output: 'export'` build inside a Capacitor shell, assets served from the
+device bundle through `WKURLSchemeHandler` — not an HTTP server, and not
+`server.url`.
+
+| | `/play/q/1/` | after tapping through to `/play/q/2/` |
+|---|---|---|
+| provider `mountId` | `r3epwiwr` | `r3epwiwr` — unchanged |
+| provider `mountCount` | 1 | 1 — unchanged |
+
+**`GameProvider` survived the navigation.** Next's export-mode HEAD probe
+(`segment-cache/cache.js:855-866`) therefore receives a 2xx from Capacitor's
+scheme handler: `rejectRouteCacheEntry` never fired, the router stayed on the
+client-transition path, and no document load occurred. In the real app that is
+the difference between in-flight quiz state surviving between questions and
+being silently destroyed.
+
+Criteria were written to `scratchpad/measure-0a.md` **before** the measurement,
+so the bar could not move to fit the result. The earlier static analysis of the
+Capacitor binary pointed the same way but was explicitly not accepted as proof;
+this is the measurement it was standing in for.
+
+**ADR-001 holds.** No architecture revision needed.
+
+Caveat worth keeping: the plan asks for 0A on **real hardware**. This ran on a
+simulator, which exercises the same `WKURLSchemeHandler` code path and is
+strong evidence, but a device pass is still worth taking opportunistically
+during Phase 5 when a signed build exists.
+
+**Two export blockers found and worth keeping:** `manifest.ts` needs
+`export const dynamic = 'force-static'` (already carried back to the working
+branch — it is correct for the SSR build too), and
+`sentry-test/server/route.ts` is build-fatal under export and must be excluded
+from the native build in Phase 3.
+
+**Probe branch:** `throwaway/0a-head-probe`. Never merge. The four dynamic
+routes there are stubbed, not deleted.
+
+**0E gate — 3 of 4.** Against the checklist in
+[05-migration-plan.md](05-migration-plan.md#0e--gate-native-work-may-now-begin):
+
+- [x] **0A passed** — measured, ADR-001 unchanged. Simulator rather than
+      hardware; see the caveat above.
+- [x] **0B and 0C closed, with tests that run in CI** — `supabase/tests` is in
+      the root workspaces array and a CI job runs the RLS suite against a local
+      stack.
+- [ ] **0D proven from a device** — the CORS code is shipped and verified
+      against production for all three origins, but the plan asks for the full
+      game loop from a real Capacitor WebView. The 0A probe shell is a bare
+      export with stubbed routes; it does not exercise the game loop. This is
+      the one outstanding item.
+- [x] **STATUS.md records each outcome**, including the corrections to the
+      audit (A5's unit tests were never broken; A6's migration had never been
+      applied; CORS was a latent trap rather than a live break).
+
+**Practical read:** 0D's remaining check is a verification step, not a design
+question — the architecture risk that 0E exists to guard against was 0A, and it
+passed. The natural place to close it is early Phase 5, when a Capacitor shell
+first runs the real app rather than a probe. Phases 1–3 do not depend on it.
+
+**Phase 1 — correctness and hardening: done.** C1, C2, C3, C7, A4 fixed with
+tests; A6 was closed in Phase 0; A7 triaged below.
+
+**A7 triage (measured 2026-08-19, decisions recorded).** The exit criterion is
+a recorded decision per item, not a fix per item.
+
+| Item | Measured | Decision |
+|---|---|---|
+| Unbounded leaderboard `limit` | `?limit=1000000` accepted. Returned 133 rows (all that exist) but took **1.7s** — the aggregation runs over all of `daily_scores` before slicing, so it is a cost amplifier, not a data leak | **Fixed.** Capped at 200 (`count` at 50) on both global and league leaderboards, with `NaN` falling back to the default rather than propagating |
+| `private` schema exposed | Confirmed empty: 0 tables, 0 views, 0 functions. Not reachable with the anon key today | **Fixed.** Removed from `config.toml` `schemas`. Anything a future migration creates there would otherwise be API-reachable by default |
+| `get-profile-by-handle` unauthenticated and unthrottled | **2.27s per call**, service-role, heavy multi-join, no auth and no throttle. The cheapest DoS surface in the app | **Deferred to Phase 2**, deliberately. The fix is rate limiting, which needs infrastructure that does not exist yet (no staging, no shared limiter). Adding a bespoke per-function limiter now would be thrown away. Tracked as a Phase 2 exit item |
+| No rate limiting or idempotency keys anywhere | `outbox_events.idempotency_key` exists and is **never written** (0 writes across all functions). Nothing throttles attempt cycling or handle enumeration | **Deferred to Phase 2**, same reason. Note the two worst amplifiers are already closed: `delete-attempt` is admin-gated (A1) and `publish-quiz` is deleted (A2), so the unthrottled loop that mattered most is gone |
+| Full answer key released at finalize | Inherent to showing a results breakdown. A1 is closed, so the one-shot-per-player guarantee now holds | **Product decision, not a defect.** Acceptable while the leaderboard carries no stakes. Revisit if prizes or ranked play are ever added |
+
+**Phase 2 — Foundations (complete).** The one open row is the native build
+target, which cannot exist before Phase 5.
+
+| Exit criterion | State |
+|---|---|
+| `app_version` / `app_build` readable at runtime on every platform | **done** — `version.json` + `scripts/release/version.mjs`, inlined via `src/lib/version.ts`. Verified in the shipped bundle |
+| PostHog carries `client_platform`; Sentry has `release` + `dist` + `client_platform` | **done** — PostHog super properties registered at init; Sentry `release`/`dist`/tags set, and `environment` now comes from the build config rather than `NODE_ENV` (which made every artifact report as production) |
+| `X-Client-Version` sent and enforced, minimum set permissively | **done** — `_shared/client-version.ts` gates six door-level functions and returns 426 `CLIENT_UPDATE_REQUIRED`. Inert by default (`MIN_CLIENT_*` unset = `0.0.0`), which is the required end state: armed on day one would brick clients. Never gated on `start-question-timer`, `submit-answer`, `finalize-attempt`, `resume-attempt` or `delete-account` — a gate firing mid-attempt destroys a player's single daily play, and blocking `delete-account` is an App Store 5.1.1(v) violation |
+| Staging exists end to end and a build can be pointed at it | **partly** — a second free Supabase project exists with all 19 migrations and 24 functions deployed ([ENVIRONMENTS.md](ENVIRONMENTS.md)). No Cloudflare Worker or seeded data yet, so a build cannot be pointed at it end to end |
+| Both build targets run in CI | **partly** — the web target's env drift is fixed and `version.mjs check` runs; the native target does not exist until Phase 5 |
+| Migrations reach a database from the repo rather than by hand | **done** — `.github/workflows/supabase.yml` pushes migrations and the 24 10Q functions to staging then production on `main`, gated on the invariants job, with the Cloudflare deploy waiting on it. Production's ledger was reconciled to make this possible (below) |
+
+**Fixed in passing: CI verified a different artifact than production shipped.**
+`NEXT_PUBLIC_POSTHOG_KEY` and `_HOST` were supplied only to the deploy job, and
+`NEXT_PUBLIC_*` is inlined at build time — so CI was type-checking and building
+a bundle with analytics compiled out, then production built a different one.
+Both env blocks now match, with a comment saying they must stay in step.
+
+**Near-miss worth recording:** adding `X-Client-Version` would have broken
+*every* API request, because `_shared/cors.ts` did not list it in
+`Access-Control-Allow-Headers`. Preflight failures are silent — the request
+never leaves the browser and the server logs nothing — so this would have
+looked like a total client outage with no server-side trace. Caught before
+deploy, now asserted in the CORS tests.
+
+**13 of 24 Edge Functions were running stale code in production (found
+2026-08-19, fixed).** The `x-client-version` CORS fix was committed in Phase 2
+and deployed to only 11 functions. The other 13 — including
+`get-profile-by-handle`, `get-league-by-invite`, `report-handle` and
+`delete-account` — still rejected the header at preflight.
+
+Every one of those calls failed from the browser. Preflight rejections are
+invisible server-side: the request never arrives, so there is nothing in the
+logs, and the client sees a bare `TypeError: Failed to fetch`. `delete-account`
+failing is an App Store 5.1.1(v) compliance problem, not just a bug.
+
+Found by accident, while clicking through `/u/<handle>` to check a Phase 3
+route conversion. Nothing in CI or the test suite would have caught it: the
+source was correct the whole time and every test passed. Only the deployed
+artifact was wrong.
+
+This is the exact failure the new Supabase deploy workflow exists to prevent —
+it deploys all 24 on every push to `main`, so "committed but not deployed"
+stops being a state the system can be in. All 24 verified accepting the header
+after a manual deploy.
+
+**Phase 4 — Platform seam (web half complete).** The seam, the client
+convergence and every platform-independent item are done and verified on web.
+The native half cannot proceed: it needs `@capacitor/*` dependencies, which
+the 0E gate blocks until 0D is proven from a device.
+
+Done:
+
+| Item | State |
+|---|---|
+| `src/platform/` seam, web implementations first | **done** — 8 capabilities, both implementations each, selected at build time |
+| ESLint banning `@capacitor/*` outside `src/platform/` | **done** — and it caught a real mistake while being written |
+| `storage` with the `StorageResult` distinction | **done** — 9 tests over read-failure vs empty |
+| `attempt_state` off `sessionStorage`; delete `quiz_id`/`quiz_questions` | **done** — verified writing durably in the browser |
+| Session factory; evaluate converging web onto `createClient` | **done, converged** — `@supabase/ssr` deleted |
+| Extract `handleAuthCallback(url)`; fix the dropped `?next=` | **done** — 17 tests |
+| Rewrite the dead PKCE guard | **done** — it keyed off the session key itself and would have thrown for everyone once storage moved |
+| Lift `onAuthStateChange` into a provider | **done** — plus a foreground re-check |
+| Backend CORS fix prototyped before the client port | **done in Phase 0**, verified live for all three origins |
+
+Blocked on 0E: native OAuth (`skipBrowserRedirect`, `@capacitor/browser`,
+custom scheme, `appUrlOpen`), `signInWithIdToken`, and the Preferences storage
+adapter. `session.native.ts` currently uses a localStorage-backed adapter —
+**safe for a shell build and wrong for a shipped app**, marked TODO(0E) in the
+file. Every native module is written with the implementation notes in place so
+the port is mechanical once the gate clears.
+
+The four exit criteria all require a real device or emulator, so Phase 4
+cannot be signed off before Phase 5 stands up a shell. This mirrors the note
+already recorded for 0D.
+
+**Three defects found by testing rather than reasoning during this phase:**
+
+1. **The client convergence orphaned every existing account.** Sessions lived
+   in cookies the new client cannot read, so the first load after deploy read
+   as "no session" and minted a new anonymous user — the id changed from
+   6a6d9fcd to c932b507 in the browser. `ensureSession` now adopts a legacy
+   cookie session before concluding anyone is new, and gates
+   `signInAnonymously` on `storage.isDurable()`.
+2. **The seam selected native implementations in `npm run dev`.** `NATIVE =
+   platform !== 'web'` reads correctly and is wrong: `npm run dev` does not go
+   through the version-env wrapper, so the flag is undefined and every
+   developer got storage that always fails and OAuth that throws. Native is
+   now opt-in by explicit `ios`/`android`.
+3. **`build-native.sh` never set `CLIENT_PLATFORM`**, so `version.mjs`
+   defaulted to `web` and the native app would have shipped the **web** seam.
+   The export built cleanly and was silently wrong.
+
+All three were invisible to typecheck, lint and the test suite.
+
+**Phase 3 — Static export (complete).** All four exit criteria met.
+
+| Exit criterion | State |
+|---|---|
+| `npm run build` (web) and the native build both pass | **done** — `BUILD_TARGET=native` produces a 33-route, 6.2M export; the web target still builds with middleware, the `/sentry-test/server` route handler and the image optimizer intact |
+| Export serves correctly from a static server at every route | **done** — `scripts/check-export.sh` validates it, and the Playwright `export` project serves `out/` as plain files |
+| Web unchanged in production apart from the new redirects | **done** — every server feature is bound to `!isNative`; verified in the build output |
+| Playwright passes against both the dev server and the export | **done** — 4 dev-server tests, 6 export tests |
+
+Three routes moved off dynamic segments, because a static export cannot
+enumerate league ids, handles or invite codes:
+
+| Was | Now |
+|---|---|
+| `/invite/<code>` | `/invite/?code=` |
+| `/u/<handle>` | `/u/?handle=` |
+| `/leagues/<id>` | `/leagues/view?id=` |
+
+Old shapes 308 permanently. Invite links are the growth loop and sit in
+people's message threads, so they have to work indefinitely. The
+`/leagues/:id` rule carries a negative lookahead — a bare `:id` swallows
+`/leagues/create` and `/leagues/view`, sending anyone clicking "create a
+league" into a lookup for a league named "create". Verified against a running
+server, not just the config.
+
+`/play/q/[index]` keeps its segment via `generateStaticParams`: a quiz is
+always `MAX_QUESTIONS_PER_QUIZ` questions, so the paths are known at build
+time. `dynamicParams = false` and the resume index is clamped — in an app
+bundle an out-of-range push is a hard 404, not a soft redirect.
+
+Two things worth carrying forward:
+
+- **`window.location.origin` is wrong on native.** It is
+  `capacitor://localhost` in the WebView, so an invite link built from it is
+  unopenable — and it fails silently, as a link a friend taps and nothing
+  happens. Shared URLs now come from `PUBLIC_ORIGIN`.
+- **The plan's `/_next/image` CI check does not work as written.** Next inlines
+  its image config — including that literal path and `unoptimized:!0` — into a
+  framework chunk on every build, so a bare grep fails forever on inert config.
+  The check looks for generated `/_next/image?url=` URLs in emitted HTML.
+
+**Production's migration ledger is reconciled (2026-08-19).** `db push` now
+reports `Remote database is up to date` against production, and CI deploys
+migrations to staging then production before the Cloudflare deploy runs.
+
+It previously refused outright. The ledger held 35 rows: 17 stamped with
+dashboard-assigned timestamps rather than repo filenames, and 18 belonging to
+the transfers project. `db push` compares remote versions to local *filenames*,
+so almost every row looked like "applied remotely, absent locally".
+
+What made it safe:
+
+- **The transfers migrations were recovered first.** All 18 had been applied
+  through the dashboard and existed in no repo — their only copy was the
+  `statements` column of `schema_migrations`. The record of how the schema was
+  built lived inside the database it built. They are now in
+  `supabase/transfers-migrations/`, extracted verbatim.
+- **The whole ledger was backed up with its SQL**, so the operation was
+  reversible rather than merely careful.
+- **It was rehearsed on staging.** One row was renamed to a fake dashboard
+  timestamp to reproduce the exact failure, repaired, and checked: the SQL
+  survived at an identical byte length and the push went clean. Only then did
+  it run against production. That rehearsal answered the question that mattered
+  — `--status reverted` *deletes* a row, and `--status applied` re-inserts it
+  from the local file — which is the difference between reconciling history and
+  destroying it.
+- **`migration repair` runs no DDL.** It edits only the history table. Verified
+  either side of the change: 9 transfers tables, 251 journalists, 96 clubs
+  unchanged; 181 players and 527 attempts unchanged; both cron jobs alive; every
+  security invariant still holding.
+
+Also found in passing: `replace_publish_quiz_cron` existed only in production's
+ledger, which looked like a migration the repo was missing. It is the tail of
+`20260402000000_publish_scheduled_quiz_function.sql` — production applied as two
+dashboard migrations what the repo keeps in one file. The quiz-publishing cron
+is fine, and staging (built purely from the repo) proves it.
+
+**Staging exists (Phase 2).** Second Supabase project `yfzylxospvbipnlbwxno`,
+free plan, seeded by applying all 19 repo migrations with `db push` rather than
+copying production — so the repo's claim to be the source of truth is now
+actually tested somewhere. 24 edge functions deployed. Details and the
+relink-to-production discipline in [ENVIRONMENTS.md](ENVIRONMENTS.md).
+
+Two things that shaped this: the free plan caps an org at **two** active
+projects, so a third environment costs money; and free projects **pause after
+7 days idle**, which matters during the Play closed-test window.
+
+**More migration drift found, benign this time.** Three repo migrations are
+absent from production's `schema_migrations` ledger —
+`handle_customization`, `admin_tool_rls_and_snapshots`, `quiz_content_source` —
+but their objects all exist, so they were applied under different names or by
+hand. The schema is right and the ledger is wrong, which is the harmless
+version of the answer-key case where the migration genuinely never ran.
+
+**A false alarm worth recording**, because it nearly became a "finding":
+`anon` and `authenticated` hold INSERT/UPDATE column grants on
+`question_answers.is_correct` and `players.linked_auth_user_id` in both
+environments. Those grants are vestigial — the table-level privilege was
+revoked, so a real `PATCH` returns `42501` (verified against production). Column
+privileges alone do not tell you whether something is reachable; the request
+does.
 
 ## Completed
 
@@ -32,9 +318,135 @@ release scripts as absent — consistent with a migration that has not begun.
 - Release operator skill and `scripts/release/` contract stubs
 - Migration control skill — `.agent/skills/cross-platform-migration/`
 
+### Store-compliance work landed ahead of the plan
+
+Built and deployed before this plan was written, on the `store-compliance`
+branch. It closes part of [03-blocking-fixes.md](03-blocking-fixes.md) section B.
+**None of it is migration work and none of it touches the 0E gate** — no
+`ios/`, no `android/`, no `@capacitor/*`, no `output: 'export'`.
+
+- **B1 account deletion — done.** `delete-account` Edge Function (deployed),
+  in-app Danger Zone in `/settings`, and a migration fixing the two foreign
+  keys that would have aborted the delete (`outbox_events.actor_user_id` →
+  SET NULL, `players.linked_auth_user_id` → CASCADE). B1's open product
+  question is answered: leagues owned by a deleting user **transfer to the
+  longest-standing remaining member**; solo-owner leagues cascade away.
+  Without this, four of six live leagues would have been destroyed by their
+  owner deleting an account.
+- **B2 UGC moderation — all four mechanisms now exist**, and **B3 is closed.**
+  League names are filtered on the server (`create-league` validated length
+  only, so any slur passed verbatim), and `leave-league` gives every member an
+  exit from a league they were added to without consent — which is the concrete
+  form Apple's "block abusive users" requirement takes here. An owner who
+  leaves hands the league to its longest-standing member rather than destroying
+  it under everyone else, matching the account-deletion rule.
+
+  League names are free text, so the handle blocklist alone was not enough:
+  "F.U.C.K United", "shit_lords", Cyrillic lookalikes, zero-width joiners and
+  full-width forms all passed it. Names are now normalised to an ASCII skeleton
+  before matching, with runs of isolated letters rejoined so the spelled-out
+  form is caught too. Verified not to over-block: initial-heavy names like
+  "F C Barcelona" and "S H I E L D" still pass.
+- **B2 handle moderation — a two-tier
+  handle blocklist enforced *server-side* in `update-handle` (slurs matched
+  as substrings; milder terms word-matched, so "Scunthorpe" and "Assassin"
+  still work — tuned against `/usr/share/dict/words`, 657 → 82 false
+  positives); a `handle_reports` table with a `report-handle` function and
+  report UI on `/u/[handle]`; an admin queue at `/admin/reports`.
+- **B4 privacy policy — done.** `/privacy` and `/terms`, server-rendered and
+  reachable without auth. The policy discloses that PostHog receives the
+  signed-in user's email, which the code does today
+  (`AuthButton.tsx:54`). ⚠️ The support address in `src/lib/legal.ts` is
+  still a placeholder and must point at a monitored inbox before submission.
+- **PWA manifest and icon set** — web only (`manifest.ts`, `public/icons/`).
+
+**Docs these findings correct:** [03-blocking-fixes.md](03-blocking-fixes.md)
+B1 ("does not exist"), B2 ("zero of the four"), B4, and
+[STORE_READINESS.md](STORE_READINESS.md) where it says the same.
+[ADR-001](01-architecture-decision.md)'s closing note that account deletion
+and UGC moderation are "currently missing entirely" is likewise now stale.
+
+### Phase 0 work landed
+
+**0B — attempt integrity: done (A1, A3, A5, and A6 found in passing).**
+
+- **A1 closed.** `delete-attempt` now has a server-side admin check *and*
+  refuses to delete a finalized attempt. The second gate is what kills the
+  replay loop and holds even if the role check is misconfigured, since the
+  answer key is only released at finalize. Verified against production: an
+  ordinary anonymous session that previously reached argument validation now
+  gets `403 Admin access required`, with and without a valid `quiz_id`.
+- **A3 closed.** `planQuestionTimerStart` backdates Q1's clock to the attempt's
+  start when the timer request arrives more than 60s late. Backdating rather
+  than rejecting, so a genuinely slow device is charged the delay instead of
+  being locked out. Verified against production: a simulated 10-minute stall
+  returned an already-expired window instead of a fresh 12s one.
+- **A6 — the answer key was live-readable, and is now closed.** Found while
+  rewriting the RLS assertions: migration `20260310100000_restrict_is_correct_column.sql`
+  existed in the repo but had **never been applied to production** — it is
+  absent from `supabase_migrations.schema_migrations`. 10Q's migrations were
+  pushed by hand, and this one was missed.
+
+  Consequence, verified before fixing: the publishable anon key that ships in
+  the client bundle could read `question_answers.is_correct` for every
+  published quiz, **including the current day's**. One HTTP request returned
+  every correct answer, with no attempt and no replay — strictly worse than
+  A1. Applied 2026-08-19; anon and authenticated now get `42501`, the five
+  non-secret columns still read, `quiz_play_view` is unaffected, and a full
+  game loop (start → timer → submit) still scores correctly under the service
+  role.
+
+  This is the concrete cost of the audit's "Supabase is not in CI" finding:
+  a security migration sat unapplied for five months with nothing to catch it.
+  Worth an explicit drift check before submission — the repo and the live
+  database are not known to agree elsewhere either.
+- **A5 partly.** `supabase/tests` is now in the root `workspaces` array, so
+  `npm test` reaches it — 183 → **259 tests**. The production URL and anon key
+  defaults are gone, the suite refuses any non-local `SUPABASE_URL` unless
+  `ALLOW_NON_LOCAL_RLS_TESTS=1`, and a CI job runs it against a real local
+  stack.
+- **A5 complete — the RLS assertions are rewritten.** 17 assertions across six
+  groups, every one checked against the live policies and grants before being
+  written, and all 17 verified passing against production (read-only; the
+  insert/update cases were confirmed non-destructive). They cover answer-key
+  secrecy, attempt and score isolation, quiz visibility, and the admin-only
+  moderation queue.
+
+  Two lessons are encoded in them. **RLS filters, it does not error** — an
+  unauthenticated SELECT returns `[]` with `error: null`, and a blocked UPDATE
+  returns success with zero rows affected. Asserting on `error` was the
+  original suite's central mistake, and I repeated it once before the test
+  caught me. And `players` is genuinely world-readable, so the suite now
+  documents that exposure (A4) rather than asserting the opposite; when A4 is
+  fixed those tests flip and must be updated deliberately.
+
+**0C — quiz publishing: done.**
+
+- `publish-quiz` deleted from the repo, from `config.toml`, and from the
+  Supabase project. The endpoint now 404s; today's quiz still publishes, since
+  the live `pg_cron` job calls `public.publish_scheduled_quiz()` directly.
+- **Every Edge Function audited for an explicit auth check.** All 10Q
+  functions that mutate state authenticate. Three are unauthenticated by
+  design and are **read-only** (verified: zero write ops) —
+  `get-current-quiz`, `get-league-by-invite`, `get-profile-by-handle`. They
+  remain a privacy and DoS concern (A7), not an integrity hole.
+- Four deployed functions belonging to the **separate transfers project**
+  (`ingest-claim`, `poll-tweets`, `poll-tweets-batch`, `extract-claim`) have
+  no auth check and can write. They are outside 10Q's schema and outside this
+  migration's scope, so they were left alone — but they are a live
+  unauthenticated-write surface on the same Supabase project and should be
+  fixed by whoever owns that work.
+- **C9 resolved — the audit's concern is disproved.** The `scheduled` status
+  exists and the cron is healthy: 160 published, **115 scheduled through
+  December**, and today's quiz released on time at 11:30 UTC. It has not been
+  matching zero rows.
+
 ## In progress
 
-- Nothing. Phase 0 has not started.
+- **0B remainder** — rewrite the 16 stale RLS assertions so they pass against
+  a local stack. Until they do, 0B's exit criterion ("tests that prove the
+  invariant") is only half met: A1 and A3 have unit coverage, the RLS layer
+  does not.
 
 ## Blocked
 
@@ -90,6 +502,29 @@ shortcut. Decide the account type and start recruiting testers before Phase 0 fi
   client behavior trivially inspectable — so they land in 0B/0C, not "after mobile ships".
 - **Google Play account maturation can be a four-week gate.** Scheduling, not
   architecture — but it must run in parallel from day one.
+- **CORS is a trap, not a live break — measured 2026-08-19.** Production
+  currently answers `Access-Control-Allow-Origin: *` for
+  `Origin: capacitor://localhost`, so `ALLOWED_ORIGIN` is **not set** as an
+  Edge Function secret and the game loop would work from a Capacitor WebView
+  today. That is accidental, not designed: the moment anyone follows
+  `_shared/cors.ts`'s own instruction to set `ALLOWED_ORIGIN=https://play10q.com`,
+  the game loop breaks on native while leagues and profiles keep working.
+  0D is still required — it is defusing a trap rather than fixing a live
+  break, so it can follow 0B/0C rather than blocking them.
+- **The audit overstated A5 — measured 2026-08-19.**
+  [02-current-state.md](02-current-state.md) §6 and
+  [03-blocking-fixes.md](03-blocking-fixes.md) A5 say the `supabase/tests`
+  suite "would fail if anyone ran them". That is true of the 16 RLS smoke
+  tests, which are stale, but **not** of the 69 unit tests — they pass today,
+  unchanged. The suite was invisible, not broken. Only the RLS half needs
+  rewriting, which is a materially smaller job than the audit implies.
+- **A1's exploit needs a session, not anonymity — measured 2026-08-19.** The
+  Supabase gateway 401s an unauthenticated POST to `delete-attempt`, so it is
+  not callable by a stranger with no token. This does **not** soften the
+  finding: every visitor is auto-signed-in via `signInAnonymously()`, so any
+  visitor already holds the credential the exploit needs. The function still
+  has no server-side admin check, and `verify_jwt = false` appears 22 times
+  in `config.toml`, so a missing in-function check fails open.
 
 ## Known documentation gaps
 

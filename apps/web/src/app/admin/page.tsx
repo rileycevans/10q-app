@@ -15,6 +15,7 @@ interface QuizSummary {
 export default function AdminPage() {
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([]);
   const [stats, setStats] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
+  const [pendingReports, setPendingReports] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -32,6 +33,12 @@ export default function AdminPage() {
         .from('quizzes').select('*', { count: 'exact', head: true }).eq('status', 'scheduled');
       const { count: draft } = await supabase
         .from('quizzes').select('*', { count: 'exact', head: true }).eq('status', 'draft');
+
+      // Surfaced as a badge so a filling moderation queue is visible without
+      // having to open the page.
+      const { count: pending } = await supabase
+        .from('handle_reports').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+      setPendingReports(pending ?? 0);
 
       setStats({
         total: count ?? 0,
@@ -85,6 +92,17 @@ export default function AdminPage() {
               className="h-14 bg-yellow border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
             >
               TAGS
+            </Link>
+            <Link
+              href="/admin/reports"
+              className="col-span-2 h-14 bg-paper border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink flex items-center justify-center gap-2 transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
+            >
+              HANDLE REPORTS
+              {pendingReports > 0 && (
+                <span className="px-3 py-1 bg-red border-[3px] border-ink rounded-full text-sm">
+                  {pendingReports}
+                </span>
+              )}
             </Link>
           </div>
 

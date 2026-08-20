@@ -4,6 +4,7 @@ import { createContext, useContext, useRef, useSyncExternalStore } from 'react';
 import { ensureSession } from '@/lib/auth';
 import { getCurrentQuiz, reshapeQuizRows, type QuizQuestion } from '@/domains/quiz';
 import { startAttempt, type AttemptState } from '@/domains/attempt';
+import { cacheAttemptState } from '@/lib/attempt-cache';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -91,10 +92,10 @@ function createGameStore(): GameStore {
           (attemptState.all_questions as Parameters<typeof reshapeQuizRows>[0]) || []
         );
 
-        // Persist to sessionStorage for hard-refresh recovery
-        sessionStorage.setItem('quiz_id', currentQuiz.quiz_id);
-        sessionStorage.setItem('quiz_questions', JSON.stringify(questions));
-        sessionStorage.setItem('attempt_state', JSON.stringify(attemptState));
+        // Durable, so an OS-killed WebView can still recover the attempt.
+        // quiz_id and quiz_questions used to be written here and were read by
+        // nothing — the questions blob was the biggest thing in storage.
+        cacheAttemptState(attemptState);
 
         setState({
           phase: 'ready',
@@ -111,7 +112,7 @@ function createGameStore(): GameStore {
     },
 
     setAttempt: (attempt) => {
-      sessionStorage.setItem('attempt_state', JSON.stringify(attempt));
+      cacheAttemptState(attempt);
       setState({ attempt });
     },
   };

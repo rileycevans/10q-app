@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { updateHandle } from '@/domains/profile';
+import { updateHandle, deleteAccount } from '@/domains/profile';
 import { getSession } from '@/lib/auth';
 import { supabase } from '@/lib/supabase/client';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { LegalFooter } from '@/components/LegalFooter';
 import { validateHandle } from '@10q/contracts';
 import dynamic from 'next/dynamic';
-import { trackScreenView, trackSettingsView, trackHandleUpdate, trackAppError } from '@/lib/analytics';
+import { trackScreenView, trackSettingsView, trackHandleUpdate, trackAccountDeleted, trackAppError } from '@/lib/analytics';
+
+// Typing this exactly is what arms the delete button.
+const DELETE_CONFIRMATION_PHRASE = 'DELETE';
 
 const AuthButton = dynamic(
   () => import('@/components/AuthButton').then((mod) => mod.AuthButton),
@@ -24,6 +28,10 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState(false);
   const [currentHandle, setCurrentHandle] = useState<string | null>(null);
   const [daysUntilChange, setDaysUntilChange] = useState<number | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -139,6 +147,41 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleDeleteAccount() {
+    if (deleting) return;
+    if (deleteConfirmation.trim().toUpperCase() !== DELETE_CONFIRMATION_PHRASE) {
+      setDeleteError(`Type ${DELETE_CONFIRMATION_PHRASE} to confirm`);
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+
+    try {
+      // Capture before the account disappears — afterwards there's no session
+      // to attribute the event to.
+      trackAccountDeleted();
+
+      await deleteAccount();
+
+      // The server already destroyed the account; clear the now-orphaned local
+      // session so the app doesn't start up holding a dead token.
+      await supabase.auth.signOut();
+
+      // Full reload rather than router.push so every cached client-side store
+      // is dropped along with the session.
+      window.location.href = '/';
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete account';
+      setDeleteError(message);
+      setDeleting(false);
+      trackAppError({
+        location: 'settings_delete_account',
+        message,
+      });
+    }
+  }
+
   if (loading) {
     return (
       <ArcadeBackground>
@@ -249,6 +292,92 @@ export default function SettingsPage() {
             </form>
           </div>
 
+          {/* Danger Zone — account deletion is required by both app stores */}
+          <div className="mb-6 pt-6 border-t-[3px] border-ink/20">
+            <h2 className="font-display text-xl font-bold text-ink mb-2">Danger Zone</h2>
+
+            {!deleteOpen ? (
+              <>
+                <p className="font-body text-sm text-ink/70 mb-3">
+                  Permanently delete your account and all of your data.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteOpen(true);
+                    setDeleteError(null);
+                  }}
+                  className="w-full h-12 bg-red border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px]"
+                >
+                  Delete Account
+                </button>
+              </>
+            ) : (
+              <div className="p-4 bg-red/20 border-[3px] border-ink rounded-lg">
+                <p className="font-body font-bold text-sm text-ink mb-2">
+                  This cannot be undone.
+                </p>
+                <p className="font-body text-sm text-ink/80 mb-3">
+                  Your handle, scores, streaks, past attempts and league memberships
+                  will be permanently deleted. Leagues you own will pass to their
+                  longest-standing member, or be deleted if you are the only member.
+                </p>
+
+                <label
+                  htmlFor="delete-confirmation"
+                  className="block font-bold text-xs uppercase tracking-wide text-ink mb-2"
+                >
+                  Type {DELETE_CONFIRMATION_PHRASE} to confirm
+                </label>
+                <input
+                  id="delete-confirmation"
+                  type="text"
+                  value={deleteConfirmation}
+                  onChange={(e) => {
+                    setDeleteConfirmation(e.target.value);
+                    setDeleteError(null);
+                  }}
+                  disabled={deleting}
+                  autoComplete="off"
+                  placeholder={DELETE_CONFIRMATION_PHRASE}
+                  className="w-full h-12 px-4 mb-3 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-body font-bold text-base text-ink placeholder:text-ink/40 focus:outline-none focus:ring-[3px] focus:ring-red focus:ring-offset-2 disabled:opacity-50"
+                />
+
+                {deleteError && (
+                  <div className="mb-3 p-3 bg-red border-[3px] border-ink rounded-lg">
+                    <p className="font-body text-sm font-bold text-ink">{deleteError}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteOpen(false);
+                      setDeleteConfirmation('');
+                      setDeleteError(null);
+                    }}
+                    disabled={deleting}
+                    className="flex-1 h-12 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={
+                      deleting ||
+                      deleteConfirmation.trim().toUpperCase() !== DELETE_CONFIRMATION_PHRASE
+                    }
+                    className="flex-1 h-12 bg-red border-[3px] border-ink rounded-lg shadow-sticker-sm font-bold text-sm text-ink transition-transform duration-[120ms] ease-out active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {deleting ? 'Deleting...' : 'Delete Forever'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Back Button */}
           <button
             onClick={() => router.push('/')}
@@ -256,6 +385,8 @@ export default function SettingsPage() {
           >
             Go Home
           </button>
+
+          <LegalFooter />
         </div>
       </div>
     </ArcadeBackground>

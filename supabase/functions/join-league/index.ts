@@ -3,10 +3,7 @@
  * Allows an authenticated player to join a league via invite code
  */
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 
 const ErrorCodes = {
   NOT_AUTHORIZED: "NOT_AUTHORIZED",
@@ -101,7 +98,7 @@ async function getAuthenticatedUser(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   if (req.method !== "POST") {

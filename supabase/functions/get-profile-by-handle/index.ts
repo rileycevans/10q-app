@@ -3,11 +3,7 @@
  * Returns public profile information by handle (no auth required)
  */
 
-// Inline CORS headers
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -96,9 +92,25 @@ async function createServiceClient() {
 }
 
 // Main function
+/**
+ * C7 — mirrors public.is_streak_alive(). A streak is live only if the player
+ * finalized today's or yesterday's quiz; yesterday counts because today's quiz
+ * drops at 11:30 UTC and may not have been played yet.
+ */
+function isStreakAlive(lastQuizDate: string | null | undefined): boolean {
+  if (!lastQuizDate) return false;
+  const last = new Date(`${String(lastQuizDate).slice(0, 10)}T00:00:00.000Z`);
+  const today = new Date();
+  const todayUtc = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+  const diffDays = Math.round((todayUtc.getTime() - last.getTime()) / 86400000);
+  return diffDays <= 1;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeadersFor(req) });
   }
 
   const requestId = generateRequestId();
@@ -123,7 +135,10 @@ Deno.serve(async (req) => {
     // Get profile by handle
     const { data: profile, error: profileError } = await supabase
       .from("players")
-      .select("id, handle_display, handle_canonical, created_at, current_streak, longest_streak")
+      // C7: last_quiz_date comes along so the streak can be expired below.
+      // players.current_streak is the value as of the last finalize and never
+      // decays, so a player who stopped in April still showed a live streak.
+      .select("id, handle_display, handle_canonical, created_at, current_streak, longest_streak, last_quiz_date")
       .eq("handle_canonical", handleCanonical)
       .single();
 
@@ -301,7 +316,9 @@ Deno.serve(async (req) => {
           avg_time_per_question_ms: avgTimePerQuestionMs,
         },
         streaks: {
-          current_streak: profile.current_streak ?? 0,
+          current_streak: isStreakAlive(profile.last_quiz_date)
+            ? (profile.current_streak ?? 0)
+            : 0,
           longest_streak: profile.longest_streak ?? 0,
         },
         recent_results: recentResults,
