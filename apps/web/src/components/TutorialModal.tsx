@@ -243,6 +243,9 @@ function HandleStep({
       <div className="mb-4">
         <input
           type="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={handle}
           onChange={(e) => { setHandle(e.target.value); setError(null); }}
           placeholder="Pick a username..."

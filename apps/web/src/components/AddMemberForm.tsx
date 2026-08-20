@@ -34,6 +34,9 @@ export function AddMemberForm({ onAdd, disabled }: AddMemberFormProps) {
       <div className="flex gap-2">
         <input
           type="text"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           value={handle}
           onChange={(e) => {
             setHandle(e.target.value);
@@ -41,7 +44,7 @@ export function AddMemberForm({ onAdd, disabled }: AddMemberFormProps) {
           }}
           placeholder="Enter player handle"
           disabled={loading || disabled}
-          className="flex-1 h-10 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-body font-bold text-sm text-ink placeholder:text-ink/50 focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
+          className="flex-1 h-10 px-4 bg-paper border-[3px] border-ink rounded-lg shadow-sticker-sm font-body font-bold text-base text-ink placeholder:text-ink/50 focus:outline-none focus:ring-[3px] focus:ring-cyanA focus:ring-offset-2 disabled:opacity-50"
         />
         <button
           type="submit"

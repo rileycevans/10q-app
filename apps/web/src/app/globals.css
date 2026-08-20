@@ -188,6 +188,33 @@ body {
 }
 
 /* Answer Feedback Animations */
+/*
+ * Toast entrance. `animate-slide-in` was referenced by Toast.tsx with no
+ * keyframe behind it anywhere, so toasts snapped in with no animation at all.
+ */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 220ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* A toast is an interruption; honour the OS setting and just fade. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 @keyframes answer-pop {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.06); }
