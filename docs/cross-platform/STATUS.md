@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 2 — Foundations (in progress)**
+**Current phase: Phase 3 — Static export**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -107,7 +107,8 @@ a recorded decision per item, not a fix per item.
 | No rate limiting or idempotency keys anywhere | `outbox_events.idempotency_key` exists and is **never written** (0 writes across all functions). Nothing throttles attempt cycling or handle enumeration | **Deferred to Phase 2**, same reason. Note the two worst amplifiers are already closed: `delete-attempt` is admin-gated (A1) and `publish-quiz` is deleted (A2), so the unthrottled loop that mattered most is gone |
 | Full answer key released at finalize | Inherent to showing a results breakdown. A1 is closed, so the one-shot-per-player guarantee now holds | **Product decision, not a defect.** Acceptable while the leaderboard carries no stakes. Revisit if prizes or ranked play are ever added |
 
-**Phase 2 — Foundations (in progress).** Four of five exit criteria met.
+**Phase 2 — Foundations (complete).** The one open row is the native build
+target, which cannot exist before Phase 5.
 
 | Exit criterion | State |
 |---|---|
@@ -130,6 +131,27 @@ Both env blocks now match, with a comment saying they must stay in step.
 never leaves the browser and the server logs nothing — so this would have
 looked like a total client outage with no server-side trace. Caught before
 deploy, now asserted in the CORS tests.
+
+**13 of 24 Edge Functions were running stale code in production (found
+2026-08-19, fixed).** The `x-client-version` CORS fix was committed in Phase 2
+and deployed to only 11 functions. The other 13 — including
+`get-profile-by-handle`, `get-league-by-invite`, `report-handle` and
+`delete-account` — still rejected the header at preflight.
+
+Every one of those calls failed from the browser. Preflight rejections are
+invisible server-side: the request never arrives, so there is nothing in the
+logs, and the client sees a bare `TypeError: Failed to fetch`. `delete-account`
+failing is an App Store 5.1.1(v) compliance problem, not just a bug.
+
+Found by accident, while clicking through `/u/<handle>` to check a Phase 3
+route conversion. Nothing in CI or the test suite would have caught it: the
+source was correct the whole time and every test passed. Only the deployed
+artifact was wrong.
+
+This is the exact failure the new Supabase deploy workflow exists to prevent —
+it deploys all 24 on every push to `main`, so "committed but not deployed"
+stops being a state the system can be in. All 24 verified accepting the header
+after a manual deploy.
 
 **Production's migration ledger is reconciled (2026-08-19).** `db push` now
 reports `Remote database is up to date` against production, and CI deploys
