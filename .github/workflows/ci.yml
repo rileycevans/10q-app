@@ -58,8 +58,13 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      # Only the dev-server project. The `export` project serves apps/web/out,
+      # which does not exist in this job — it is built and tested in
+      # native-export, where `npm run test:e2e:export` runs it against a real
+      # served export. Without the filter this job starts the dev server and
+      # then fails every export test with ERR_CONNECTION_REFUSED on :4173.
       - name: Playwright E2E Tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=chromium
         working-directory: apps/web
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}

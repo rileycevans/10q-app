@@ -42,6 +42,23 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Views need the same grants and are NOT in pg_tables, so the loop above
+-- misses them. quiz_play_view is the client's entire read path for a quiz —
+-- without this the game cannot load a question at all.
+DO $$
+DECLARE
+  v text;
+BEGIN
+  FOR v IN
+    SELECT viewname FROM pg_views WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format(
+      'GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.%I TO anon, authenticated, service_role',
+      v
+    );
+  END LOOP;
+END $$;
+
 -- Sequences, so INSERTs that rely on a default nextval() work.
 DO $$
 DECLARE
