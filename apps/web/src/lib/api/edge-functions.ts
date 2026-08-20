@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { ErrorCode } from '@10q/contracts';
 import { withRetry, getUserFriendlyErrorMessage } from '@/lib/error-handling';
 import { logger } from '@/lib/logger';
+import { CLIENT_VERSION_HEADER } from '@/lib/version';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -40,6 +41,16 @@ async function callEdgeFunction<T>(
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      // Phase 2 — identifies the client build to the backend so a minimum
+      // supported version can be enforced server-side. This is the only lever
+      // that works once store binaries are in the wild: a native client cannot
+      // be rolled back, and an old binary may run for months against a
+      // continuously-deployed backend.
+      //
+      // Format: `<platform>/<version>+<build>`. Sent on every request; the
+      // server currently records it without gating (permissive minimum), so
+      // shipping this now costs nothing and makes the gate available later.
+      'X-Client-Version': CLIENT_VERSION_HEADER,
     };
 
     if (requireAuth) {

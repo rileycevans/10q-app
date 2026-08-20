@@ -153,7 +153,16 @@ describe("corsHeadersFor — always", () => {
     ];
     // A missing entry here fails preflight silently — the request never leaves
     // the browser and the server logs nothing.
-    for (const h of ["authorization", "apikey", "content-type", "x-client-info"]) {
+    // x-client-version was added in Phase 2 and is sent on EVERY edge function
+    // call. Omitting it from this list fails preflight for the entire API —
+    // caught exactly this way while wiring the header up.
+    for (const h of [
+      "authorization",
+      "apikey",
+      "content-type",
+      "x-client-info",
+      "x-client-version",
+    ]) {
       expect(allowed).toContain(h);
     }
   });

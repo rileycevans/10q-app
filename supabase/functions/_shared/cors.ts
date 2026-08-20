@@ -64,8 +64,13 @@ const WILDCARD_MODE =
   !Deno.env.get("ALLOWED_ORIGIN") || Deno.env.get("ALLOWED_ORIGIN") === "*";
 
 const BASE_HEADERS = {
+  // Every header the client actually sends must be listed here. A missing
+  // entry fails preflight silently: the request never leaves the browser and
+  // the server logs nothing, so it looks like a client bug.
+  // x-client-version was added in Phase 2 (VERSIONING.md) and is sent on every
+  // edge function call.
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-client-version",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   // Required whenever the response varies by request Origin. Without it a
   // shared cache can hand a capacitor:// response to a browser, or vice versa.
