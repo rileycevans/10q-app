@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 4 — Platform seam and auth**
+**Current phase: Phase 4 — Platform seam and auth (web half done; native half blocked on 0E)**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -152,6 +152,55 @@ This is the exact failure the new Supabase deploy workflow exists to prevent —
 it deploys all 24 on every push to `main`, so "committed but not deployed"
 stops being a state the system can be in. All 24 verified accepting the header
 after a manual deploy.
+
+**Phase 4 — Platform seam (web half complete).** The seam, the client
+convergence and every platform-independent item are done and verified on web.
+The native half cannot proceed: it needs `@capacitor/*` dependencies, which
+the 0E gate blocks until 0D is proven from a device.
+
+Done:
+
+| Item | State |
+|---|---|
+| `src/platform/` seam, web implementations first | **done** — 8 capabilities, both implementations each, selected at build time |
+| ESLint banning `@capacitor/*` outside `src/platform/` | **done** — and it caught a real mistake while being written |
+| `storage` with the `StorageResult` distinction | **done** — 9 tests over read-failure vs empty |
+| `attempt_state` off `sessionStorage`; delete `quiz_id`/`quiz_questions` | **done** — verified writing durably in the browser |
+| Session factory; evaluate converging web onto `createClient` | **done, converged** — `@supabase/ssr` deleted |
+| Extract `handleAuthCallback(url)`; fix the dropped `?next=` | **done** — 17 tests |
+| Rewrite the dead PKCE guard | **done** — it keyed off the session key itself and would have thrown for everyone once storage moved |
+| Lift `onAuthStateChange` into a provider | **done** — plus a foreground re-check |
+| Backend CORS fix prototyped before the client port | **done in Phase 0**, verified live for all three origins |
+
+Blocked on 0E: native OAuth (`skipBrowserRedirect`, `@capacitor/browser`,
+custom scheme, `appUrlOpen`), `signInWithIdToken`, and the Preferences storage
+adapter. `session.native.ts` currently uses a localStorage-backed adapter —
+**safe for a shell build and wrong for a shipped app**, marked TODO(0E) in the
+file. Every native module is written with the implementation notes in place so
+the port is mechanical once the gate clears.
+
+The four exit criteria all require a real device or emulator, so Phase 4
+cannot be signed off before Phase 5 stands up a shell. This mirrors the note
+already recorded for 0D.
+
+**Three defects found by testing rather than reasoning during this phase:**
+
+1. **The client convergence orphaned every existing account.** Sessions lived
+   in cookies the new client cannot read, so the first load after deploy read
+   as "no session" and minted a new anonymous user — the id changed from
+   6a6d9fcd to c932b507 in the browser. `ensureSession` now adopts a legacy
+   cookie session before concluding anyone is new, and gates
+   `signInAnonymously` on `storage.isDurable()`.
+2. **The seam selected native implementations in `npm run dev`.** `NATIVE =
+   platform !== 'web'` reads correctly and is wrong: `npm run dev` does not go
+   through the version-env wrapper, so the flag is undefined and every
+   developer got storage that always fails and OAuth that throws. Native is
+   now opt-in by explicit `ios`/`android`.
+3. **`build-native.sh` never set `CLIENT_PLATFORM`**, so `version.mjs`
+   defaulted to `web` and the native app would have shipped the **web** seam.
+   The export built cleanly and was silently wrong.
+
+All three were invisible to typecheck, lint and the test suite.
 
 **Phase 3 — Static export (complete).** All four exit criteria met.
 
