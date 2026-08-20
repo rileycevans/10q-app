@@ -60,6 +60,32 @@ jobs:
         with:
           version: latest
 
+      # Fail with a readable message rather than the CLI's "Cannot find
+      # project ref. Have you run supabase link?", which is what an empty
+      # secret actually produces and says nothing about the cause.
+      - name: Check required secrets are present
+        run: |
+          missing=""
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
+          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing"
+            echo
+            echo "Set them under Settings > Secrets and variables > Actions."
+            echo "  SUPABASE_ACCESS_TOKEN   a personal access token from supabase.com/dashboard/account/tokens"
+            echo "  $REF_SECRET_NAME  the project ref"
+            echo "  $PW_SECRET_NAME  the database password"
+            exit 1
+          fi
+          echo "all required secrets present"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_STAGING_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_STAGING_DB_PASSWORD }}
+          REF_SECRET_NAME: SUPABASE_STAGING_REF
+          PW_SECRET_NAME: SUPABASE_STAGING_DB_PASSWORD
+
       # Staging's ledger was seeded from this repo with `db push --include-all`,
       # so `db push` is meaningful there: it applies exactly what the repo says
       # and nothing else. That is not true of production — see the bottom of
@@ -105,6 +131,32 @@ jobs:
         uses: supabase/setup-cli@v1
         with:
           version: latest
+
+      # Fail with a readable message rather than the CLI's "Cannot find
+      # project ref. Have you run supabase link?", which is what an empty
+      # secret actually produces and says nothing about the cause.
+      - name: Check required secrets are present
+        run: |
+          missing=""
+          [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
+          [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
+          if [ -n "$missing" ]; then
+            echo "Missing repository secrets:$missing"
+            echo
+            echo "Set them under Settings > Secrets and variables > Actions."
+            echo "  SUPABASE_ACCESS_TOKEN   a personal access token from supabase.com/dashboard/account/tokens"
+            echo "  $REF_SECRET_NAME  the project ref"
+            echo "  $PW_SECRET_NAME  the database password"
+            exit 1
+          fi
+          echo "all required secrets present"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ secrets.SUPABASE_PROD_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+          REF_SECRET_NAME: SUPABASE_PROD_REF
+          PW_SECRET_NAME: SUPABASE_PROD_DB_PASSWORD
 
       # Production's ledger was reconciled with this repo on 2026-08-19 (see
       # docs/cross-platform/STATUS.md). Before that, `db push` refused to run
