@@ -60,11 +60,15 @@ export default function HomePage() {
         // the value as of the last finalize and never expires, so a player who
         // last played months ago still read a live-looking streak. The view
         // applies the expiry rule.
+        // maybeSingle, not single: a brand-new anonymous player has no row in
+        // player_streaks yet, and .single() answers "no rows" with a 406 that
+        // shows up in the console and Sentry on every first visit. No streak
+        // is a normal state, not an error.
         const { data: player } = await supabase
           .from('player_streaks')
           .select('current_streak')
           .eq('player_id', session.user.id)
-          .single();
+          .maybeSingle();
         if (player) setStreak(player.current_streak);
         if (session.user.app_metadata?.role === 'admin') setIsAdmin(true);
         setAvatarUrl(session.user.user_metadata?.avatar_url ?? session.user.user_metadata?.picture ?? null);
