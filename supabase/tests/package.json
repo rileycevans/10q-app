@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint configured for supabase/tests\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0"

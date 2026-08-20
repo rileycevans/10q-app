@@ -64,6 +64,25 @@ if (hasCredentials && !isLocalStack && !allowNonLocal) {
 // Every assertion below was checked against the live policies and grants before
 // being written, so they encode reality rather than intent.
 describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
+  /**
+   * Diagnostic, not an assertion.
+   *
+   * Every failure mode of this suite renders as `code: '42501'` with the
+   * message truncated by the reporter, which makes a bad key, a missing
+   * grant and a real RLS regression indistinguishable in CI output. This
+   * prints the full error once so the next failure is readable.
+   */
+  it("prints what the stack actually returns (diagnostic)", async () => {
+    const anon = await anonClient.from("quizzes").select("id").limit(1);
+    const svc = await serviceClient.from("quizzes").select("id").limit(1);
+    console.log("[rls-diagnostic] url:", SUPABASE_URL);
+    console.log("[rls-diagnostic] anon key length:", SUPABASE_ANON_KEY.length);
+    console.log("[rls-diagnostic] service key length:", SUPABASE_SERVICE_KEY.length);
+    console.log("[rls-diagnostic] anon  ->", JSON.stringify(anon.error ?? { rows: anon.data?.length }));
+    console.log("[rls-diagnostic] service ->", JSON.stringify(svc.error ?? { rows: svc.data?.length }));
+    expect(true).toBe(true);
+  });
+
   // These tests assert RUNTIME behaviour — that Postgres refuses a query with
   // 42501 — so the client is deliberately untyped. Without generated database
   // types every table resolves to `never`, which makes a deliberately-illegal
