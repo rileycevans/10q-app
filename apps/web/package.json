@@ -18,7 +18,8 @@
     "generate:icons": "node scripts/generate-app-icons.mjs",
     "process:logo": "node scripts/make-logo-transparent.mjs",
     "refine:logo": "node scripts/refine-logo-ink.mjs",
-    "build:native": "../../scripts/build-native.sh"
+    "build:native": "../../scripts/build-native.sh",
+    "test:e2e:export": "playwright test --project=export"
   },
   "dependencies": {
     "@10q/contracts": "*",
@@ -45,6 +46,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^16.1.6",
+    "serve": "^14.2.6",
     "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
