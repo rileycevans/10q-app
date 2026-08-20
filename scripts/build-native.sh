@@ -53,8 +53,26 @@ for f in "${HIDE[@]}"; do
   fi
 done
 
+# CLIENT_PLATFORM drives two things: the identifiers stamped into the bundle
+# (version.mjs) and which implementations the platform seam selects
+# (src/platform/index.ts keys off NEXT_PUBLIC_CLIENT_PLATFORM !== 'web').
+#
+# Without it, version.mjs defaults to 'web' and the native app silently ships
+# the WEB seam — localStorage instead of Preferences, detectSessionInUrl true
+# against a deep-link handler that also wants the code. The export builds
+# perfectly and is wrong.
+#
+# One export serves both stores, so the caller picks:
+#   CLIENT_PLATFORM=android ./scripts/build-native.sh
+CLIENT_PLATFORM="${CLIENT_PLATFORM:-ios}"
+case "$CLIENT_PLATFORM" in
+  ios|android) ;;
+  *) echo "CLIENT_PLATFORM must be ios or android for a native build, got '$CLIENT_PLATFORM'" >&2; exit 1 ;;
+esac
+export CLIENT_PLATFORM
+
 echo
-echo "Building static export (BUILD_TARGET=native)..."
+echo "Building static export (BUILD_TARGET=native CLIENT_PLATFORM=$CLIENT_PLATFORM)..."
 BUILD_TARGET=native npm run build --workspace=apps/web
 
 OUT="$WEB/out"
