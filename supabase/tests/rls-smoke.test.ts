@@ -4,7 +4,7 @@
  * Run against local Supabase stack.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, it, expect, beforeAll } from "vitest";
 
 // No defaults. These previously fell back to the *production* URL and anon
@@ -47,8 +47,16 @@ if (hasCredentials && !isLocalStack && !allowNonLocal) {
 // Every assertion below was checked against the live policies and grants before
 // being written, so they encode reality rather than intent.
 describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
-  let anonClient: ReturnType<typeof createClient>;
-  let serviceClient: ReturnType<typeof createClient>;
+  // These tests assert RUNTIME behaviour — that Postgres refuses a query with
+  // 42501 — so the client is deliberately untyped. Without generated database
+  // types every table resolves to `never`, which makes a deliberately-illegal
+  // insert fail to compile instead of failing at the database, testing the
+  // opposite of the point.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type UntypedClient = SupabaseClient<any, any, any>;
+
+  let anonClient: UntypedClient;
+  let serviceClient: UntypedClient;
 
   beforeAll(() => {
     anonClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
