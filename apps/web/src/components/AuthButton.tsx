@@ -1,71 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getSession, signOut } from '@/lib/auth';
-import { supabase } from '@/lib/supabase/client';
+import { useState } from 'react';
+import { useAuth } from './AuthProvider';
+import { signOut } from '@/lib/auth';
 import { SignInModal } from './SignInModal';
-import { identifyUser, setPersonProperties, resetIdentity, trackSignOut } from '@/lib/analytics';
+import { resetIdentity, trackSignOut } from '@/lib/analytics';
 
 export function AuthButton() {
-  const [isAnonymous, setIsAnonymous] = useState(true);
-  const [hasSession, setHasSession] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  // Auth state comes from the app-wide provider rather than a subscription
+  // owned by this component — it used to be the only listener, so auth
+  // changes went unobserved on any screen without a sign-in button.
+  const { isAnonymous, isSignedIn: hasSession, isLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [showSignInModal, setShowSignInModal] = useState(false);
-
-  useEffect(() => {
-    let subscription: { unsubscribe: () => void } | null = null;
-
-    async function init() {
-      try {
-        await checkAuth();
-
-        // Listen for auth changes
-        const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          setHasSession(!!session);
-          setIsAnonymous(session?.user?.is_anonymous ?? true);
-        });
-
-        subscription = authSubscription;
-      } catch (err) {
-        console.error('Auth initialization error:', err);
-        setError('Auth error');
-        setIsLoading(false);
-      }
-    }
-
-    init();
-
-    return () => {
-      if (subscription && typeof subscription.unsubscribe === 'function') {
-        subscription.unsubscribe();
-      }
-    };
-  }, []);
-
-  async function checkAuth() {
-    try {
-      const session = await getSession();
-      setHasSession(!!session);
-      setIsAnonymous(session?.user?.is_anonymous ?? true);
-
-      if (session?.user) {
-        if (!session.user.is_anonymous) {
-          identifyUser(session.user.id, {
-            email: session.user.email,
-          });
-          setPersonProperties({ is_anonymous: false });
-        } else {
-          setPersonProperties({ is_anonymous: true });
-        }
-      }
-    } catch (err) {
-      console.error('Check auth error:', err);
-      setError('Failed to check auth');
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   function handleSignIn() {
     setShowSignInModal(true);
@@ -73,16 +20,14 @@ export function AuthButton() {
 
   async function handleSignOut() {
     try {
-      setIsLoading(true);
+      // No local loading/session state to manage: the provider observes the
+      // sign-out through onAuthStateChange and re-renders this component.
       trackSignOut();
       await signOut();
       resetIdentity();
-      setHasSession(false);
-      setIsAnonymous(true);
     } catch (error) {
       console.error('Sign out error:', error);
-    } finally {
-      setIsLoading(false);
+      setError('Failed to sign out');
     }
   }
 

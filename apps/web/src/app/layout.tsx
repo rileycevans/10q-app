@@ -3,6 +3,7 @@ import { Rubik, Bungee } from "next/font/google";
 import "./globals.css";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ToastProvider } from "@/components/Toast";
+import { AuthProvider } from "@/components/AuthProvider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const rubik = Rubik({
@@ -79,7 +80,9 @@ export default function RootLayout({
       <body className={`${rubik.variable} ${bungee.variable} font-body antialiased`}>
         <ErrorBoundary>
           <ToastProvider>
-            <AnalyticsProvider>{children}</AnalyticsProvider>
+            <AuthProvider>
+              <AnalyticsProvider>{children}</AnalyticsProvider>
+            </AuthProvider>
           </ToastProvider>
         </ErrorBoundary>
       </body>
