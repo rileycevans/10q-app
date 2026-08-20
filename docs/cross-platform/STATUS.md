@@ -116,7 +116,7 @@ a recorded decision per item, not a fix per item.
 | `X-Client-Version` sent and enforced, minimum set permissively | **done** — `_shared/client-version.ts` gates six door-level functions and returns 426 `CLIENT_UPDATE_REQUIRED`. Inert by default (`MIN_CLIENT_*` unset = `0.0.0`), which is the required end state: armed on day one would brick clients. Never gated on `start-question-timer`, `submit-answer`, `finalize-attempt`, `resume-attempt` or `delete-account` — a gate firing mid-attempt destroys a player's single daily play, and blocking `delete-account` is an App Store 5.1.1(v) violation |
 | Staging exists end to end and a build can be pointed at it | **partly** — a second free Supabase project exists with all 19 migrations and 24 functions deployed ([ENVIRONMENTS.md](ENVIRONMENTS.md)). No Cloudflare Worker or seeded data yet, so a build cannot be pointed at it end to end |
 | Both build targets run in CI | **partly** — the web target's env drift is fixed and `version.mjs check` runs; the native target does not exist until Phase 5 |
-| Migrations reach a database from the repo rather than by hand | **done for staging, blocked for production** — `.github/workflows/supabase.yml` pushes migrations and the 24 10Q functions to staging on `main`, gated on the invariants job for the same commit. Production is refused by `db push` itself (below) |
+| Migrations reach a database from the repo rather than by hand | **done** — `.github/workflows/supabase.yml` pushes migrations and the 24 10Q functions to staging then production on `main`, gated on the invariants job, with the Cloudflare deploy waiting on it. Production's ledger was reconciled to make this possible (below) |
 
 **Fixed in passing: CI verified a different artifact than production shipped.**
 `NEXT_PUBLIC_POSTHOG_KEY` and `_HOST` were supplied only to the deploy job, and
@@ -131,43 +131,41 @@ never leaves the browser and the server logs nothing — so this would have
 looked like a total client outage with no server-side trace. Caught before
 deploy, now asserted in the CORS tests.
 
-**Production migrations cannot be automated yet — needs a decision.**
-`supabase db push` refuses to run against production at all:
+**Production's migration ledger is reconciled (2026-08-19).** `db push` now
+reports `Remote database is up to date` against production, and CI deploys
+migrations to staging then production before the Cloudflare deploy runs.
 
-```
-Remote migration versions not found in local migrations directory.
-supabase migration repair --status reverted 20260101214909 20260118041741 ...
-```
+It previously refused outright. The ledger held 35 rows: 17 stamped with
+dashboard-assigned timestamps rather than repo filenames, and 18 belonging to
+the transfers project. `db push` compares remote versions to local *filenames*,
+so almost every row looked like "applied remotely, absent locally".
 
-Production's `supabase_migrations.schema_migrations` holds **35 entries**.
-**17 belong to the separate transfers project**, whose migrations are not in
-this repo at all. The remaining 18 are 10Q entries stamped with dashboard/MCP
-timestamps rather than repo filenames. The CLI cannot distinguish "applied
-under a different name" from "applied and then deleted from the repo", so it
-refuses to proceed rather than guess.
+What made it safe:
 
-The same dry run against staging reports `Remote database is up to date`,
-because staging's ledger was built from the repo.
+- **The transfers migrations were recovered first.** All 18 had been applied
+  through the dashboard and existed in no repo — their only copy was the
+  `statements` column of `schema_migrations`. The record of how the schema was
+  built lived inside the database it built. They are now in
+  `supabase/transfers-migrations/`, extracted verbatim.
+- **The whole ledger was backed up with its SQL**, so the operation was
+  reversible rather than merely careful.
+- **It was rehearsed on staging.** One row was renamed to a fake dashboard
+  timestamp to reproduce the exact failure, repaired, and checked: the SQL
+  survived at an identical byte length and the push went clean. Only then did
+  it run against production. That rehearsal answered the question that mattered
+  — `--status reverted` *deletes* a row, and `--status applied` re-inserts it
+  from the local file — which is the difference between reconciling history and
+  destroying it.
+- **`migration repair` runs no DDL.** It edits only the history table. Verified
+  either side of the change: 9 transfers tables, 251 journalists, 96 clubs
+  unchanged; 181 players and 527 attempts unchanged; both cron jobs alive; every
+  security invariant still holding.
 
-The CLI's suggested `migration repair` across 35 versions **rewrites the
-applied-migration history of the live database**. It is plausibly the right
-fix, but it is a reviewed one-time operation — not something to run
-unsupervised, and not something CI should do as a side effect of a push.
-So production deploys stay manual and the risk that motivated all of this
-(a migration sitting unapplied for five months) is only *reduced* for
-production, not eliminated: CI now proves migrations apply and hold their
-invariants, and staging proves they apply to a hosted project, but the last
-hop to production is still a human running the CLI.
-
-Three options, for Riley to pick:
-1. **Repair the ledger by hand**, then enable a production job. Highest value,
-   needs a careful session against a live database with a backup taken first.
-2. **Move the transfers project's migrations into their own repo**, which
-   removes 17 of the 35 conflicting entries and makes the remaining drift
-   small enough to reason about.
-3. **Leave production manual** and rely on staging plus the invariant
-   assertions. Cheapest, and the honest answer for as long as the ledger
-   is untouched.
+Also found in passing: `replace_publish_quiz_cron` existed only in production's
+ledger, which looked like a migration the repo was missing. It is the tail of
+`20260402000000_publish_scheduled_quiz_function.sql` — production applied as two
+dashboard migrations what the repo keeps in one file. The quiz-publishing cron
+is fine, and staging (built purely from the repo) proves it.
 
 **Staging exists (Phase 2).** Second Supabase project `yfzylxospvbipnlbwxno`,
 free plan, seeded by applying all 19 repo migrations with `db push` rather than

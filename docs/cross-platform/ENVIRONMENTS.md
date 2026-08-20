@@ -40,25 +40,38 @@ supabase link --project-ref zcvwamziybpslpavjljw   # ALWAYS relink to prod after
 The relink matters. `db push` and `functions deploy` act on whatever is linked,
 and the failure mode is applying a half-finished migration to production.
 
-## Drift found while doing this
+## Drift found while doing this — now resolved
 
-Production's migration ledger and the repo do not agree, which is what
-motivated the Phase 2 "Supabase in CI" item.
+Production's ledger and the repo did not agree, which is what motivated the
+Phase 2 "Supabase in CI" item.
 
-**Three repo migrations are absent from `supabase_migrations.schema_migrations`
-in production** — `handle_customization`, `admin_tool_rls_and_snapshots`,
-`quiz_content_source`. Verified their objects *do* exist
-(`players.handle_last_changed_at`, `quiz_edit_snapshots`,
-`quizzes.content_source`), so they were applied under different names or by
-hand. The schema is right; the ledger is not.
+Three repo migrations were absent from `schema_migrations`
+(`handle_customization`, `admin_tool_rls_and_snapshots`, `quiz_content_source`)
+though their objects existed, and 17 further rows carried dashboard timestamps
+instead of repo filenames. **Reconciled on 2026-08-19** — production now has
+exactly the repo's 19 migrations at their repo versions, and `db push` reports
+`Remote database is up to date`. See STATUS.md for the procedure and the
+rehearsal that de-risked it.
 
-That is the benign version. The malignant version was
-`20260310100000_restrict_is_correct_column.sql`, which had been in the repo
-since March and had **never been applied at all** — leaving the answer key
-readable with the publishable anon key for five months. See STATUS.md.
+The malignant version of this was
+`20260310100000_restrict_is_correct_column.sql`, in the repo since March and
+**never applied at all**, leaving the answer key readable with the publishable
+anon key for five months.
 
-Staging exists partly so this stops being possible: migrations applied there
-first, from the repo, by CI.
+Staging exists so this stops being possible: migrations are applied there
+first, from the repo, by CI, and CI asserts the invariants that were violated.
+
+## The transfers project shares this database
+
+18 migrations in production's ledger belonged to the transfer-credibility
+system, which lives in its own `transfers` schema (9 tables) and shares 10Q's
+Supabase project. They were applied through the dashboard and existed in no
+repo at all.
+
+They are now recovered into `supabase/transfers-migrations/` and their ledger
+rows removed, so 10Q's ledger describes only 10Q. Nothing about the transfers
+schema or its data changed. If it moves to its own project later — always the
+intent — that directory's README has the steps.
 
 ## What staging does not have yet
 
