@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 4 — Platform seam and auth (web half done; native half blocked on 0E)**
+**Current phase: Phase 5 — UX pass done; shell blocked on 0E**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -152,6 +152,49 @@ This is the exact failure the new Supabase deploy workflow exists to prevent —
 it deploys all 24 on every push to `main`, so "committed but not deployed"
 stops being a state the system can be in. All 24 verified accepting the header
 after a manual deploy.
+
+**Phase 5 — UX pass (complete). Shell workstream blocked.** The plan splits
+Phase 5 into two independently-mergeable workstreams. The UX pass needs no
+Capacitor and **ships to web**, where most of it fixes live mobile-Safari
+bugs; it is done. The shell (`capacitor.config.ts`, `ios/`, `android/`) needs
+`@capacitor/*`, which 0E blocks.
+
+| Item | Priority | State |
+|---|---|---|
+| `viewportFit: 'cover'`, `maximumScale: 1` | P0 | **done** — verified in the meta tag |
+| Safe-area padding | P0 | **done** — 7 utilities, applied at ArcadeBackground, BottomDock, Toast and the invite CTA |
+| `100vh` → `100dvh` | P0 | **done** — one utility override rather than 60 call sites; the dock's bottom edge now sits flush at 812px in a 375×812 viewport |
+| Android hardware back | P0 | **done** — per-route policy through the seam, plus push→replace across the play flow |
+| Wire up `PageTransition` | P1 | **deliberately not done** — see below |
+| `BottomDock` as a real tab bar | P1 | not started |
+| Input hygiene | P2 | **done** — autoCapitalize/autoCorrect off on handle fields; the 14px field that triggered iOS focus-zoom is now 16px |
+| Accessibility floor | P2 | **done** — `aria-live` on answer correctness, `role="dialog"` + focus trap + Escape on all four modals |
+| Dead style references | P3 | **done** — `to-magentaA` was never a token; `animate-slide-in` had no keyframe |
+| Emoji icons → SVG; profile `.bg-arcade` | P3 | not started |
+
+**The play flow no longer pollutes history.** Ten questions meant ten history
+entries, so back walked a player backwards through questions the server
+considers answered — on a game with one attempt per day. Verified end to end:
+a full quiz from question 9 through finalize to results left history at 19
+entries throughout, and back from results lands on home.
+
+**`PageTransition` is left unwired on purpose.** framer-motion drives
+animations from `requestAnimationFrame`, which browsers throttle to zero in a
+hidden tab, so a mount animation stays frozen at `initial` — opacity 0 and
+offset — indefinitely. That is **pre-existing**: five such animations on
+`/results` behave identically on `main`. It matters here because this
+environment's browser pane reports `visibilityState: "hidden"` even when
+fronted, so the animated path cannot be verified at all. Wiring an
+unverifiable decorative feature into five screens would spread a latent
+invisible-content bug for no functional gain. The component keeps its
+`prefers-reduced-motion` fix, which is a real accessibility improvement and
+carries no risk. **Anyone picking this up should verify in a real focused
+browser tab first.**
+
+**Phase 5 exit criteria remain unmet** — all four require a real iPhone and
+Android device, which is the same device dependency that blocks 0D and Phase
+4's native half. The web-observable half of the fourth criterion ("mobile
+Safari regressions fixed and verified on web") is done.
 
 **Phase 4 — Platform seam (web half complete).** The seam, the client
 convergence and every platform-independent item are done and verified on web.
