@@ -172,6 +172,62 @@ jobs:
         if: always()
         run: supabase stop
 
+  native-export:
+    name: Static export builds
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The export is what gets packaged into the iOS and Android bundles, so
+      # it has to build on every commit — not only when someone remembers to
+      # run it before a release. `output: 'export'` fails on things the web
+      # target tolerates (route handlers, middleware, dynamic segments without
+      # generateStaticParams), and those failures otherwise surface weeks later
+      # at packaging time.
+      - name: Build static export
+        run: npm run build:native --workspace=apps/web
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_POSTHOG_KEY: ${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST: ${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
+
+      # Catches what a successful build does not: optimizer URLs that 404
+      # inside the bundle, routes that exported without an index.html, missing
+      # question pages. All silent at runtime.
+      - name: Validate the export
+        run: ./scripts/check-export.sh apps/web/out
+
+      # The build script hides middleware.ts and the Sentry server configs and
+      # restores them from an EXIT trap. If a bug ever defeated that trap, the
+      # next web deploy would silently ship without middleware — so assert the
+      # tree is clean rather than trusting it.
+      - name: Assert the source tree was restored
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "native build left the tree dirty:"
+            git status --porcelain
+            exit 1
+          fi
+          if find apps/web -name '*.native-hidden' | grep -q .; then
+            echo "hidden files left behind:"
+            find apps/web -name '*.native-hidden'
+            exit 1
+          fi
+          echo "tree clean"
+
   deploy:
     name: Deploy to Cloudflare
     needs: ci
