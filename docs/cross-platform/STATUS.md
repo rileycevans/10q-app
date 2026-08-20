@@ -12,7 +12,11 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 0 — Preconditions (0A–0E)** (in progress)
+**Current phase: Phase 1 complete — Phase 2 (Foundations) is next**
+
+Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
+check is the one open item, see below) and Phase 1's correctness and hardening
+work is finished. Phase 2 does not depend on the outstanding 0D device check.
 
 | | Precondition | State |
 |---|---|---|
@@ -88,6 +92,20 @@ routes there are stubbed, not deleted.
 question — the architecture risk that 0E exists to guard against was 0A, and it
 passed. The natural place to close it is early Phase 5, when a Capacitor shell
 first runs the real app rather than a probe. Phases 1–3 do not depend on it.
+
+**Phase 1 — correctness and hardening: done.** C1, C2, C3, C7, A4 fixed with
+tests; A6 was closed in Phase 0; A7 triaged below.
+
+**A7 triage (measured 2026-08-19, decisions recorded).** The exit criterion is
+a recorded decision per item, not a fix per item.
+
+| Item | Measured | Decision |
+|---|---|---|
+| Unbounded leaderboard `limit` | `?limit=1000000` accepted. Returned 133 rows (all that exist) but took **1.7s** — the aggregation runs over all of `daily_scores` before slicing, so it is a cost amplifier, not a data leak | **Fixed.** Capped at 200 (`count` at 50) on both global and league leaderboards, with `NaN` falling back to the default rather than propagating |
+| `private` schema exposed | Confirmed empty: 0 tables, 0 views, 0 functions. Not reachable with the anon key today | **Fixed.** Removed from `config.toml` `schemas`. Anything a future migration creates there would otherwise be API-reachable by default |
+| `get-profile-by-handle` unauthenticated and unthrottled | **2.27s per call**, service-role, heavy multi-join, no auth and no throttle. The cheapest DoS surface in the app | **Deferred to Phase 2**, deliberately. The fix is rate limiting, which needs infrastructure that does not exist yet (no staging, no shared limiter). Adding a bespoke per-function limiter now would be thrown away. Tracked as a Phase 2 exit item |
+| No rate limiting or idempotency keys anywhere | `outbox_events.idempotency_key` exists and is **never written** (0 writes across all functions). Nothing throttles attempt cycling or handle enumeration | **Deferred to Phase 2**, same reason. Note the two worst amplifiers are already closed: `delete-attempt` is admin-gated (A1) and `publish-quiz` is deleted (A2), so the unthrottled loop that mattered most is gone |
+| Full answer key released at finalize | Inherent to showing a results breakdown. A1 is closed, so the one-shot-per-player guarantee now holds | **Product decision, not a defect.** Acceptable while the leaderboard carries no stakes. Revisit if prizes or ranked play are ever added |
 
 ## Completed
 

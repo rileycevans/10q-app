@@ -27,8 +27,28 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const window = url.searchParams.get("window") || "7d";
     const mode = url.searchParams.get("mode") || "top";
-    const limit = parseInt(url.searchParams.get("limit") || "100", 10);
-    const count = parseInt(url.searchParams.get("count") || "12", 10);
+    // A7 — bound the caller-supplied paging values.
+    //
+    // `limit` was unbounded, so ?limit=1000000 was accepted. It never returned
+    // more rows than exist (measured: 133), but the aggregation runs over all
+    // of daily_scores before slicing, so a large value is a cost amplifier
+    // rather than a data leak — 1.7s of service-role work per request, with no
+    // rate limiting in front of it.
+    //
+    // NaN is coerced to the default rather than passed through: parseInt("abc")
+    // is NaN, and NaN survives Math.min/max unchanged.
+    const MAX_LIMIT = 200;
+    const MAX_COUNT = 50;
+
+    const rawLimit = parseInt(url.searchParams.get("limit") || "100", 10);
+    const rawCount = parseInt(url.searchParams.get("count") || "12", 10);
+
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(Math.max(rawLimit, 1), MAX_LIMIT)
+      : 100;
+    const count = Number.isFinite(rawCount)
+      ? Math.min(Math.max(rawCount, 1), MAX_COUNT)
+      : 12;
     const scoreType = url.searchParams.get("score_type") || "cumulative";
 
     // Validate parameters

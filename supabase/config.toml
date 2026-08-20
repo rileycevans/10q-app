@@ -4,7 +4,11 @@
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "private"]
+# A7 — `private` removed from the exposed list. It is empty (0 tables, 0 views,
+# 0 functions, verified 2026-08-19), but anything a future migration creates
+# there would otherwise be API-reachable by default, which defeats the point of
+# calling it private.
+schemas = ["public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
