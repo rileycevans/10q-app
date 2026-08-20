@@ -38,6 +38,16 @@ additional_redirect_urls = ["https://localhost:3000"]
 jwt_expiry = 3600
 enable_signup = true
 
+# 10Q is anonymous-first: every visitor gets signInAnonymously() before any
+# sign-in prompt, and linkIdentity later preserves the user id so streaks,
+# scores and leagues survive the upgrade.
+#
+# Production has this on. The local stack defaulted to off, so a local
+# database did not match the one the app actually runs against — and the RLS
+# suite, which signs in anonymously to test authenticated access, failed on
+# its first CI run with "expected null to be truthy".
+enable_anonymous_sign_ins = true
+
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
