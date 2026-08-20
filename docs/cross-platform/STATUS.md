@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 3 — Static export**
+**Current phase: Phase 4 — Platform seam and auth**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -152,6 +152,47 @@ This is the exact failure the new Supabase deploy workflow exists to prevent —
 it deploys all 24 on every push to `main`, so "committed but not deployed"
 stops being a state the system can be in. All 24 verified accepting the header
 after a manual deploy.
+
+**Phase 3 — Static export (complete).** All four exit criteria met.
+
+| Exit criterion | State |
+|---|---|
+| `npm run build` (web) and the native build both pass | **done** — `BUILD_TARGET=native` produces a 33-route, 6.2M export; the web target still builds with middleware, the `/sentry-test/server` route handler and the image optimizer intact |
+| Export serves correctly from a static server at every route | **done** — `scripts/check-export.sh` validates it, and the Playwright `export` project serves `out/` as plain files |
+| Web unchanged in production apart from the new redirects | **done** — every server feature is bound to `!isNative`; verified in the build output |
+| Playwright passes against both the dev server and the export | **done** — 4 dev-server tests, 6 export tests |
+
+Three routes moved off dynamic segments, because a static export cannot
+enumerate league ids, handles or invite codes:
+
+| Was | Now |
+|---|---|
+| `/invite/<code>` | `/invite/?code=` |
+| `/u/<handle>` | `/u/?handle=` |
+| `/leagues/<id>` | `/leagues/view?id=` |
+
+Old shapes 308 permanently. Invite links are the growth loop and sit in
+people's message threads, so they have to work indefinitely. The
+`/leagues/:id` rule carries a negative lookahead — a bare `:id` swallows
+`/leagues/create` and `/leagues/view`, sending anyone clicking "create a
+league" into a lookup for a league named "create". Verified against a running
+server, not just the config.
+
+`/play/q/[index]` keeps its segment via `generateStaticParams`: a quiz is
+always `MAX_QUESTIONS_PER_QUIZ` questions, so the paths are known at build
+time. `dynamicParams = false` and the resume index is clamped — in an app
+bundle an out-of-range push is a hard 404, not a soft redirect.
+
+Two things worth carrying forward:
+
+- **`window.location.origin` is wrong on native.** It is
+  `capacitor://localhost` in the WebView, so an invite link built from it is
+  unopenable — and it fails silently, as a link a friend taps and nothing
+  happens. Shared URLs now come from `PUBLIC_ORIGIN`.
+- **The plan's `/_next/image` CI check does not work as written.** Next inlines
+  its image config — including that literal path and `unoptimized:!0` — into a
+  framework chunk on every build, so a bare grep fails forever on inert config.
+  The check looks for generated `/_next/image?url=` URLs in emitted HTML.
 
 **Production's migration ledger is reconciled (2026-08-19).** `db push` now
 reports `Remote database is up to date` against production, and CI deploys
