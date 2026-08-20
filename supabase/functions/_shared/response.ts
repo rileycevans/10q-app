@@ -33,6 +33,11 @@ export const ErrorCodes = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   NO_VIEWER_SCORE: "NO_VIEWER_SCORE",
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+
+  // Returned with HTTP 426. The client build is below the configured minimum
+  // supported version — see _shared/client-version.ts and
+  // docs/cross-platform/release/VERSIONING.md §8.
+  CLIENT_UPDATE_REQUIRED: "CLIENT_UPDATE_REQUIRED",
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];

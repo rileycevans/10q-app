@@ -4,6 +4,7 @@
  */
 
 import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
@@ -16,6 +17,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (read-only, degraded UX only).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "get_global_leaderboard_request", {});
 
   try {

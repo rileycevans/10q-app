@@ -35,6 +35,12 @@ export const ErrorCodes = {
   
   // Service errors
   SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+  // Client version gate
+  // Returned with HTTP 426 when the client build is below the configured
+  // minimum supported version. Mirrored in the Deno registry at
+  // supabase/functions/_shared/response.ts — adding it to only one is bug C5.
+  CLIENT_UPDATE_REQUIRED: "CLIENT_UPDATE_REQUIRED",
+
 } as const;
 
 export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];

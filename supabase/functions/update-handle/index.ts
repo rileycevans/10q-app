@@ -4,6 +4,7 @@
  */
 
 import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 
 import { containsBlockedContent } from "../_shared/handle-blocklist.ts";
 
@@ -183,6 +184,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (discretionary write, retryable after updating).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "update_handle_request", {});
 
   try {

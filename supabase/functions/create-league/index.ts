@@ -4,6 +4,7 @@
  */
 
 import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 
 import { validateLeagueName } from "../_shared/league-names.ts";
 
@@ -173,6 +174,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (discretionary write, retryable after updating).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "create_league_request", {});
 
   try {

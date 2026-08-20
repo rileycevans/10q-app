@@ -5,6 +5,7 @@
  */
 
 import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
+import { requireMinimumClient } from "../_shared/client-version.ts";
 import { successResponse, errorResponse, ErrorCodes } from "../_shared/response.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
@@ -27,6 +28,11 @@ Deno.serve(async (req) => {
   }
 
   const requestId = generateRequestId();
+
+  // Version gate (preferred gate point — blocks BEFORE the daily attempt is consumed).
+  // Inert until MIN_CLIENT_* secrets are set — see VERSIONING.md §8.
+  const outdated = requireMinimumClient(req, requestId);
+  if (outdated) return outdated;
   logStructured(requestId, "start_attempt_request", {});
 
   try {
