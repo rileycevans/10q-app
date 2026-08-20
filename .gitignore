@@ -53,3 +53,8 @@ lerna-debug.log*
 # showed up as a spurious diff.
 apps/web/playwright-report/
 apps/web/test-results/
+
+# Finder/editor duplicates ("page 2.tsx"). Next.js ignores filenames with
+# spaces so they never become routes, but they are stale copies that get
+# swept into commits by a directory-wide `git add` — which has happened twice.
+*\ [0-9].*
