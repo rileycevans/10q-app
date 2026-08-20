@@ -10,7 +10,7 @@ interface LeagueCardProps {
 export function LeagueCard({ league }: LeagueCardProps) {
   return (
     <Link
-      href={`/leagues/${league.league_id}`}
+      href={`/leagues/view?id=${league.league_id}`}
       className="block bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-5 w-full transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px]"
     >
       <div className="flex items-center justify-between">

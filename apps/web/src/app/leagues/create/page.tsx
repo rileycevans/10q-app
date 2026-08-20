@@ -34,7 +34,7 @@ export default function CreateLeaguePage() {
 
     try {
       const league = await createLeague(name.trim());
-      router.push(`/leagues/${league.league_id}`);
+      router.push(`/leagues/view?id=${league.league_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create league');
       setLoading(false);

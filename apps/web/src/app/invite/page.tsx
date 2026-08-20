@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { joinLeague } from '@/domains/league';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { getSession } from '@/lib/auth';
@@ -20,10 +20,10 @@ interface LeagueInfo {
   member_count: number;
 }
 
-export default function InvitePage() {
+function InvitePageInner() {
   const router = useRouter();
-  const params = useParams();
-  const inviteCode = params.code as string;
+  const searchParams = useSearchParams();
+  const inviteCode = searchParams.get('code') ?? '';
 
   const [loading, setLoading] = useState(true);
   const [leagueInfo, setLeagueInfo] = useState<LeagueInfo | null>(null);
@@ -91,7 +91,7 @@ export default function InvitePage() {
 
       // Navigate to league page after a brief delay
       setTimeout(() => {
-        router.push(`/leagues/${result.league_id}`);
+        router.push(`/leagues/view?id=${result.league_id}`);
       }, 1500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to join league';
@@ -100,7 +100,7 @@ export default function InvitePage() {
         setToast({ message: 'You are already a member of this league', type: 'error' });
         // Still navigate to the league
         setTimeout(() => {
-          router.push(`/leagues/${leagueInfo?.league_id}`);
+          router.push(`/leagues/view?id=${leagueInfo?.league_id}`);
         }, 2000);
       } else {
         setToast({ message: `Failed to join league: ${errorMessage}`, type: 'error' });
@@ -250,5 +250,23 @@ export default function InvitePage() {
         </div>
       )}
     </ArcadeBackground>
+  );
+}
+
+/**
+ * `/invite/?code=ABC123` rather than `/invite/ABC123`.
+ *
+ * A static export cannot enumerate invite codes, and codes are generated at
+ * runtime — `generateStaticParams` has nothing to return. A query param needs
+ * no page per code.
+ *
+ * The old path shape is a permanent Cloudflare redirect: those links are in
+ * people's message threads and must keep working forever.
+ */
+export default function InvitePage() {
+  return (
+    <Suspense fallback={<ArcadeBackground><div /></ArcadeBackground>}>
+      <InvitePageInner />
+    </Suspense>
   );
 }

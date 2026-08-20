@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { getProfileByHandle, type Profile } from '@/domains/profile';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { CategoryPerformanceCard } from '@/components/CategoryPerformanceCard';
@@ -16,10 +16,10 @@ const AuthButton = dynamic(
   { ssr: false }
 );
 
-export default function ProfilePage() {
-  const params = useParams();
+function ProfilePageInner() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const handle = params.handle as string;
+  const handle = searchParams.get('handle') ?? '';
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,7 @@ export default function ProfilePage() {
 
           trackScreenView({
             screen: 'profile',
-            route: `/u/${handle}`,
+            route: `/u/?handle=${handle}`,
           });
 
           trackProfileView({
@@ -219,3 +219,16 @@ export default function ProfilePage() {
   );
 }
 
+
+/**
+ * `/u/?handle=riley` rather than `/u/riley`.
+ *
+ * Handles are user-chosen and change; a static export cannot enumerate them.
+ */
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ArcadeBackground><div /></ArcadeBackground>}>
+      <ProfilePageInner />
+    </Suspense>
+  );
+}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   getLeagueDetails,
   addLeagueMember,
@@ -18,6 +18,7 @@ import {
   type LeagueLeaderboardResponse,
 } from '@/domains/leaderboard';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
+import { publicUrl } from '@/lib/version';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { LeagueMemberList } from '@/components/LeagueMemberList';
 import { AddMemberForm } from '@/components/AddMemberForm';
@@ -29,10 +30,10 @@ const AuthButton = dynamic(
   { ssr: false }
 );
 
-export default function LeagueDetailPage() {
+function LeagueDetailPageInner() {
   const router = useRouter();
-  const params = useParams();
-  const leagueId = params.id as string;
+  const searchParams = useSearchParams();
+  const leagueId = searchParams.get('id') ?? '';
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,8 +53,9 @@ export default function LeagueDetailPage() {
   // Set invite link on client side only
   useEffect(() => {
     if (leagueDetails?.invite_code) {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      setInviteLink(`${origin}/invite/${leagueDetails.invite_code}`);
+      // Not window.location.origin: on native that is capacitor://localhost,
+      // which produces an invite link nobody outside the app can open.
+      setInviteLink(publicUrl(`/invite/?code=${leagueDetails.invite_code}`));
     }
   }, [leagueDetails?.invite_code]);
 
@@ -459,3 +461,18 @@ export default function LeagueDetailPage() {
   );
 }
 
+
+/**
+ * `/leagues/view?id=<uuid>` rather than `/leagues/<uuid>`.
+ *
+ * Leagues are created at runtime, so a static export has no set of ids to
+ * build pages from. `view` rather than a bare `/leagues/?id=` so it cannot
+ * collide with the `/leagues` index or `/leagues/create`.
+ */
+export default function LeagueDetailPage() {
+  return (
+    <Suspense fallback={<ArcadeBackground><div /></ArcadeBackground>}>
+      <LeagueDetailPageInner />
+    </Suspense>
+  );
+}

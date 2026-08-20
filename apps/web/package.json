@@ -17,7 +17,8 @@
     "deploy": "../../scripts/release/with-version-env.sh sh -c \"opennextjs-cloudflare build && opennextjs-cloudflare deploy\"",
     "generate:icons": "node scripts/generate-app-icons.mjs",
     "process:logo": "node scripts/make-logo-transparent.mjs",
-    "refine:logo": "node scripts/refine-logo-ink.mjs"
+    "refine:logo": "node scripts/refine-logo-ink.mjs",
+    "build:native": "../../scripts/build-native.sh"
   },
   "dependencies": {
     "@10q/contracts": "*",

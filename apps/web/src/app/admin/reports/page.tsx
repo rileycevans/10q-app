@@ -172,7 +172,7 @@ export default function AdminReportsPage() {
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
                       <Link
-                        href={`/u/${r.reported_handle}`}
+                        href={`/u/?handle=${r.reported_handle}`}
                         className="font-display text-2xl text-ink break-words underline-offset-2 hover:underline"
                       >
                         {r.reported_handle}

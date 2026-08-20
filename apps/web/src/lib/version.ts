@@ -70,3 +70,28 @@ export function buildIdentity() {
     environment: APP_ENVIRONMENT,
   } as const;
 }
+
+/**
+ * The origin that shared links must point at.
+ *
+ * `window.location.origin` is wrong on native. Inside the Capacitor WebView it
+ * is `capacitor://localhost`, so an invite link built from it is a URL nobody
+ * outside the app can open — and it fails silently, as a link a friend taps and
+ * nothing happens, not as an error anyone sees in testing.
+ *
+ * The invite link is the growth loop, so it must always be an https://
+ * play10q.com URL regardless of which platform generated it.
+ *
+ * Web keeps using the live origin so preview deploys and localhost still
+ * self-reference correctly; only native pins to the canonical site.
+ */
+export const PUBLIC_ORIGIN: string =
+  process.env.NEXT_PUBLIC_PUBLIC_ORIGIN ??
+  (CLIENT_PLATFORM === 'web' && typeof window !== 'undefined'
+    ? window.location.origin
+    : 'https://play10q.com');
+
+/** Absolute URL on the public site, for anything shared outside the app. */
+export function publicUrl(path: string): string {
+  return `${PUBLIC_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+}
