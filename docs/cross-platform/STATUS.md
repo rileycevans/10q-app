@@ -107,15 +107,16 @@ a recorded decision per item, not a fix per item.
 | No rate limiting or idempotency keys anywhere | `outbox_events.idempotency_key` exists and is **never written** (0 writes across all functions). Nothing throttles attempt cycling or handle enumeration | **Deferred to Phase 2**, same reason. Note the two worst amplifiers are already closed: `delete-attempt` is admin-gated (A1) and `publish-quiz` is deleted (A2), so the unthrottled loop that mattered most is gone |
 | Full answer key released at finalize | Inherent to showing a results breakdown. A1 is closed, so the one-shot-per-player guarantee now holds | **Product decision, not a defect.** Acceptable while the leaderboard carries no stakes. Revisit if prizes or ranked play are ever added |
 
-**Phase 2 — Foundations (in progress).** Three of five exit criteria met.
+**Phase 2 — Foundations (in progress).** Four of five exit criteria met.
 
 | Exit criterion | State |
 |---|---|
 | `app_version` / `app_build` readable at runtime on every platform | **done** — `version.json` + `scripts/release/version.mjs`, inlined via `src/lib/version.ts`. Verified in the shipped bundle |
 | PostHog carries `client_platform`; Sentry has `release` + `dist` + `client_platform` | **done** — PostHog super properties registered at init; Sentry `release`/`dist`/tags set, and `environment` now comes from the build config rather than `NODE_ENV` (which made every artifact report as production) |
-| `X-Client-Version` sent and enforced, minimum set permissively | **sent, not yet enforced.** The header is on every edge function call and verified end to end. Server-side gating is the remaining half |
+| `X-Client-Version` sent and enforced, minimum set permissively | **done** — `_shared/client-version.ts` gates six door-level functions and returns 426 `CLIENT_UPDATE_REQUIRED`. Inert by default (`MIN_CLIENT_*` unset = `0.0.0`), which is the required end state: armed on day one would brick clients. Never gated on `start-question-timer`, `submit-answer`, `finalize-attempt`, `resume-attempt` or `delete-account` — a gate firing mid-attempt destroys a player's single daily play, and blocking `delete-account` is an App Store 5.1.1(v) violation |
 | Staging exists end to end and a build can be pointed at it | **partly** — a second free Supabase project exists with all 19 migrations and 24 functions deployed ([ENVIRONMENTS.md](ENVIRONMENTS.md)). No Cloudflare Worker or seeded data yet, so a build cannot be pointed at it end to end |
 | Both build targets run in CI | **partly** — the web target's env drift is fixed and `version.mjs check` runs; the native target does not exist until Phase 5 |
+| Migrations reach a database from the repo rather than by hand | **done for staging, blocked for production** — `.github/workflows/supabase.yml` pushes migrations and the 24 10Q functions to staging on `main`, gated on the invariants job for the same commit. Production is refused by `db push` itself (below) |
 
 **Fixed in passing: CI verified a different artifact than production shipped.**
 `NEXT_PUBLIC_POSTHOG_KEY` and `_HOST` were supplied only to the deploy job, and
@@ -129,6 +130,44 @@ Both env blocks now match, with a comment saying they must stay in step.
 never leaves the browser and the server logs nothing — so this would have
 looked like a total client outage with no server-side trace. Caught before
 deploy, now asserted in the CORS tests.
+
+**Production migrations cannot be automated yet — needs a decision.**
+`supabase db push` refuses to run against production at all:
+
+```
+Remote migration versions not found in local migrations directory.
+supabase migration repair --status reverted 20260101214909 20260118041741 ...
+```
+
+Production's `supabase_migrations.schema_migrations` holds **35 entries**.
+**17 belong to the separate transfers project**, whose migrations are not in
+this repo at all. The remaining 18 are 10Q entries stamped with dashboard/MCP
+timestamps rather than repo filenames. The CLI cannot distinguish "applied
+under a different name" from "applied and then deleted from the repo", so it
+refuses to proceed rather than guess.
+
+The same dry run against staging reports `Remote database is up to date`,
+because staging's ledger was built from the repo.
+
+The CLI's suggested `migration repair` across 35 versions **rewrites the
+applied-migration history of the live database**. It is plausibly the right
+fix, but it is a reviewed one-time operation — not something to run
+unsupervised, and not something CI should do as a side effect of a push.
+So production deploys stay manual and the risk that motivated all of this
+(a migration sitting unapplied for five months) is only *reduced* for
+production, not eliminated: CI now proves migrations apply and hold their
+invariants, and staging proves they apply to a hosted project, but the last
+hop to production is still a human running the CLI.
+
+Three options, for Riley to pick:
+1. **Repair the ledger by hand**, then enable a production job. Highest value,
+   needs a careful session against a live database with a backup taken first.
+2. **Move the transfers project's migrations into their own repo**, which
+   removes 17 of the 35 conflicting entries and makes the remaining drift
+   small enough to reason about.
+3. **Leave production manual** and rely on staging plus the invariant
+   assertions. Cheapest, and the honest answer for as long as the ledger
+   is untouched.
 
 **Staging exists (Phase 2).** Second Supabase project `yfzylxospvbipnlbwxno`,
 free plan, seeded by applying all 19 repo migrations with `db push` rather than
