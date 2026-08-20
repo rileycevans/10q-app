@@ -44,7 +44,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       
       {/* Toast Container */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      {/* mb-safe-only clears the home indicator; bottom-4 is the base offset. */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 mb-safe-only">
         {toasts.map((toast) => (
           <div
             key={toast.id}

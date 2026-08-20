@@ -21,8 +21,10 @@ export function BottomDock({
   onSettingsClick,
   onProfileClick,
 }: BottomDockProps) {
+  // pb-safe-only adds the home-indicator inset on top of the existing py-3,
+  // so the dock keeps its own spacing on devices that have no indicator.
   return (
-    <div className="flex items-center justify-center gap-3 px-4 py-3">
+    <div className="flex items-center justify-center gap-3 px-4 py-3 pb-safe-only">
       <button
         className="w-14 h-14 bg-green border-[4px] border-ink rounded-lg shadow-sticker-sm flex items-center justify-center font-bold text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
         onClick={onRankClick}
