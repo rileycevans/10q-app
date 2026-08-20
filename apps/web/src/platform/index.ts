@@ -29,7 +29,25 @@ import type {
 
 export * from './types';
 
-const NATIVE = process.env.NEXT_PUBLIC_CLIENT_PLATFORM !== 'web';
+/**
+ * Native only when the build says so explicitly.
+ *
+ * Deliberately not `!== 'web'`. `npm run dev` does not go through
+ * scripts/release/with-version-env.sh, so the flag is undefined there — and
+ * `undefined !== 'web'` selects the NATIVE implementations, which on web are
+ * a storage layer that always returns ok:false and an OAuth module that
+ * throws. That is exactly what happened: the durable attempt cache silently
+ * wrote nothing in dev, and because the write is fire-and-forget there was no
+ * error anywhere to explain it.
+ *
+ * Web is the safe default: its implementations work everywhere, including
+ * inside a WebView. A native build that forgets the flag gets a degraded but
+ * functional app; a web build that accidentally selects native gets a broken
+ * one.
+ */
+const NATIVE =
+  process.env.NEXT_PUBLIC_CLIENT_PLATFORM === 'ios' ||
+  process.env.NEXT_PUBLIC_CLIENT_PLATFORM === 'android';
 
 export const storage: Storage = NATIVE
   ? require('./storage.native').default
