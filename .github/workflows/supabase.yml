@@ -92,25 +92,55 @@ jobs:
           STAGING_REF: ${{ secrets.SUPABASE_STAGING_REF }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-# -----------------------------------------------------------------------------
-# Production is deliberately NOT automated.
-# -----------------------------------------------------------------------------
-# `supabase db push` currently refuses to run against production at all:
-#
-#     Remote migration versions not found in local migrations directory.
-#
-# Its ledger holds 35 entries. 17 belong to the separate transfers project,
-# whose migrations are not in this repo; the other 18 are 10Q entries stamped
-# with dashboard/MCP-assigned timestamps rather than repo filenames. The CLI
-# cannot tell "applied under a different name" from "applied and then deleted",
-# so it stops.
-#
-# The fix the CLI suggests — `supabase migration repair` across 35 versions —
-# rewrites the applied-migration history of the live database. That is a
-# deliberate, reviewed, one-time operation, not something to run as a side
-# effect of a push to main. Until it is done by hand, production migrations
-# stay manual.
-#
-# To enable afterwards: add deploy-production mirroring deploy-staging with
-# `needs: deploy-staging`, and add it to ci.yml's deploy job's `needs` so the
-# Cloudflare deploy cannot outrun the backend.
+  deploy-production:
+    name: Deploy to production
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Production's ledger was reconciled with this repo on 2026-08-19 (see
+      # docs/cross-platform/STATUS.md). Before that, `db push` refused to run
+      # here at all: 35 rows, 17 stamped with dashboard timestamps instead of
+      # repo filenames and 18 belonging to the separate transfers project.
+      # It now reports "Remote database is up to date" against the repo's 19.
+      #
+      # If this step ever fails with "Remote migration versions not found in
+      # local migrations directory", something applied a migration outside this
+      # repo. Fix that rather than reaching for `migration repair` in CI —
+      # repair rewrites applied-migration history and belongs in a reviewed
+      # session, not an automated one.
+      - name: Push migrations
+        run: supabase db push --project-ref "$PROD_REF"
+        env:
+          PROD_REF: ${{ secrets.SUPABASE_PROD_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_PROD_DB_PASSWORD }}
+
+      # Same 24 functions as staging. The four transfers functions
+      # (extract-claim, ingest-claim, poll-tweets, poll-tweets-batch) are
+      # deliberately excluded — they belong to the other project.
+      - name: Deploy Edge Functions
+        run: |
+          set -euo pipefail
+          for fn in get-current-quiz start-attempt start-question-timer submit-answer \
+                    finalize-attempt resume-attempt get-attempt-results \
+                    get-global-leaderboard get-league-leaderboard get-league-details \
+                    get-my-leagues get-league-by-invite create-league join-league \
+                    leave-league add-league-member remove-league-member delete-league \
+                    get-profile-by-handle update-handle report-handle \
+                    delete-account delete-attempt create-quiz; do
+            echo "::group::$fn"
+            supabase functions deploy "$fn" --project-ref "$PROD_REF"
+            echo "::endgroup::"
+          done
+        env:
+          PROD_REF: ${{ secrets.SUPABASE_PROD_REF }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

@@ -179,6 +179,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Backend before clients, always. A client that ships before the schema
+      # it depends on is broken for every user; a schema that ships before its
+      # client is merely inert. supabase.yml lives in a separate workflow so
+      # `needs:` cannot reach it — wait on its check instead.
+      #
+      # Only waits when this commit actually touched supabase/**, because
+      # supabase.yml is path-filtered and would otherwise never report a check
+      # for this ref, hanging the deploy until timeout.
+      - name: Check whether this commit touches Supabase
+        id: touched
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.compareCommitsWithBasehead({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${context.payload.before}...${context.sha}`,
+            });
+            const hit = (data.files || []).some(f =>
+              f.filename.startsWith('supabase/migrations/') ||
+              f.filename.startsWith('supabase/functions/'));
+            core.setOutput('supabase', hit ? 'yes' : 'no');
+            core.info(hit ? 'Supabase touched — will wait for its deploy'
+                          : 'No Supabase changes — deploying directly');
+
+      - name: Wait for the Supabase deploy
+        if: steps.touched.outputs.supabase == 'yes'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: 'Deploy to production'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+
       - name: Checkout
         uses: actions/checkout@v4
 
