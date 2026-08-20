@@ -58,3 +58,17 @@ apps/web/test-results/
 # spaces so they never become routes, but they are stale copies that get
 # swept into commits by a directory-wide `git add` — which has happened twice.
 *\ [0-9].*
+
+# Capacitor native build output. The projects themselves ARE tracked — they
+# carry hand-edited config (URL schemes, entitlements) that must be reviewed —
+# but their build artifacts and resolved dependencies are not.
+apps/web/ios/App/Pods/
+apps/web/ios/App/build/
+apps/web/ios/App/App/public/
+apps/web/ios/App/Podfile.lock
+apps/web/android/.gradle/
+apps/web/android/build/
+apps/web/android/app/build/
+apps/web/android/app/src/main/assets/public/
+apps/web/android/local.properties
+apps/web/android/.idea/

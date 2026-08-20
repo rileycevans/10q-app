@@ -23,6 +23,23 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const isLocalStack = /^https?:\/\/(127\.0\.0\.1|localhost|host\.docker\.internal)(:\d+)?$/
   .test(SUPABASE_URL);
 const allowNonLocal = process.env.ALLOW_NON_LOCAL_RLS_TESTS === "1";
+/**
+ * `jq -r` prints "null" for a missing field, so a mis-named key in the CI
+ * workflow yields a non-empty value that authenticates as nothing. Every
+ * query then returns 42501 and the suite reads as a catastrophic RLS failure
+ * rather than a configuration problem — which is exactly how this first failed.
+ */
+const looksLikePlaceholder = (v: string) =>
+  v === "null" || v === "undefined" || v.length < 20;
+
+if (SUPABASE_ANON_KEY !== "" && looksLikePlaceholder(SUPABASE_ANON_KEY)) {
+  throw new Error(
+    `SUPABASE_ANON_KEY does not look like a key (${JSON.stringify(SUPABASE_ANON_KEY)}). ` +
+      "This is a configuration problem, not an RLS failure — every query would " +
+      "return 42501. Check how the workflow reads `supabase status --output json`.",
+  );
+}
+
 const hasCredentials = SUPABASE_URL !== "" && SUPABASE_ANON_KEY !== "";
 const shouldRun = hasCredentials && (isLocalStack || allowNonLocal);
 

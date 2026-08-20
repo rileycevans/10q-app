@@ -99,11 +99,32 @@ jobs:
       # hardcoding, so nothing in the repo carries a usable credential.
       - name: Start local Supabase stack
         run: |
+          set -euo pipefail
           supabase start
+          STATUS="$(supabase status --output json)"
+
+          # Field names differ across CLI versions — newer ones emit
+          # PUBLISHABLE_KEY / SECRET_KEY alongside (or instead of) the legacy
+          # ANON_KEY / SERVICE_ROLE_KEY. jq prints the literal "null" for a
+          # missing field: a non-empty value that authenticates as nothing, so
+          # every query returns 42501 and the suite reads as a catastrophic RLS
+          # failure rather than a bad key. That is exactly how this first failed.
+          pick() {
+            for k in "$@"; do
+              v="$(printf '%s' "$STATUS" | jq -r --arg k "$k" '.[$k] // empty')"
+              [ -n "$v" ] && { printf '%s' "$v"; return 0; }
+            done
+            return 1
+          }
+
+          URL="$(pick API_URL)" || { echo "could not read API_URL; available keys:"; printf '%s' "$STATUS" | jq 'keys'; exit 1; }
+          ANON="$(pick ANON_KEY PUBLISHABLE_KEY)" || { echo "could not read an anon/publishable key; available keys:"; printf '%s' "$STATUS" | jq 'keys'; exit 1; }
+          SERVICE="$(pick SERVICE_ROLE_KEY SECRET_KEY)" || { echo "could not read a service/secret key; available keys:"; printf '%s' "$STATUS" | jq 'keys'; exit 1; }
+
           {
-            echo "SUPABASE_URL=$(supabase status --output json | jq -r '.API_URL')"
-            echo "SUPABASE_ANON_KEY=$(supabase status --output json | jq -r '.ANON_KEY')"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$(supabase status --output json | jq -r '.SERVICE_ROLE_KEY')"
+            echo "SUPABASE_URL=$URL"
+            echo "SUPABASE_ANON_KEY=$ANON"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE"
           } >> "$GITHUB_ENV"
 
       # Assert the invariants that matter, against the schema the repo just
