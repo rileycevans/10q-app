@@ -195,7 +195,7 @@ describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
    * behaviour — these tests pin what IS true, and the A4 test below documents
    * the exposure so tightening it is a visible, intentional change.
    */
-  describe("Players table exposure (A4 — documents current behaviour)", () => {
+  describe("Players table exposure (A4 — fixed)", () => {
     it("anon CAN read the players table", async () => {
       const { data, error } = await anonClient
         .from("players")
@@ -206,15 +206,33 @@ describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
       expect(Array.isArray(data)).toBe(true);
     });
 
-    it("A4: linked_auth_user_id is still readable and correlates players to auth identities", async () => {
+    // A4 is now FIXED. This test flipped deliberately, exactly as the previous
+    // version said it would: the column GRANT in 20260819140000 removes
+    // linked_auth_user_id from anon and authenticated.
+    it("A4: linked_auth_user_id is NOT readable — it correlates handles to auth identities", async () => {
       const { error } = await anonClient
         .from("players")
         .select("id, linked_auth_user_id")
         .limit(1);
 
-      // Expected to PASS today. When A4 is fixed this test flips and must be
-      // updated deliberately — that is the point of asserting it.
+      expect(error).toBeTruthy();
+      expect(error?.code).toBe("42501");
+    });
+
+    it("A4: select(*) on players is refused rather than silently narrowed", async () => {
+      const { error } = await anonClient.from("players").select("*").limit(1);
+      expect(error).toBeTruthy();
+      expect(error?.code).toBe("42501");
+    });
+
+    it("the columns the app actually reads still work", async () => {
+      const { data, error } = await anonClient
+        .from("players")
+        .select("id, handle_display, handle_canonical, current_streak")
+        .limit(1);
+
       expect(error).toBeNull();
+      expect(Array.isArray(data)).toBe(true);
     });
 
     it("anon cannot update another player's handle", async () => {
@@ -226,17 +244,20 @@ describe.skipIf(!shouldRun)("RLS Smoke Tests", () => {
       if (!existing || existing.length === 0) return;
       const target = existing[0];
 
-      // There is no UPDATE policy on players, so RLS matches zero rows and
-      // PostgREST returns success with an empty set rather than an error.
-      // Asserting on `error` here is the exact mistake the original suite
-      // made; assert that nothing actually changed instead.
+      // Two layers now refuse this, and either is sufficient:
+      //   1. No UPDATE policy exists, so RLS matches zero rows.
+      //   2. Since A4 (20260819140000) the column GRANT does not include
+      //      UPDATE, so PostgREST returns 42501 before RLS is consulted.
+      // The invariant worth asserting is the effect, not which layer caught
+      // it — asserting on the error shape is what made the original suite
+      // wrong when the schema moved underneath it.
       const { data: updated } = await anonClient
         .from("players")
         .update({ handle_display: "pwned" })
         .eq("id", target.id)
         .select();
 
-      expect(updated).toEqual([]);
+      expect(updated ?? []).toEqual([]);
 
       const { data: after } = await anonClient
         .from("players")
