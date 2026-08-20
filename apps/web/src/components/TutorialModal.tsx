@@ -33,6 +33,7 @@ import {
   markCompletedForUser,
   setResumeAfterOAuth,
 } from '@/lib/tutorial';
+import { useModalA11y } from './useModalA11y';
 
 type Step = 'welcome' | 'signin' | 'handle' | 'done';
 
@@ -55,6 +56,8 @@ export function TutorialModal(props: TutorialModalProps) {
 }
 
 function TutorialModalInner({ initialStep, onClose }: TutorialModalProps) {
+  // Inner only mounts while open, so the dialog is open for its lifetime.
+  const dialogRef = useModalA11y(true, onClose);
   const [step, setStep] = useState<Step>(initialStep);
 
   // Clear the resume hint once we've actually opened at the resumed step
@@ -72,6 +75,11 @@ function TutorialModalInner({ initialStep, onClose }: TutorialModalProps) {
         onClick={onClose}
       />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Tutorial Modal"
+        tabIndex={-1}
         className="relative bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >

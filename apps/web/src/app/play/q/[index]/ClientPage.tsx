@@ -519,6 +519,26 @@ export function QuestionPageClient({ index }: { index: number }) {
             questionNumber={questionIndex}
           />
 
+          {/*
+            Answer correctness is conveyed only by colour and a shake/pop
+            animation, so a screen-reader user gets no signal at all about
+            whether they were right — required by the project's own
+            accessibility checklist.
+
+            aria-live="assertive" rather than "polite": the result matters for
+            about a second before the next question replaces it, and a polite
+            announcement queued behind other speech would arrive after the
+            moment has passed. Visually hidden rather than sr-only-styled
+            inline so it never affects layout.
+          */}
+          <div role="status" aria-live="assertive" className="sr-only">
+            {feedback === 'correct'
+              ? 'Correct'
+              : feedback === 'wrong'
+                ? 'Incorrect'
+                : ''}
+          </div>
+
           <div className="w-full space-y-2">
             {currentQuestion.answers
               .sort((a, b) => a.sort_index - b.sort_index)

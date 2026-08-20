@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { validateHandle } from '@10q/contracts';
 import { updateHandle } from '@/domains/profile';
+import { useModalA11y } from './useModalA11y';
 
 interface HandleNudgeModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface HandleNudgeModalProps {
 }
 
 export function HandleNudgeModal({ isOpen, onClose, onSaved }: HandleNudgeModalProps) {
+  const dialogRef = useModalA11y(isOpen, onClose);
   const [handle, setHandle] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +41,11 @@ export function HandleNudgeModal({ isOpen, onClose, onSaved }: HandleNudgeModalP
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={onClose} />
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nudge Modal"
+        tabIndex={-1}
         className="relative bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
