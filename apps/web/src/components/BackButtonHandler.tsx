@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { navigation } from '@/platform';
+import { navigation, configureStatusBar } from '@/platform';
 
 /**
  * Android hardware back.
@@ -31,6 +31,17 @@ import { navigation } from '@/platform';
 export function BackButtonHandler() {
   const router = useRouter();
   const pathname = usePathname();
+
+  // Status-bar setup, once. It lives here rather than in its own component
+  // because this already mounts at the root and never unmounts.
+  //
+  // The StatusBar block in capacitor.config.ts only supplies DEFAULTS for
+  // these calls — it does not apply them. Without this, iOS reserves the
+  // status-bar strip and paints it black, which is the band that showed
+  // across the top of the app on device.
+  useEffect(() => {
+    void configureStatusBar();
+  }, []);
 
   useEffect(() => {
     return navigation.onBack(() => {

@@ -329,10 +329,24 @@ export function QuestionPageClient({ index }: { index: number }) {
         location: 'click_stale_question',
         message: `route=${questionIndex} currentQuestion.order_index=${currentQuestion.order_index} attempt.current_index=${attempt.current_index} question_id=${currentQuestion.question_id} answer_id=${answerId}`,
       });
-      setSubmitError({
-        code: 'STALE_QUESTION',
-        message: `Question mismatch (route ${questionIndex}, store ${attempt.current_index}). Reloading.`,
-      });
+      // Recover rather than strand the player.
+      //
+      // This message used to say "Reloading" and then do nothing — the guard
+      // returned, the banner appeared, and every subsequent tap hit the same
+      // mismatch. Dismissing cleared the text but not the cause, so the only
+      // way out was force-quitting the app. Riley hit this on device by
+      // tapping through questions quickly.
+      //
+      // The store is server-authoritative, so its current_index is the truth;
+      // routing to it resolves the disagreement. Clamped for the same reason
+      // as the redirect effect above: a static export only contains
+      // 1..MAX_QUESTIONS_PER_QUIZ, and an out-of-range index is a hard 404
+      // inside the app bundle.
+      const recoverTo = Math.min(
+        Math.max(attempt.current_index, 1),
+        MAX_QUESTIONS_PER_QUIZ,
+      );
+      router.replace(`/play/q/${recoverTo}`);
       return;
     }
     submittingRef.current = true;

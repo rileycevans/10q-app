@@ -27,6 +27,8 @@
     "../functions/_shared/streak.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/* *.ts",
+    "**/* *.tsx"
   ]
 }
