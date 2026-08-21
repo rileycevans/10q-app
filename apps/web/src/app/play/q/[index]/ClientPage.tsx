@@ -14,6 +14,7 @@ import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
 import { MAX_QUESTIONS_PER_QUIZ } from '@10q/contracts';
 import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
+import { haptics } from '@/platform';
 
 export function QuestionPageClient({ index }: { index: number }) {
   const router = useRouter();
@@ -354,6 +355,11 @@ export function QuestionPageClient({ index }: { index: number }) {
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
     setFeedback('committed');
+    // Answer lock-in. A light tap confirms the tap registered — useful on a
+    // 12-second timer where the visual state change is easy to miss while
+    // reading. Correct/wrong haptics are NOT possible here: the answer key is
+    // not sent to the client until finalize, deliberately.
+    void haptics.impact('light');
 
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;

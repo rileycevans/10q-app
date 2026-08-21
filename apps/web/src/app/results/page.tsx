@@ -11,6 +11,8 @@ import { trackScreenView, trackResultsView, trackShareClicked, trackQuizFinalize
 
 import Link from 'next/link';
 import { clearCachedAttempt } from '@/lib/attempt-cache';
+import { share, haptics } from '@/platform';
+import { publicUrl } from '@/lib/version';
 
 function formatTime(ms: number): string {
   const seconds = (ms / 1000).toFixed(1);
@@ -205,6 +207,17 @@ function ResultsContent() {
       last_correct_count: results.correct_count,
       last_total_time_ms: results.total_time_ms,
     });
+
+    // The results screen is the first moment the client knows how anyone did
+    // — the answer key is withheld until finalize — so this is the only place
+    // a correctness haptic can fire. Success at half marks or better, a
+    // softer warning below, rather than an error buzz for a low score: the
+    // player did not do anything wrong.
+    void haptics.notification(
+      results.correct_count >= Math.ceil(results.questions.length / 2)
+        ? 'success'
+        : 'warning',
+    );
   }, [results]);
 
   useEffect(() => {
@@ -345,33 +358,37 @@ function ResultsContent() {
   }
 
   async function handleShare() {
-    try {
-      await navigator.clipboard.writeText(buildShareText());
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    const text = buildShareText();
 
-      if (results) {
-        trackShareClicked({
-          attempt_id: results.attempt_id,
-          quiz_number: results.quiz_number,
-          total_score: results.total_score,
-        });
-      } else {
-        trackShareClicked({});
-      }
-    } catch {
-      // Fallback for browsers without clipboard API
-      const text = buildShareText();
-      const el = document.createElement('textarea');
-      el.value = text;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
+    // Through the seam: native gets the system share sheet, web falls back
+    // through the Web Share API to the clipboard. The button's "COPIED!"
+    // confirmation is only true on the clipboard path, so the label follows
+    // what actually happened rather than assuming.
+    const shared = await share.share({
+      title: '10Q',
+      text,
+      url: publicUrl('/'),
+    });
+
+    if (shared) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+
+    // Fires at the same point as before so the funnel stays continuous —
+    // share_clicked has always meant "the user asked to share", not "a share
+    // completed".
+    if (results) {
+      trackShareClicked({
+        attempt_id: results.attempt_id,
+        quiz_number: results.quiz_number,
+        total_score: results.total_score,
+      });
+    } else {
+      trackShareClicked({});
+    }
   }
+
 
   return (
     <ArcadeBackground>
