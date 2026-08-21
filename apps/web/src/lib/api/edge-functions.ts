@@ -3,6 +3,7 @@ import type { ErrorCode } from '@10q/contracts';
 import { withRetry, getUserFriendlyErrorMessage } from '@/lib/error-handling';
 import { logger } from '@/lib/logger';
 import { CLIENT_VERSION_HEADER } from '@/lib/version';
+import { observeServerDate } from '@/lib/server-clock';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -182,7 +183,13 @@ async function callEdgeFunction<T>(
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const durationMs = Date.now() - startTime;
+    const requestEndedAt = Date.now();
+    const durationMs = requestEndedAt - startTime;
+
+    // Measure the server clock from the Date header every response already
+    // carries. No probe endpoint, no extra round trip — see lib/server-clock.
+    observeServerDate(response.headers.get('date'), startTime, requestEndedAt);
+
     const responseData = await response.json();
 
     if (!response.ok) {

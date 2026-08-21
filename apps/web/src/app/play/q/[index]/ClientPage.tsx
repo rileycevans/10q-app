@@ -15,6 +15,7 @@ import type { AttemptState } from '@/domains/attempt';
 import { MAX_QUESTIONS_PER_QUIZ } from '@10q/contracts';
 import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
 import { haptics } from '@/platform';
+import { now as serverNow } from '@/lib/server-clock';
 
 export function QuestionPageClient({ index }: { index: number }) {
   const router = useRouter();
@@ -111,7 +112,7 @@ export function QuestionPageClient({ index }: { index: number }) {
   useEffect(() => {
     if (!attempt) return;
 
-    const now = Date.now();
+    const now = serverNow();
 
     if (!attempt.current_question_expires_at) {
       // Q1 path: server hasn't set an expiry yet. Start the countdown from
@@ -174,7 +175,8 @@ export function QuestionPageClient({ index }: { index: number }) {
   // ── Tick timer via requestAnimationFrame + wall-clock deadline ──────────
   // Polls `deadlineRef` on every frame while the question is active. Because
   // we're reading the deadline from a ref (not from state) and deriving the
-  // remaining time from `Date.now()` directly, the countdown can't drift or
+  // remaining time from the reconciled server clock directly, the countdown
+  // can't drift or
   // jump from re-renders — the only state change is setTimeRemaining, which
   // just updates the visible number/bar.
   useEffect(() => {
@@ -185,7 +187,7 @@ export function QuestionPageClient({ index }: { index: number }) {
     const tick = () => {
       const deadline = deadlineRef.current;
       if (deadline == null) return;
-      const remaining = Math.max(0, deadline - Date.now());
+      const remaining = Math.max(0, deadline - serverNow());
       setTimeRemaining(remaining);
       if (remaining > 0) {
         rafId = requestAnimationFrame(tick);
