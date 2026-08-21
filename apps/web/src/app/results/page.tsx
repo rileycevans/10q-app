@@ -375,7 +375,7 @@ function ResultsContent() {
 
   return (
     <ArcadeBackground>
-      <div className="flex flex-col items-center min-h-screen px-4 py-8">
+      <div className="flex flex-col items-center px-4 py-4 sm:py-8">
         <div className="w-full max-w-2xl">
           {/* Header Card */}
           <motion.div

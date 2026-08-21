@@ -26,8 +26,15 @@ export function ArcadeBackground({ children, className = '' }: ArcadeBackgroundP
         100dvh), and `min-h-0` releases the flexbox default that stops a flex
         item shrinking below its content, which is what let the overflow
         happen in the first place.
+
+        `overflow-y-auto` because .bg-arcade is a fixed 100dvh with
+        overflow:hidden (it clips the decorative gradient layers). Without a
+        scroll container here, any page taller than the viewport — the results
+        screen especially — is simply clipped with no way to reach the rest.
+        The outer stays fixed so the background does not move; this column
+        scrolls within it.
       */}
-      <div className="relative z-10 max-w-[420px] mx-auto h-full min-h-0 flex flex-col pt-safe-only px-safe">
+      <div className="relative z-10 max-w-[420px] mx-auto h-full min-h-0 overflow-y-auto flex flex-col pt-safe-only px-safe">
         {children}
       </div>
     </div>
