@@ -94,6 +94,38 @@ value. Three unrelated causes, one error string. The workflow now reports the
 token's length and whether it contains whitespace — never its value — so the
 next failure says which one it is.
 
+**Phase 6 — native capabilities (mostly done).**
+
+| Item | State |
+|---|---|
+| Native share sheet | **done** — through the seam; "COPIED!" now only claims success when the share resolved |
+| Haptics | **done** — light tap at answer lock-in, correctness notification on results |
+| One reconciled clock | **done** — offset measured from the `Date` header every response already carries, no probe endpoint; 11 tests |
+| Offline answer outbox | **done** — queues a failed submission, drains on reconnect or foreground; 8 tests |
+| Lifecycle reconciliation on foreground | **done** — `resumeAttempt` refreshes the store when the app returns |
+| Screen wake lock | **done** — a 12-second timer runs while someone is reading, not touching |
+| Deep links | **partial** — see below |
+| Cached results payload | not started |
+
+**Deep links are half-finished on purpose.** The AASA file is written and
+declares `/invite/*`, `/u/*` and `/results*`, and the Associated Domains
+entitlement exists. Three things remain, none of which should be done by
+guessing:
+
+1. **The entitlement is not registered in the Xcode build settings.** That is
+   two clicks in Signing & Capabilities; hand-editing `project.pbxproj` risks
+   a subtle break that `cap sync` may overwrite anyway.
+2. **Cloudflare must serve the extensionless AASA as `application/json`.**
+   iOS silently ignores it otherwise and the symptom is just "links open
+   Safari" with nothing in any log. Worth a `curl -I` after the next deploy.
+3. **Android's `assetlinks.json` is not written at all** — it needs the
+   SHA-256 fingerprint of a signing certificate that does not exist yet.
+
+**Not attempted: full offline play.** The plan rules it out and the reason
+holds — it would mean shipping the answer key to the device. The outbox only
+guarantees an answer *reaches* the server; the server still decides whether a
+late one counts.
+
 **0D — the game loop runs from a Capacitor WebView (2026-08-21).** Riley built
 `feat/capacitor-shell` and played a full quiz in the iOS simulator: questions
 loaded, answers submitted, the results page rendered — against **production**
