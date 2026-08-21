@@ -67,6 +67,23 @@ jobs:
         run: |
           missing=""
           [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+
+          # A personal access token starts with sbp_. The easy mistake is
+          # grabbing a project API key instead (sb_secret_... or a JWT) — those
+          # authenticate to one project's data API, not to the account, and the
+          # CLI rejects them with "Invalid access token format" only after the
+          # secrets check has already passed.
+          case "${SUPABASE_ACCESS_TOKEN:-}" in
+            ""|sbp_*) ;;
+            *)
+              echo "SUPABASE_ACCESS_TOKEN is not a personal access token."
+              echo "It must start with 'sbp_' and come from:"
+              echo "  https://supabase.com/dashboard/account/tokens"
+              echo "A project API key (sb_secret_... or a JWT) will not work —"
+              echo "those authenticate to one project's data API, not the account."
+              exit 1
+              ;;
+          esac
           [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
           [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
           if [ -n "$missing" ]; then
@@ -139,6 +156,23 @@ jobs:
         run: |
           missing=""
           [ -n "${SUPABASE_ACCESS_TOKEN:-}" ] || missing="$missing SUPABASE_ACCESS_TOKEN"
+
+          # A personal access token starts with sbp_. The easy mistake is
+          # grabbing a project API key instead (sb_secret_... or a JWT) — those
+          # authenticate to one project's data API, not to the account, and the
+          # CLI rejects them with "Invalid access token format" only after the
+          # secrets check has already passed.
+          case "${SUPABASE_ACCESS_TOKEN:-}" in
+            ""|sbp_*) ;;
+            *)
+              echo "SUPABASE_ACCESS_TOKEN is not a personal access token."
+              echo "It must start with 'sbp_' and come from:"
+              echo "  https://supabase.com/dashboard/account/tokens"
+              echo "A project API key (sb_secret_... or a JWT) will not work —"
+              echo "those authenticate to one project's data API, not the account."
+              exit 1
+              ;;
+          esac
           [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
           [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
           if [ -n "$missing" ]; then
