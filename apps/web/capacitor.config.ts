@@ -42,7 +42,16 @@ const config: CapacitorConfig = {
   },
 
   ios: {
-    contentInset: 'always',
+    // 'never', not 'always'. With 'always' the WKWebView applies the safe-area
+    // inset itself — the native layer reserves the notch strip and starts the
+    // web content below it, which renders as a black band across the top and
+    // double-counts with the CSS env(safe-area-inset-*) padding the app
+    // already applies.
+    //
+    // The app is edge-to-edge by design: the brand gradient should run under
+    // the status bar, and ArcadeBackground's pt-safe-only keeps content clear
+    // of the notch. So the web layer owns that space, not the WebView.
+    contentInset: 'never',
   },
 
   plugins: {

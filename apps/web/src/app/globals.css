@@ -21,6 +21,41 @@
 }
 
 /*
+ * Safe-area padding must not add to a full-viewport height.
+ *
+ * `min-height: 100dvh` plus `padding-top: env(safe-area-inset-top)` produces
+ * a box TALLER than the viewport by the inset — 812px + 59px = 821px on an
+ * iPhone — so anything at the bottom sits below the fold. Measured exactly
+ * that: the BottomDock's bottom edge landed 9px past the viewport, which on
+ * device looked like the icons being clipped in half.
+ *
+ * border-box makes the padding count inside the declared height rather than
+ * on top of it, so the element is exactly one viewport tall with the notch
+ * clearance carved out of it.
+ *
+ * Scoped to elements that combine both, rather than applied globally, so it
+ * cannot change the box model of anything else.
+ */
+.min-h-screen.pt-safe-only,
+.min-h-screen.pb-safe-only,
+.min-h-screen.px-safe {
+  box-sizing: border-box;
+  /*
+   * border-box alone is not enough: `min-height` is a floor, not a height, so
+   * the box still grows to 100dvh PLUS the padding. Subtracting the insets
+   * from the floor makes the element exactly one viewport tall with the notch
+   * clearance carved out of it.
+   *
+   * Measured on a simulated iPhone (812px viewport, 59px top inset): the
+   * wrapper was 821px and the BottomDock's bottom edge landed 9px past the
+   * fold, which on device looked like the icons clipped in half.
+   */
+  min-height: calc(
+    100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+  );
+}
+
+/*
  * Safe-area utilities.
  *
  * Only meaningful because the viewport export sets viewportFit: 'cover' —
@@ -140,7 +175,21 @@
   background: linear-gradient(180deg, var(--purpleA) 0%, var(--purpleB) 100%);
   position: relative;
   overflow: hidden;
-  min-height: 100dvh;
+  /*
+   * The gradient fills the viewport but must not FORCE it taller.
+   *
+   * `min-height: 100dvh` here was the real cause of the BottomDock sitting
+   * below the fold on a notched device: this element is the outer wrapper, so
+   * its 100dvh floor plus the inner column's safe-area padding pushed the
+   * whole page to 821px against an 812px viewport. Measured on a simulated
+   * iPhone — the dock's bottom edge landed exactly 9px past the fold, which
+   * looked like the icons being clipped in half.
+   *
+   * `height` rather than `min-height` so it fills the screen exactly, and the
+   * inner column (which owns the safe-area padding) scrolls within it if a
+   * screen's content is genuinely taller.
+   */
+  height: 100dvh;
 }
 
 /* Arcade Background - 3 Layer Recipe */

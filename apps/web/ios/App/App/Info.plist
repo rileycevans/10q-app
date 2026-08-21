@@ -64,8 +64,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- false so @capacitor/status-bar's setStyle actually applies. With
+	     true, the view controller owns the status bar and overrides the
+	     plugin, leaving the style whatever the controller last set. -->
 	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
