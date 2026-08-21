@@ -153,6 +153,40 @@ export function QuestionPageClient({ index }: { index: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt?.attempt_id, questionIndex]);
 
+  // ── Keep the screen awake during a question ─────────────────────────────
+  // A 12-second timer runs while the player is reading, not touching. The OS
+  // does not know that counts as activity, so the screen can dim or lock
+  // mid-question and the answer is lost to a timeout the player never saw.
+  //
+  // The Screen Wake Lock API works in the iOS/Android WebView and on modern
+  // browsers; where it does not exist this is a no-op. The lock is released
+  // on unmount, and the OS drops it automatically when the app backgrounds —
+  // so there is no way to leave a phone awake after the quiz ends.
+  useEffect(() => {
+    type WakeLockSentinel = { release: () => Promise<void> };
+    let sentinel: WakeLockSentinel | null = null;
+    let released = false;
+
+    const nav = navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> };
+    };
+
+    nav.wakeLock
+      ?.request('screen')
+      .then((s) => {
+        if (released) void s.release();
+        else sentinel = s;
+      })
+      .catch(() => {
+        // Denied, unsupported, or the document was not visible. Cosmetic.
+      });
+
+    return () => {
+      released = true;
+      void sentinel?.release().catch(() => {});
+    };
+  }, [questionIndex]);
+
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
     if (!attempt || !currentQuestion) return;

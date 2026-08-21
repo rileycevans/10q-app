@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { navigation, configureStatusBar } from '@/platform';
+import { startOutboxDrain } from '@/lib/answer-outbox';
 
 /**
  * Android hardware back.
@@ -42,6 +43,11 @@ export function BackButtonHandler() {
   useEffect(() => {
     void configureStatusBar();
   }, []);
+
+  // Deliver any answers queued while offline. Mounted at the root so it runs
+  // regardless of which screen the player lands on — including a cold start
+  // hours later, on a different network.
+  useEffect(() => startOutboxDrain(), []);
 
   useEffect(() => {
     return navigation.onBack(() => {
