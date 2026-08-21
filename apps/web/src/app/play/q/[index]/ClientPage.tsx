@@ -58,11 +58,11 @@ export function QuestionPageClient({ index }: { index: number }) {
     if (!attempt) return;
 
     if (attempt.state === 'FINALIZED') {
-      router.push('/results');
+      router.replace('/results');
       return;
     }
     if (attempt.state === 'READY_TO_FINALIZE') {
-      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      router.replace(`/results?attempt_id=${attempt.attempt_id}`);
       return;
     }
     if (attempt.current_index !== questionIndex) {
@@ -73,7 +73,9 @@ export function QuestionPageClient({ index }: { index: number }) {
         Math.max(attempt.current_index, 1),
         MAX_QUESTIONS_PER_QUIZ,
       );
-      router.push(`/play/q/${target}`);
+      // replace, not push: this is a correction, and pushing would leave the
+      // wrong question in history for the back button to return to.
+      router.replace(`/play/q/${target}`);
     }
   }, [attempt, questionIndex, router]);
 
@@ -279,13 +281,13 @@ export function QuestionPageClient({ index }: { index: number }) {
             current_question_expires_at: result.question_expires_at,
             state: result.current_index > MAX_QUESTIONS_PER_QUIZ ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
           });
-          router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          router.replace(`/results?attempt_id=${attempt.attempt_id}`);
           return;
         }
         // Submit failed — recover via resumeAttempt.
         resumeAttempt(attempt.attempt_id).then((newAttempt) => {
           store.setAttempt(newAttempt);
-          router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          router.replace(`/results?attempt_id=${attempt.attempt_id}`);
         });
       });
       return;
@@ -304,7 +306,11 @@ export function QuestionPageClient({ index }: { index: number }) {
       state: 'IN_PROGRESS',
     });
 
-    router.push(`/play/q/${nextIndex}`);
+    // replace, not push. Question order is server-authoritative and each
+    // question has its own expiry, so there is no valid "back" within a quiz —
+    // pushing would build ten history entries and let Android's back button
+    // walk a player backwards through questions the server considers answered.
+    router.replace(`/play/q/${nextIndex}`);
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
@@ -401,7 +407,7 @@ export function QuestionPageClient({ index }: { index: number }) {
           state: result.current_index > MAX_QUESTIONS_PER_QUIZ ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
         });
       }
-      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      router.replace(`/results?attempt_id=${attempt.attempt_id}`);
       return;
     }
 
@@ -423,7 +429,8 @@ export function QuestionPageClient({ index }: { index: number }) {
       state: 'IN_PROGRESS',
     });
 
-    router.push(`/play/q/${nextIndex}`);
+    // replace, not push — see the timeout advance above.
+    router.replace(`/play/q/${nextIndex}`);
   };
 
   // ── Render: loading (recovery from hard refresh) ────────────────────────
@@ -511,6 +518,26 @@ export function QuestionPageClient({ index }: { index: number }) {
             questionText={currentQuestion.body}
             questionNumber={questionIndex}
           />
+
+          {/*
+            Answer correctness is conveyed only by colour and a shake/pop
+            animation, so a screen-reader user gets no signal at all about
+            whether they were right — required by the project's own
+            accessibility checklist.
+
+            aria-live="assertive" rather than "polite": the result matters for
+            about a second before the next question replaces it, and a polite
+            announcement queued behind other speech would arrive after the
+            moment has passed. Visually hidden rather than sr-only-styled
+            inline so it never affects layout.
+          */}
+          <div role="status" aria-live="assertive" className="sr-only">
+            {feedback === 'correct'
+              ? 'Correct'
+              : feedback === 'wrong'
+                ? 'Incorrect'
+                : ''}
+          </div>
 
           <div className="w-full space-y-2">
             {currentQuestion.answers

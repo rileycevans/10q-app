@@ -63,11 +63,11 @@ function FinalizeContent() {
           attemptId = attemptState.attempt_id;
 
           if (attemptState.state === 'FINALIZED') {
-            router.push(`/results?attempt_id=${attemptId}`);
+            router.replace(`/results?attempt_id=${attemptId}`);
             return;
           }
           if (attemptState.state !== 'READY_TO_FINALIZE') {
-            router.push(`/play/q/${attemptState.current_index}`);
+            router.replace(`/play/q/${attemptState.current_index}`);
             return;
           }
         }
@@ -94,7 +94,7 @@ function FinalizeContent() {
           ? `&streak=${result.current_streak}&longest=${result.longest_streak}`
           : '';
         setTimeout(() => {
-          router.push(`/results?attempt_id=${attemptId}${streakParams}`);
+          router.replace(`/results?attempt_id=${attemptId}${streakParams}`);
         }, 2000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to finalize attempt');

@@ -4,6 +4,7 @@ import "./globals.css";
 import { AnalyticsProvider } from "@/components/AnalyticsProvider";
 import { ToastProvider } from "@/components/Toast";
 import { AuthProvider } from "@/components/AuthProvider";
+import { BackButtonHandler } from "@/components/BackButtonHandler";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const rubik = Rubik({
@@ -54,6 +55,24 @@ export const metadata: Metadata = {
 // Brand purple behind the status/nav bars in installed and native shells.
 export const viewport: Viewport = {
   themeColor: "#1A1A21",
+
+  // Draw into the notch and home-indicator areas.
+  //
+  // This is a precondition, not a preference: until viewportFit is 'cover',
+  // every env(safe-area-inset-*) resolves to 0px on iOS. Safe-area padding
+  // added without it looks correct in devtools and does nothing on a device.
+  viewportFit: "cover",
+
+  // Pinch-zoom is currently enabled during a 12-second server-timed question,
+  // where an accidental two-finger touch zooms the board mid-answer and there
+  // is no time to recover. Disabled deliberately.
+  //
+  // The accessibility cost is real — this is the kind of thing WCAG 1.4.4
+  // exists to prevent — but the app has no small text to enlarge, and the
+  // failure it prevents costs a player their single daily attempt. Revisit if
+  // dense text is ever added.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -81,6 +100,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <ToastProvider>
             <AuthProvider>
+              <BackButtonHandler />
               <AnalyticsProvider>{children}</AnalyticsProvider>
             </AuthProvider>
           </ToastProvider>

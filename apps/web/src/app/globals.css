@@ -1,5 +1,74 @@
 @import "tailwindcss";
 
+/*
+ * min-h-screen uses dynamic viewport height.
+ *
+ * `100vh` on mobile Safari is the height with the URL bar HIDDEN, so a
+ * full-height layout is taller than the visible area whenever the bar is
+ * showing — which it is on load. Anything pinned to the bottom sits below
+ * the fold until the user scrolls, and the BottomDock does exactly that
+ * today.
+ *
+ * `100dvh` tracks the viewport as the bar shows and hides. Redefined here
+ * rather than rewritten across 60 call sites: one place to reason about, and
+ * it covers uses added later.
+ *
+ * Baseline in all target browsers (iOS Safari 15.4+, Chrome 108+), both of
+ * which are below the app's floor.
+ */
+.min-h-screen {
+  min-height: 100dvh;
+}
+
+/*
+ * Safe-area utilities.
+ *
+ * Only meaningful because the viewport export sets viewportFit: 'cover' —
+ * without it every inset below resolves to 0px on iOS and these do nothing.
+ *
+ * max() rather than a bare env(): on a device with no inset (every Android
+ * without a cutout, and the desktop web) the inset is 0, and content pinned
+ * flush to a screen edge with no padding at all looks like a bug rather than
+ * a design. The floor keeps a sane gutter everywhere and grows to clear the
+ * notch or home indicator where there is one.
+ */
+.pt-safe {
+  padding-top: max(var(--gutter), env(safe-area-inset-top));
+}
+
+.pb-safe {
+  padding-bottom: max(var(--gutter), env(safe-area-inset-bottom));
+}
+
+.px-safe {
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
+}
+
+/* For elements that already own their padding and only need the inset added. */
+.pb-safe-only {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pt-safe-only {
+  padding-top: env(safe-area-inset-top);
+}
+
+/*
+ * Margin variants, for position:fixed elements.
+ *
+ * Padding does not move a fixed element — it grows it inward, leaving the
+ * box in the same place and the content still over the home indicator. These
+ * shift the whole element instead, composing with a Tailwind bottom-N offset.
+ */
+.mb-safe-only {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+.mt-safe-only {
+  margin-top: env(safe-area-inset-top);
+}
+
 :root {
   /* Design Tokens - Colors */
   --ink: #1A1A21;
@@ -71,7 +140,7 @@
   background: linear-gradient(180deg, var(--purpleA) 0%, var(--purpleB) 100%);
   position: relative;
   overflow: hidden;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Arcade Background - 3 Layer Recipe */
@@ -119,6 +188,33 @@ body {
 }
 
 /* Answer Feedback Animations */
+/*
+ * Toast entrance. `animate-slide-in` was referenced by Toast.tsx with no
+ * keyframe behind it anywhere, so toasts snapped in with no animation at all.
+ */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 220ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
+}
+
+/* A toast is an interruption; honour the OS setting and just fade. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-in {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 @keyframes answer-pop {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.06); }
