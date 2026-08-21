@@ -71,6 +71,29 @@ from the native build in Phase 3.
 **Probe branch:** `throwaway/0a-head-probe`. Never merge. The four dynamic
 routes there are stubbed, not deleted.
 
+**Migrations now deploy from CI (2026-08-21).** All five repository secrets
+are set and the Supabase workflow ran green end to end: staging, then
+production, both applying `20260820120000_baseline_table_grants.sql`. A
+migration reaching production by pipeline rather than by hand is the whole
+point of the Phase 2 work — "committed but not deployed" is no longer a state
+this system can be in.
+
+Verified after the deploy: the answer key and the auth linkage are still
+unreadable by `anon`/`authenticated` — the blanket grant re-applies both
+column restrictions at the end of the file, and it held — plus 183 players
+and 530 attempts intact, the publish cron alive, play10q.com serving 200, and
+`capacitor://localhost` still echoed by the game-loop functions.
+
+**Getting there cost four rounds on the access token**, worth recording so
+nobody repeats it. The CLI validates the token as `sbp_` followed by exactly
+40 **lowercase hex** characters — verified against CLI 2.84.2 and 2.115.0 by
+testing the validator directly. An uppercase letter or a dash is rejected as
+`Invalid access token format` *before any network call*, which is the
+identical message the CLI uses for a project API key and for a truncated
+value. Three unrelated causes, one error string. The workflow now reports the
+token's length and whether it contains whitespace — never its value — so the
+next failure says which one it is.
+
 **0D — the game loop runs from a Capacitor WebView (2026-08-21).** Riley built
 `feat/capacitor-shell` and played a full quiz in the iOS simulator: questions
 loaded, answers submitted, the results page rendered — against **production**
