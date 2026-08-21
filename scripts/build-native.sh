@@ -78,6 +78,39 @@ BUILD_TARGET=native npm run build --workspace=apps/web
 OUT="$WEB/out"
 [ -d "$OUT" ] || { echo "expected export at $OUT — not found" >&2; exit 1; }
 
+# The Capacitor CLI requires Node >= 22, and a machine can easily default to
+# an older one — nvm's default, a system install, whatever the shell picked
+# up. CI pins 22 explicitly, so this failing locally while passing in CI is
+# the expected shape of the problem.
+#
+# Rather than making every caller remember to switch, find a suitable Node and
+# put it on PATH for the sync step only.
+if [ -d "$WEB/ios" ] || [ -d "$WEB/android" ]; then
+  NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "$NODE_MAJOR" -lt 22 ]; then
+    FOUND=""
+    # nvm keeps versions here; take the highest that satisfies the requirement.
+    for candidate in $(ls -1 "$HOME/.nvm/versions/node" 2>/dev/null | sort -V -r); do
+      major="${candidate#v}"; major="${major%%.*}"
+      if [ "$major" -ge 22 ] && [ -x "$HOME/.nvm/versions/node/$candidate/bin/node" ]; then
+        FOUND="$HOME/.nvm/versions/node/$candidate/bin"
+        break
+      fi
+    done
+
+    if [ -n "$FOUND" ]; then
+      echo "Node $(node --version) is too old for the Capacitor CLI; using $(basename "$(dirname "$FOUND")") for sync."
+      PATH="$FOUND:$PATH"
+      export PATH
+    else
+      echo "The Capacitor CLI needs Node >= 22 and this shell has $(node --version)." >&2
+      echo "Install it, then re-run:" >&2
+      echo "  nvm install 22 && nvm use 22" >&2
+      exit 1
+    fi
+  fi
+fi
+
 # Copy the export into the native projects and refresh plugin registrations.
 # Skipped when the platforms are absent so the script still works as an
 # export-only build (which is what CI runs — it validates the export without
