@@ -16,6 +16,7 @@ import { MAX_QUESTIONS_PER_QUIZ } from '@10q/contracts';
 import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
 import { haptics } from '@/platform';
 import { now as serverNow } from '@/lib/server-clock';
+import { lifecycle } from '@/platform';
 
 export function QuestionPageClient({ index }: { index: number }) {
   const router = useRouter();
@@ -152,6 +153,37 @@ export function QuestionPageClient({ index }: { index: number }) {
     // this to run on question changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt?.attempt_id, questionIndex]);
+
+  // ── Re-sync with the server when the app returns to the foreground ──────
+  // The quiz is server-timed, so a backgrounded app comes back to a countdown
+  // that kept running without it. The client's view of the attempt is stale
+  // by exactly the time it was away, and on mobile that is the normal
+  // interruption — a call, a notification, switching apps.
+  //
+  // resumeAttempt returns the server's current state, which is authoritative:
+  // it may say the question expired, that the attempt advanced, or that it is
+  // finished. The redirect effect above then routes accordingly, so this only
+  // has to refresh the store.
+  useEffect(() => {
+    if (!attempt) return;
+
+    return lifecycle.onAppStateChange((state) => {
+      if (state !== 'active') return;
+
+      resumeAttempt(attempt.attempt_id)
+        .then((fresh) => store.setAttempt(fresh))
+        .catch((err) => {
+          // Non-fatal: the countdown keeps running against the last known
+          // expiry, and the server rejects a late answer regardless. Logged
+          // because a failure here means the player may see time they do not
+          // have.
+          trackAppError({
+            location: 'quiz_foreground_resync',
+            message: err instanceof Error ? err.message : 'Failed to re-sync on foreground',
+          });
+        });
+    });
+  }, [attempt, store]);
 
   // ── Keep the screen awake during a question ─────────────────────────────
   // A 12-second timer runs while the player is reading, not touching. The OS
