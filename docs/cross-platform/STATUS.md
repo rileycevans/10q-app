@@ -71,6 +71,32 @@ from the native build in Phase 3.
 **Probe branch:** `throwaway/0a-head-probe`. Never merge. The four dynamic
 routes there are stubbed, not deleted.
 
+**0D — the game loop runs from a Capacitor WebView (2026-08-21).** Riley built
+`feat/capacitor-shell` and played a full quiz in the iOS simulator: questions
+loaded, answers submitted, the results page rendered — against **production**
+Edge Functions, from `capacitor://localhost`.
+
+That is 0D's substantive exit criterion — "the full game loop completes from a
+Capacitor WebView, against production CORS config" — met for iOS. It is the
+first evidence the CORS work holds from an actual WebView rather than from a
+curl with a spoofed Origin, which is the distinction the plan draws.
+
+It also re-confirms 0A against the real app: the 0A measurement ran a probe
+shell with stubbed routes, and this ran the real game, so the export router
+survived real navigation between real questions.
+
+Two parts remain before 0D can be ticked outright:
+
+- **Android is untested.** No Android SDK on the machine yet. Android presents
+  `http://localhost` rather than `capacitor://localhost` — a separate
+  allow-list entry — so it is genuinely unproven rather than implied by iOS.
+- **Simulator, not hardware.** Same caveat already recorded for 0A. The
+  simulator exercises the same `WKURLSchemeHandler` path and is strong
+  evidence, but the one check that genuinely needs a device is session
+  survival across cold starts: a simulator does not reproduce iOS evicting a
+  WebView cache under storage pressure, which is the exact failure
+  `StorageResult` and the Preferences session exist to prevent.
+
 **0E gate — 3 of 4.** Against the checklist in
 [05-migration-plan.md](05-migration-plan.md#0e--gate-native-work-may-now-begin):
 
