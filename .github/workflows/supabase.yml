@@ -84,6 +84,30 @@ jobs:
               exit 1
               ;;
           esac
+
+          # Shape check, without ever printing the value. A pasted token often
+          # carries a trailing newline or stray whitespace — the prefix check
+          # above still passes, and the CLI then rejects it with the same
+          # "Invalid access token format" as a wrong token type, which is
+          # indistinguishable from the outside.
+          TOKEN_LEN=${#SUPABASE_ACCESS_TOKEN}
+          TRIMMED="$(printf '%s' "$SUPABASE_ACCESS_TOKEN" | tr -d '[:space:]')"
+          TRIMMED_LEN=${#TRIMMED}
+          echo "access token: ${TOKEN_LEN} chars, ${TRIMMED_LEN} after removing whitespace"
+          if [ "$TOKEN_LEN" -ne "$TRIMMED_LEN" ]; then
+            echo
+            echo "The token contains whitespace — almost certainly a trailing"
+            echo "newline from an interactive paste. Re-set it without one:"
+            echo "  printf '%s' 'sbp_your_token_here' | gh secret set SUPABASE_ACCESS_TOKEN"
+            exit 1
+          fi
+          if [ "$TRIMMED_LEN" -lt 30 ]; then
+            echo
+            echo "The token is only ${TRIMMED_LEN} characters — it looks truncated."
+            echo "A Supabase personal access token is roughly 40+ characters."
+            echo "Copy the whole value; the dashboard shows it once at creation."
+            exit 1
+          fi
           [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
           [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
           if [ -n "$missing" ]; then
@@ -173,6 +197,30 @@ jobs:
               exit 1
               ;;
           esac
+
+          # Shape check, without ever printing the value. A pasted token often
+          # carries a trailing newline or stray whitespace — the prefix check
+          # above still passes, and the CLI then rejects it with the same
+          # "Invalid access token format" as a wrong token type, which is
+          # indistinguishable from the outside.
+          TOKEN_LEN=${#SUPABASE_ACCESS_TOKEN}
+          TRIMMED="$(printf '%s' "$SUPABASE_ACCESS_TOKEN" | tr -d '[:space:]')"
+          TRIMMED_LEN=${#TRIMMED}
+          echo "access token: ${TOKEN_LEN} chars, ${TRIMMED_LEN} after removing whitespace"
+          if [ "$TOKEN_LEN" -ne "$TRIMMED_LEN" ]; then
+            echo
+            echo "The token contains whitespace — almost certainly a trailing"
+            echo "newline from an interactive paste. Re-set it without one:"
+            echo "  printf '%s' 'sbp_your_token_here' | gh secret set SUPABASE_ACCESS_TOKEN"
+            exit 1
+          fi
+          if [ "$TRIMMED_LEN" -lt 30 ]; then
+            echo
+            echo "The token is only ${TRIMMED_LEN} characters — it looks truncated."
+            echo "A Supabase personal access token is roughly 40+ characters."
+            echo "Copy the whole value; the dashboard shows it once at creation."
+            exit 1
+          fi
           [ -n "${PROJECT_REF:-}" ] || missing="$missing $REF_SECRET_NAME"
           [ -n "${SUPABASE_DB_PASSWORD:-}" ] || missing="$missing $PW_SECRET_NAME"
           if [ -n "$missing" ]; then
