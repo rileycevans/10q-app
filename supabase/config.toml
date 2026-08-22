@@ -59,6 +59,8 @@ enable_confirmations = false
 # UNAUTHORIZED_UNSUPPORTED_TOKEN_ALGORITHM before the function runs.
 # Each function that needs auth validates the Bearer token itself via
 # _shared/auth.ts → supabase.auth.getUser(token), which understands ES256.
+[functions.register-device-token]
+verify_jwt = false
 [functions.add-league-member]
 verify_jwt = false
 [functions.create-league]
