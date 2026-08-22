@@ -94,6 +94,51 @@ value. Three unrelated causes, one error string. The workflow now reports the
 token's length and whether it contains whitespace — never its value — so the
 next failure says which one it is.
 
+**Phase 8 — store compliance (2026-08-21).** Most of it was already done in
+earlier phases. Three things closed since:
+
+**Auto-generated handles no longer leak the auth UUID.** A player who never
+chose a handle got `Player` + the first eight hex characters of their auth
+UUID, published on the leaderboard. `generateXboxStyleHandle` had existed
+with zero callers since the start; it is now wired into `start-attempt` and
+`create-league` with collision retry, and a migration renamed the 176 of 185
+existing players who carried the leaking form. Safe because none of them had
+chosen it — every affected row had `handle_last_changed_at IS NULL`, and the
+migration enforces that rather than trusting the observation.
+
+**`get-profile-by-handle` no longer returns the auth UUID.** It is
+unauthenticated and returned `players.id`, which is the auth user id for
+every row. Now returns `players.public_id`, a separate random uuid. The field
+keeps its name and shape because store binaries stay installed for months.
+
+Worth recording that the second problem was **made worse by the first fix**:
+replacing UUID-derived handles with generated ones closed a leak but made
+handles guessable across a ~250k space, so the whole player base could be
+walked and mapped to auth UUIDs. Fixing one exposure created the enumeration
+path for another.
+
+**Narrow rate limiting**, for that reason. `get-profile-by-handle` is
+unauthenticated, service-role, and a 2.27s multi-join — the cheapest DoS
+surface here as well as the enumeration path. 30/minute per caller, fixed
+window, failing open. Deliberately not the general limiter the plan defers to
+its own workstream; this is the smallest thing that closes the hole and is
+easy to delete when edge-level throttling replaces it. Verified in
+production: 34 requests in one window gave exactly 30 allowed and 4 refused.
+
+**The owned-leagues question was already answered.** `delete-account`
+transfers a league to its longest-standing remaining member before deleting,
+and only lets a league cascade away when the departing owner is its only
+member. I raised it as an open decision from the plan's text without checking
+the code first — it was implemented.
+
+**`get-league-by-invite` stays unauthenticated on purpose.** Invite links are
+shared with people who do not have the app, and 32^6 codes from
+`crypto.getRandomValues` is not a guessable space.
+
+Still open in Phase 8: the ownership handoff is silent — the inheriting
+member is not told. Best folded into Phase 7's notification work rather than
+building a one-off path for it.
+
 **Phase 6 — native capabilities (mostly done).**
 
 | Item | State |
