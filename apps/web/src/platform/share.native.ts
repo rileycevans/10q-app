@@ -13,7 +13,25 @@ import webShare from './share.web';
 const share: Share = {
   async share({ title, text, url }) {
     try {
-      await CapShare.share({ title, text, url, dialogTitle: title });
+      // Deliberately NOT passing `url` when the text already contains it.
+      //
+      // iOS treats text and url as two separate share items and fetches link
+      // metadata — title, icon, preview — before it can render the sheet.
+      // That is a visible delay (seconds, on a slow connection) for a URL the
+      // recipient reads in the text anyway. Measured as a real symptom on
+      // device, not a theoretical one.
+      //
+      // When the text does not already carry the link, pass it: a share with
+      // no destination is worse than a slow one.
+      const textIncludesUrl =
+        !!text && !!url && text.includes(new URL(url).host);
+
+      await CapShare.share({
+        title,
+        text,
+        url: textIncludesUrl ? undefined : url,
+        dialogTitle: title,
+      });
       return true;
     } catch (error) {
       // The user dismissing the sheet is not a failure to report, and must
