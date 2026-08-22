@@ -94,6 +94,41 @@ value. Three unrelated causes, one error string. The workflow now reports the
 token's length and whether it contains whitespace — never its value — so the
 next failure says which one it is.
 
+**Phase 7 — push notifications (schema and registration done).**
+
+| Item | State |
+|---|---|
+| Device-token table with RLS | **done** |
+| Per-type preferences | **done** — both stores require granular opt-out |
+| Delivery log | **done** — makes "did they get it?" answerable and gives retries something to deduplicate against |
+| Registration/refresh endpoint | **done** — `register-device-token`, deployed and verified |
+| APNs and FCM credentials | **needs Riley** — nothing can be sent without them |
+| The sender | not started — blocked on credentials |
+| Daily-drop and streak-at-risk triggers | not started |
+| Permission priming, tap routing | not started |
+
+**Better starting point than the plan assumed.** `public.outbox_events`
+already carries `QuizPublished` and `AttemptCompleted` — 5,841 rows, none
+consumed — so the daily-drop trigger is already being recorded and a sender
+reads from there rather than needing new instrumentation.
+
+**Design note on the token table.** It keys on the token, not on
+`(player, platform)`. A device has one token and it can move between accounts
+— someone signs out and a friend signs in on the same phone — so keying on
+the token makes the row follow the device and re-point at whoever holds it.
+Keying on the player would leave two people both believing they own it, and
+receiving each other's notifications.
+
+**Found while verifying: the push tables inherited the blanket grant.**
+`20260820120000` set `ALTER DEFAULT PRIVILEGES`, so every new public table is
+granted to `anon` automatically — correct for game tables, wrong for device
+tokens, where `anon` briefly held
+SELECT/INSERT/UPDATE/DELETE/TRUNCATE. RLS blocked it, and that was verified
+rather than assumed (all 16 tables have RLS on, and an `anon` INSERT lands
+nothing), but a push token table should not rest on one layer. Revoked
+explicitly, granted back only what a signed-in player needs, with a CI
+assertion so it cannot return. Worth remembering for every future table.
+
 **Phase 8 — store compliance (2026-08-21).** Most of it was already done in
 earlier phases. Three things closed since:
 
