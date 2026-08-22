@@ -185,6 +185,21 @@ jobs:
             WHERE n.nspname = 'public' AND p.proname = 'enforce_question_timing'
               AND p.prosrc LIKE '%12 seconds%'")"
 
+          # Push tables must not inherit the blanket grant. 20260820120000
+          # sets ALTER DEFAULT PRIVILEGES so every new public table is granted
+          # to anon — right for game tables, wrong for device tokens. RLS would
+          # still block reads, but a token table should not depend on a single
+          # layer.
+          check "anon has no grants on device_tokens" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.role_table_grants
+            WHERE table_schema = 'public' AND table_name = 'device_tokens'
+              AND grantee = 'anon'")"
+
+          check "anon has no grants on notification_deliveries" "0" "$(scalar "
+            SELECT count(*) FROM information_schema.role_table_grants
+            WHERE table_schema = 'public' AND table_name = 'notification_deliveries'
+              AND grantee = 'anon'")"
+
           [ "$fail" = "0" ] || { echo; echo "Security invariants FAILED."; exit 1; }
           echo
           echo "All invariants hold."
