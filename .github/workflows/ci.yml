@@ -58,8 +58,13 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
+      # Only the dev-server project. The `export` project serves apps/web/out,
+      # which does not exist in this job — it is built and tested in
+      # native-export, where `npm run test:e2e:export` runs it against a real
+      # served export. Without the filter this job starts the dev server and
+      # then fails every export test with ERR_CONNECTION_REFUSED on :4173.
       - name: Playwright E2E Tests
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=chromium
         working-directory: apps/web
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
@@ -291,14 +296,45 @@ jobs:
             core.info(hit ? 'Supabase touched — will wait for its deploy'
                           : 'No Supabase changes — deploying directly');
 
+      # `allowed-conclusions` and the poll loop matter here: "Deploy to
+      # production" is queued behind "Deploy to staging" and does not exist as
+      # a check yet when this step starts. Without waiting for it to appear the
+      # action reports "the requested check was never run against this ref" and
+      # exits 1 — the gate racing the job it is supposed to wait for.
       - name: Wait for the Supabase deploy
         if: steps.touched.outputs.supabase == 'yes'
-        uses: lewagon/wait-on-check-action@v1.3.4
+        uses: actions/github-script@v7
         with:
-          ref: ${{ github.sha }}
-          check-name: 'Deploy to production'
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          wait-interval: 15
+          script: |
+            const target = 'Deploy to production';
+            const deadline = Date.now() + 25 * 60 * 1000;
+
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: context.sha,
+                per_page: 100,
+              });
+
+              const run = data.check_runs.find(c => c.name === target);
+
+              if (!run) {
+                core.info(`${target} has not started yet — waiting`);
+              } else if (run.status !== 'completed') {
+                core.info(`${target} is ${run.status} — waiting`);
+              } else if (run.conclusion === 'success' || run.conclusion === 'skipped') {
+                core.info(`${target} finished: ${run.conclusion}`);
+                return;
+              } else {
+                core.setFailed(`${target} finished: ${run.conclusion} — not deploying the client ahead of the backend`);
+                return;
+              }
+
+              await new Promise(r => setTimeout(r, 15000));
+            }
+
+            core.setFailed(`Timed out waiting for ${target}`);
 
       - name: Checkout
         uses: actions/checkout@v4
