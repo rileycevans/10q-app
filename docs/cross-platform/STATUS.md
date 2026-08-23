@@ -12,7 +12,7 @@ implementation state contradicts this file, the observation wins and this file i
 
 ---
 
-**Current phase: Phase 4 — Platform seam and auth (web half done; native half blocked on 0E)**
+**Current phase: Phase 5 — running on a real iPhone; fixing what the device found**
 
 Phase 0's preconditions are answered (0A passed; 0B, 0C, 0D done — 0D's device
 check is the one open item, see below) and Phase 1's correctness and hardening
@@ -70,6 +70,174 @@ from the native build in Phase 3.
 
 **Probe branch:** `throwaway/0a-head-probe`. Never merge. The four dynamic
 routes there are stubbed, not deleted.
+
+**Migrations now deploy from CI (2026-08-21).** All five repository secrets
+are set and the Supabase workflow ran green end to end: staging, then
+production, both applying `20260820120000_baseline_table_grants.sql`. A
+migration reaching production by pipeline rather than by hand is the whole
+point of the Phase 2 work — "committed but not deployed" is no longer a state
+this system can be in.
+
+Verified after the deploy: the answer key and the auth linkage are still
+unreadable by `anon`/`authenticated` — the blanket grant re-applies both
+column restrictions at the end of the file, and it held — plus 183 players
+and 530 attempts intact, the publish cron alive, play10q.com serving 200, and
+`capacitor://localhost` still echoed by the game-loop functions.
+
+**Getting there cost four rounds on the access token**, worth recording so
+nobody repeats it. The CLI validates the token as `sbp_` followed by exactly
+40 **lowercase hex** characters — verified against CLI 2.84.2 and 2.115.0 by
+testing the validator directly. An uppercase letter or a dash is rejected as
+`Invalid access token format` *before any network call*, which is the
+identical message the CLI uses for a project API key and for a truncated
+value. Three unrelated causes, one error string. The workflow now reports the
+token's length and whether it contains whitespace — never its value — so the
+next failure says which one it is.
+
+**Phase 7 — push notifications (complete except device verification).**
+
+| Item | State |
+|---|---|
+| Device-token table with RLS | **done** |
+| Per-type preferences | **done** — both stores require granular opt-out |
+| Delivery log | **done** — makes "did they get it?" answerable and gives retries something to deduplicate against |
+| Registration/refresh endpoint | **done** — `register-device-token`, deployed and verified |
+| APNs and FCM credentials | **done** — both verified against the real providers, not just present |
+| APNs/FCM senders and dispatcher | **done** — preferences respected, dead tokens revoked, deliveries deduplicated |
+| Client registration through the seam | **done** — web bundle verified free of the push plugin |
+| Permission priming | **done** — after a first completed quiz, not on launch |
+| Tap routing | **done** — server sends the route, client sanitises it |
+| Daily-drop cron | **done** — 11:32 UTC, and only if a quiz actually published |
+| Streak-at-risk cron | **done** — 21:00 UTC, skips streaks of zero |
+| Delivery to a real device | **not yet** — needs a build on Riley's phone |
+| The sender | not started — blocked on credentials |
+| Daily-drop and streak-at-risk triggers | not started |
+| Permission priming, tap routing | not started |
+
+**Better starting point than the plan assumed.** `public.outbox_events`
+already carries `QuizPublished` and `AttemptCompleted` — 5,841 rows, none
+consumed — so the daily-drop trigger is already being recorded and a sender
+reads from there rather than needing new instrumentation.
+
+**Design note on the token table.** It keys on the token, not on
+`(player, platform)`. A device has one token and it can move between accounts
+— someone signs out and a friend signs in on the same phone — so keying on
+the token makes the row follow the device and re-point at whoever holds it.
+Keying on the player would leave two people both believing they own it, and
+receiving each other's notifications.
+
+**Found while verifying: the push tables inherited the blanket grant.**
+`20260820120000` set `ALTER DEFAULT PRIVILEGES`, so every new public table is
+granted to `anon` automatically — correct for game tables, wrong for device
+tokens, where `anon` briefly held
+SELECT/INSERT/UPDATE/DELETE/TRUNCATE. RLS blocked it, and that was verified
+rather than assumed (all 16 tables have RLS on, and an `anon` INSERT lands
+nothing), but a push token table should not rest on one layer. Revoked
+explicitly, granted back only what a signed-in player needs, with a CI
+assertion so it cannot return. Worth remembering for every future table.
+
+**Phase 8 — store compliance (2026-08-21).** Most of it was already done in
+earlier phases. Three things closed since:
+
+**Auto-generated handles no longer leak the auth UUID.** A player who never
+chose a handle got `Player` + the first eight hex characters of their auth
+UUID, published on the leaderboard. `generateXboxStyleHandle` had existed
+with zero callers since the start; it is now wired into `start-attempt` and
+`create-league` with collision retry, and a migration renamed the 176 of 185
+existing players who carried the leaking form. Safe because none of them had
+chosen it — every affected row had `handle_last_changed_at IS NULL`, and the
+migration enforces that rather than trusting the observation.
+
+**`get-profile-by-handle` no longer returns the auth UUID.** It is
+unauthenticated and returned `players.id`, which is the auth user id for
+every row. Now returns `players.public_id`, a separate random uuid. The field
+keeps its name and shape because store binaries stay installed for months.
+
+Worth recording that the second problem was **made worse by the first fix**:
+replacing UUID-derived handles with generated ones closed a leak but made
+handles guessable across a ~250k space, so the whole player base could be
+walked and mapped to auth UUIDs. Fixing one exposure created the enumeration
+path for another.
+
+**Narrow rate limiting**, for that reason. `get-profile-by-handle` is
+unauthenticated, service-role, and a 2.27s multi-join — the cheapest DoS
+surface here as well as the enumeration path. 30/minute per caller, fixed
+window, failing open. Deliberately not the general limiter the plan defers to
+its own workstream; this is the smallest thing that closes the hole and is
+easy to delete when edge-level throttling replaces it. Verified in
+production: 34 requests in one window gave exactly 30 allowed and 4 refused.
+
+**The owned-leagues question was already answered.** `delete-account`
+transfers a league to its longest-standing remaining member before deleting,
+and only lets a league cascade away when the departing owner is its only
+member. I raised it as an open decision from the plan's text without checking
+the code first — it was implemented.
+
+**`get-league-by-invite` stays unauthenticated on purpose.** Invite links are
+shared with people who do not have the app, and 32^6 codes from
+`crypto.getRandomValues` is not a guessable space.
+
+Still open in Phase 8: the ownership handoff is silent — the inheriting
+member is not told. Best folded into Phase 7's notification work rather than
+building a one-off path for it.
+
+**Phase 6 — native capabilities (mostly done).**
+
+| Item | State |
+|---|---|
+| Native share sheet | **done** — through the seam; "COPIED!" now only claims success when the share resolved |
+| Haptics | **done** — light tap at answer lock-in, correctness notification on results |
+| One reconciled clock | **done** — offset measured from the `Date` header every response already carries, no probe endpoint; 11 tests |
+| Offline answer outbox | **done** — queues a failed submission, drains on reconnect or foreground; 8 tests |
+| Lifecycle reconciliation on foreground | **done** — `resumeAttempt` refreshes the store when the app returns |
+| Screen wake lock | **done** — a 12-second timer runs while someone is reading, not touching |
+| Deep links | **partial** — see below |
+| Cached results payload | not started |
+
+**Deep links are half-finished on purpose.** The AASA file is written and
+declares `/invite/*`, `/u/*` and `/results*`, and the Associated Domains
+entitlement exists. Three things remain, none of which should be done by
+guessing:
+
+1. **The entitlement is not registered in the Xcode build settings.** That is
+   two clicks in Signing & Capabilities; hand-editing `project.pbxproj` risks
+   a subtle break that `cap sync` may overwrite anyway.
+2. **Cloudflare must serve the extensionless AASA as `application/json`.**
+   iOS silently ignores it otherwise and the symptom is just "links open
+   Safari" with nothing in any log. Worth a `curl -I` after the next deploy.
+3. **Android's `assetlinks.json` is not written at all** — it needs the
+   SHA-256 fingerprint of a signing certificate that does not exist yet.
+
+**Not attempted: full offline play.** The plan rules it out and the reason
+holds — it would mean shipping the answer key to the device. The outbox only
+guarantees an answer *reaches* the server; the server still decides whether a
+late one counts.
+
+**0D — the game loop runs from a Capacitor WebView (2026-08-21).** Riley built
+`feat/capacitor-shell` and played a full quiz in the iOS simulator: questions
+loaded, answers submitted, the results page rendered — against **production**
+Edge Functions, from `capacitor://localhost`.
+
+That is 0D's substantive exit criterion — "the full game loop completes from a
+Capacitor WebView, against production CORS config" — met for iOS. It is the
+first evidence the CORS work holds from an actual WebView rather than from a
+curl with a spoofed Origin, which is the distinction the plan draws.
+
+It also re-confirms 0A against the real app: the 0A measurement ran a probe
+shell with stubbed routes, and this ran the real game, so the export router
+survived real navigation between real questions.
+
+Two parts remain before 0D can be ticked outright:
+
+- **Android is untested.** No Android SDK on the machine yet. Android presents
+  `http://localhost` rather than `capacitor://localhost` — a separate
+  allow-list entry — so it is genuinely unproven rather than implied by iOS.
+- **Simulator, not hardware.** Same caveat already recorded for 0A. The
+  simulator exercises the same `WKURLSchemeHandler` path and is strong
+  evidence, but the one check that genuinely needs a device is session
+  survival across cold starts: a simulator does not reproduce iOS evicting a
+  WebView cache under storage pressure, which is the exact failure
+  `StorageResult` and the Preferences session exist to prevent.
 
 **0E gate — 3 of 4.** Against the checklist in
 [05-migration-plan.md](05-migration-plan.md#0e--gate-native-work-may-now-begin):
@@ -152,6 +320,49 @@ This is the exact failure the new Supabase deploy workflow exists to prevent —
 it deploys all 24 on every push to `main`, so "committed but not deployed"
 stops being a state the system can be in. All 24 verified accepting the header
 after a manual deploy.
+
+**Phase 5 — UX pass (complete). Shell workstream blocked.** The plan splits
+Phase 5 into two independently-mergeable workstreams. The UX pass needs no
+Capacitor and **ships to web**, where most of it fixes live mobile-Safari
+bugs; it is done. The shell (`capacitor.config.ts`, `ios/`, `android/`) needs
+`@capacitor/*`, which 0E blocks.
+
+| Item | Priority | State |
+|---|---|---|
+| `viewportFit: 'cover'`, `maximumScale: 1` | P0 | **done** — verified in the meta tag |
+| Safe-area padding | P0 | **done** — 7 utilities, applied at ArcadeBackground, BottomDock, Toast and the invite CTA |
+| `100vh` → `100dvh` | P0 | **done** — one utility override rather than 60 call sites; the dock's bottom edge now sits flush at 812px in a 375×812 viewport |
+| Android hardware back | P0 | **done** — per-route policy through the seam, plus push→replace across the play flow |
+| Wire up `PageTransition` | P1 | **deliberately not done** — see below |
+| `BottomDock` as a real tab bar | P1 | not started |
+| Input hygiene | P2 | **done** — autoCapitalize/autoCorrect off on handle fields; the 14px field that triggered iOS focus-zoom is now 16px |
+| Accessibility floor | P2 | **done** — `aria-live` on answer correctness, `role="dialog"` + focus trap + Escape on all four modals |
+| Dead style references | P3 | **done** — `to-magentaA` was never a token; `animate-slide-in` had no keyframe |
+| Emoji icons → SVG; profile `.bg-arcade` | P3 | not started |
+
+**The play flow no longer pollutes history.** Ten questions meant ten history
+entries, so back walked a player backwards through questions the server
+considers answered — on a game with one attempt per day. Verified end to end:
+a full quiz from question 9 through finalize to results left history at 19
+entries throughout, and back from results lands on home.
+
+**`PageTransition` is left unwired on purpose.** framer-motion drives
+animations from `requestAnimationFrame`, which browsers throttle to zero in a
+hidden tab, so a mount animation stays frozen at `initial` — opacity 0 and
+offset — indefinitely. That is **pre-existing**: five such animations on
+`/results` behave identically on `main`. It matters here because this
+environment's browser pane reports `visibilityState: "hidden"` even when
+fronted, so the animated path cannot be verified at all. Wiring an
+unverifiable decorative feature into five screens would spread a latent
+invisible-content bug for no functional gain. The component keeps its
+`prefers-reduced-motion` fix, which is a real accessibility improvement and
+carries no risk. **Anyone picking this up should verify in a real focused
+browser tab first.**
+
+**Phase 5 exit criteria remain unmet** — all four require a real iPhone and
+Android device, which is the same device dependency that blocks 0D and Phase
+4's native half. The web-observable half of the fourth criterion ("mobile
+Safari regressions fixed and verified on web") is done.
 
 **Phase 4 — Platform seam (web half complete).** The seam, the client
 convergence and every platform-independent item are done and verified on web.

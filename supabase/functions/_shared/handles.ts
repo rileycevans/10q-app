@@ -68,3 +68,49 @@ export function canonicalizeHandle(handle: string): string {
   return handle.trim().toLowerCase();
 }
 
+
+/**
+ * Create a player row with a generated handle, retrying on collision.
+ *
+ * Auto-handles used to be `Player` + the first 8 hex characters of the auth
+ * UUID — published on the global leaderboard, where they are a stable
+ * fragment of a user identifier that nobody chose to share. The generated
+ * form carries no user data at all.
+ *
+ * `handle_canonical` is UNIQUE, so a collision fails the insert rather than
+ * silently sharing a handle. ~291k combinations makes that unlikely, but
+ * unlikely over enough signups is a support ticket someone cannot resolve —
+ * so retry with a fresh name instead.
+ */
+export async function createPlayerWithGeneratedHandle(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  extraColumns: Record<string, unknown> = {},
+  maxAttempts = 5,
+): Promise<{ ok: true; handle: string } | { ok: false; error: string }> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const handleDisplay = generateXboxStyleHandle();
+    const handleCanonical = canonicalizeHandle(handleDisplay);
+
+    const { error } = await supabase.from("players").insert({
+      id: userId,
+      handle_display: handleDisplay,
+      handle_canonical: handleCanonical,
+      ...extraColumns,
+    });
+
+    if (!error) return { ok: true, handle: handleDisplay };
+
+    // 23505 is unique_violation. Anything else is a real failure and
+    // retrying with a different name will not help.
+    if (error.code !== "23505") {
+      return { ok: false, error: error.message };
+    }
+  }
+
+  return {
+    ok: false,
+    error: `Could not find an unused handle after ${maxAttempts} attempts`,
+  };
+}

@@ -3,6 +3,7 @@ import type { ErrorCode } from '@10q/contracts';
 import { withRetry, getUserFriendlyErrorMessage } from '@/lib/error-handling';
 import { logger } from '@/lib/logger';
 import { CLIENT_VERSION_HEADER } from '@/lib/version';
+import { observeServerDate } from '@/lib/server-clock';
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -182,7 +183,13 @@ async function callEdgeFunction<T>(
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const durationMs = Date.now() - startTime;
+    const requestEndedAt = Date.now();
+    const durationMs = requestEndedAt - startTime;
+
+    // Measure the server clock from the Date header every response already
+    // carries. No probe endpoint, no extra round trip — see lib/server-clock.
+    observeServerDate(response.headers.get('date'), startTime, requestEndedAt);
+
     const responseData = await response.json();
 
     if (!response.ok) {
@@ -309,6 +316,25 @@ export const edgeFunctions = {
   // They previously declared current_question_* while the server sends
   // question_*, so the adapter read undefined on every resume and TypeScript
   // could not catch it — the type asserted a shape the server never returns.
+  /**
+   * Register or revoke this device's push token.
+   *
+   * Called on permission grant and again on every launch — providers rotate
+   * tokens without warning — so the endpoint is idempotent and this is safe
+   * to fire often.
+   */
+  registerDeviceToken: (params: {
+    token: string;
+    platform?: 'ios' | 'android' | 'web';
+    app_version?: string;
+    unregister?: boolean;
+  }) =>
+    callEdgeFunction<{ registered: boolean }>('register-device-token', {
+      method: 'POST',
+      body: params,
+      requireAuth: true,
+    }),
+
   resumeAttempt: (attemptId: string) =>
     callEdgeFunction<{
       attempt_id: string;

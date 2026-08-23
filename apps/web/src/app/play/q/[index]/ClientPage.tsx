@@ -14,6 +14,9 @@ import type { QuizQuestion } from '@/domains/quiz';
 import type { AttemptState } from '@/domains/attempt';
 import { MAX_QUESTIONS_PER_QUIZ } from '@10q/contracts';
 import { trackScreenView, trackQuestionView, trackAnswerSubmit, trackAppError } from '@/lib/analytics';
+import { haptics } from '@/platform';
+import { now as serverNow } from '@/lib/server-clock';
+import { lifecycle } from '@/platform';
 
 export function QuestionPageClient({ index }: { index: number }) {
   const router = useRouter();
@@ -58,11 +61,11 @@ export function QuestionPageClient({ index }: { index: number }) {
     if (!attempt) return;
 
     if (attempt.state === 'FINALIZED') {
-      router.push('/results');
+      router.replace('/results');
       return;
     }
     if (attempt.state === 'READY_TO_FINALIZE') {
-      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      router.replace(`/results?attempt_id=${attempt.attempt_id}`);
       return;
     }
     if (attempt.current_index !== questionIndex) {
@@ -73,7 +76,9 @@ export function QuestionPageClient({ index }: { index: number }) {
         Math.max(attempt.current_index, 1),
         MAX_QUESTIONS_PER_QUIZ,
       );
-      router.push(`/play/q/${target}`);
+      // replace, not push: this is a correction, and pushing would leave the
+      // wrong question in history for the back button to return to.
+      router.replace(`/play/q/${target}`);
     }
   }, [attempt, questionIndex, router]);
 
@@ -108,7 +113,7 @@ export function QuestionPageClient({ index }: { index: number }) {
   useEffect(() => {
     if (!attempt) return;
 
-    const now = Date.now();
+    const now = serverNow();
 
     if (!attempt.current_question_expires_at) {
       // Q1 path: server hasn't set an expiry yet. Start the countdown from
@@ -149,6 +154,71 @@ export function QuestionPageClient({ index }: { index: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt?.attempt_id, questionIndex]);
 
+  // ── Re-sync with the server when the app returns to the foreground ──────
+  // The quiz is server-timed, so a backgrounded app comes back to a countdown
+  // that kept running without it. The client's view of the attempt is stale
+  // by exactly the time it was away, and on mobile that is the normal
+  // interruption — a call, a notification, switching apps.
+  //
+  // resumeAttempt returns the server's current state, which is authoritative:
+  // it may say the question expired, that the attempt advanced, or that it is
+  // finished. The redirect effect above then routes accordingly, so this only
+  // has to refresh the store.
+  useEffect(() => {
+    if (!attempt) return;
+
+    return lifecycle.onAppStateChange((state) => {
+      if (state !== 'active') return;
+
+      resumeAttempt(attempt.attempt_id)
+        .then((fresh) => store.setAttempt(fresh))
+        .catch((err) => {
+          // Non-fatal: the countdown keeps running against the last known
+          // expiry, and the server rejects a late answer regardless. Logged
+          // because a failure here means the player may see time they do not
+          // have.
+          trackAppError({
+            location: 'quiz_foreground_resync',
+            message: err instanceof Error ? err.message : 'Failed to re-sync on foreground',
+          });
+        });
+    });
+  }, [attempt, store]);
+
+  // ── Keep the screen awake during a question ─────────────────────────────
+  // A 12-second timer runs while the player is reading, not touching. The OS
+  // does not know that counts as activity, so the screen can dim or lock
+  // mid-question and the answer is lost to a timeout the player never saw.
+  //
+  // The Screen Wake Lock API works in the iOS/Android WebView and on modern
+  // browsers; where it does not exist this is a no-op. The lock is released
+  // on unmount, and the OS drops it automatically when the app backgrounds —
+  // so there is no way to leave a phone awake after the quiz ends.
+  useEffect(() => {
+    type WakeLockSentinel = { release: () => Promise<void> };
+    let sentinel: WakeLockSentinel | null = null;
+    let released = false;
+
+    const nav = navigator as Navigator & {
+      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> };
+    };
+
+    nav.wakeLock
+      ?.request('screen')
+      .then((s) => {
+        if (released) void s.release();
+        else sentinel = s;
+      })
+      .catch(() => {
+        // Denied, unsupported, or the document was not visible. Cosmetic.
+      });
+
+    return () => {
+      released = true;
+      void sentinel?.release().catch(() => {});
+    };
+  }, [questionIndex]);
+
   // ── Track question view ─────────────────────────────────────────────────
   useEffect(() => {
     if (!attempt || !currentQuestion) return;
@@ -171,7 +241,8 @@ export function QuestionPageClient({ index }: { index: number }) {
   // ── Tick timer via requestAnimationFrame + wall-clock deadline ──────────
   // Polls `deadlineRef` on every frame while the question is active. Because
   // we're reading the deadline from a ref (not from state) and deriving the
-  // remaining time from `Date.now()` directly, the countdown can't drift or
+  // remaining time from the reconciled server clock directly, the countdown
+  // can't drift or
   // jump from re-renders — the only state change is setTimeRemaining, which
   // just updates the visible number/bar.
   useEffect(() => {
@@ -182,7 +253,7 @@ export function QuestionPageClient({ index }: { index: number }) {
     const tick = () => {
       const deadline = deadlineRef.current;
       if (deadline == null) return;
-      const remaining = Math.max(0, deadline - Date.now());
+      const remaining = Math.max(0, deadline - serverNow());
       setTimeRemaining(remaining);
       if (remaining > 0) {
         rafId = requestAnimationFrame(tick);
@@ -279,13 +350,13 @@ export function QuestionPageClient({ index }: { index: number }) {
             current_question_expires_at: result.question_expires_at,
             state: result.current_index > MAX_QUESTIONS_PER_QUIZ ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
           });
-          router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          router.replace(`/results?attempt_id=${attempt.attempt_id}`);
           return;
         }
         // Submit failed — recover via resumeAttempt.
         resumeAttempt(attempt.attempt_id).then((newAttempt) => {
           store.setAttempt(newAttempt);
-          router.push(`/results?attempt_id=${attempt.attempt_id}`);
+          router.replace(`/results?attempt_id=${attempt.attempt_id}`);
         });
       });
       return;
@@ -304,7 +375,11 @@ export function QuestionPageClient({ index }: { index: number }) {
       state: 'IN_PROGRESS',
     });
 
-    router.push(`/play/q/${nextIndex}`);
+    // replace, not push. Question order is server-authoritative and each
+    // question has its own expiry, so there is no valid "back" within a quiz —
+    // pushing would build ten history entries and let Android's back button
+    // walk a player backwards through questions the server considers answered.
+    router.replace(`/play/q/${nextIndex}`);
   }, [timeRemaining, currentQuestion, isSubmitting, attempt, router, store, game.quizId, questionIndex]);
 
   // ── Answer handler ──────────────────────────────────────────────────────
@@ -323,10 +398,24 @@ export function QuestionPageClient({ index }: { index: number }) {
         location: 'click_stale_question',
         message: `route=${questionIndex} currentQuestion.order_index=${currentQuestion.order_index} attempt.current_index=${attempt.current_index} question_id=${currentQuestion.question_id} answer_id=${answerId}`,
       });
-      setSubmitError({
-        code: 'STALE_QUESTION',
-        message: `Question mismatch (route ${questionIndex}, store ${attempt.current_index}). Reloading.`,
-      });
+      // Recover rather than strand the player.
+      //
+      // This message used to say "Reloading" and then do nothing — the guard
+      // returned, the banner appeared, and every subsequent tap hit the same
+      // mismatch. Dismissing cleared the text but not the cause, so the only
+      // way out was force-quitting the app. Riley hit this on device by
+      // tapping through questions quickly.
+      //
+      // The store is server-authoritative, so its current_index is the truth;
+      // routing to it resolves the disagreement. Clamped for the same reason
+      // as the redirect effect above: a static export only contains
+      // 1..MAX_QUESTIONS_PER_QUIZ, and an out-of-range index is a hard 404
+      // inside the app bundle.
+      const recoverTo = Math.min(
+        Math.max(attempt.current_index, 1),
+        MAX_QUESTIONS_PER_QUIZ,
+      );
+      router.replace(`/play/q/${recoverTo}`);
       return;
     }
     submittingRef.current = true;
@@ -334,6 +423,11 @@ export function QuestionPageClient({ index }: { index: number }) {
     setSelectedAnswerId(answerId);
     setIsSubmitting(true);
     setFeedback('committed');
+    // Answer lock-in. A light tap confirms the tap registered — useful on a
+    // 12-second timer where the visual state change is easy to miss while
+    // reading. Correct/wrong haptics are NOT possible here: the answer key is
+    // not sent to the client until finalize, deliberately.
+    void haptics.impact('light');
 
     const nextIndex = questionIndex + 1;
     const isLastQuestion = nextIndex > 10;
@@ -401,7 +495,7 @@ export function QuestionPageClient({ index }: { index: number }) {
           state: result.current_index > MAX_QUESTIONS_PER_QUIZ ? 'READY_TO_FINALIZE' : 'IN_PROGRESS',
         });
       }
-      router.push(`/results?attempt_id=${attempt.attempt_id}`);
+      router.replace(`/results?attempt_id=${attempt.attempt_id}`);
       return;
     }
 
@@ -423,7 +517,8 @@ export function QuestionPageClient({ index }: { index: number }) {
       state: 'IN_PROGRESS',
     });
 
-    router.push(`/play/q/${nextIndex}`);
+    // replace, not push — see the timeout advance above.
+    router.replace(`/play/q/${nextIndex}`);
   };
 
   // ── Render: loading (recovery from hard refresh) ────────────────────────
@@ -460,7 +555,10 @@ export function QuestionPageClient({ index }: { index: number }) {
   // ── Render: question ────────────────────────────────────────────────────
   return (
     <ArcadeBackground>
-      <div className="flex flex-col min-h-screen relative">
+      {/* flex-1, not min-h-screen: ArcadeBackground is already the full-height
+        column, and nesting another pushes content past the fold on a notched
+        device. */}
+      <div className="flex flex-col flex-1 min-h-0 relative">
         {submitError && (
           <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
             <div className="bg-red border-[4px] border-ink rounded-[18px] shadow-sticker-sm p-3 text-paper">
@@ -511,6 +609,26 @@ export function QuestionPageClient({ index }: { index: number }) {
             questionText={currentQuestion.body}
             questionNumber={questionIndex}
           />
+
+          {/*
+            Answer correctness is conveyed only by colour and a shake/pop
+            animation, so a screen-reader user gets no signal at all about
+            whether they were right — required by the project's own
+            accessibility checklist.
+
+            aria-live="assertive" rather than "polite": the result matters for
+            about a second before the next question replaces it, and a polite
+            announcement queued behind other speech would arrive after the
+            moment has passed. Visually hidden rather than sr-only-styled
+            inline so it never affects layout.
+          */}
+          <div role="status" aria-live="assertive" className="sr-only">
+            {feedback === 'correct'
+              ? 'Correct'
+              : feedback === 'wrong'
+                ? 'Incorrect'
+                : ''}
+          </div>
 
           <div className="w-full space-y-2">
             {currentQuestion.answers

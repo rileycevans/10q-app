@@ -4,6 +4,7 @@
  */
 
 import { edgeFunctions } from '@/lib/api/edge-functions';
+import { enqueueAnswer } from '@/lib/answer-outbox';
 
 // Types following Notion plan
 export interface AttemptState {
@@ -156,14 +157,34 @@ export async function submitAnswer(
   selectedAnswerId: string | null,
   isTimeout = false,
 ): Promise<AnswerResult> {
-  const response = await edgeFunctions.submitAnswer(
-    attemptId,
-    questionId,
-    selectedAnswerId,
-    isTimeout,
-  );
+  let response;
+  try {
+    response = await edgeFunctions.submitAnswer(
+      attemptId,
+      questionId,
+      selectedAnswerId,
+      isTimeout,
+    );
+  } catch (err) {
+    // The request never completed — offline, or the connection dropped
+    // mid-flight. Queue it so a reconnect can deliver it rather than losing
+    // points the player earned on their one attempt of the day. Safe because
+    // submit-answer is idempotent.
+    await enqueueAnswer({ attemptId, questionId, selectedAnswerId, isTimeout });
+    throw err;
+  }
 
   if (!response.ok || !response.data) {
+    // A 5xx or a gateway failure is worth retrying; a rejection the server
+    // will repeat is not. Queue only the former.
+    // SERVICE_UNAVAILABLE is the envelope's 5xx/transport code, and an empty
+    // one means the response did not carry a recognised error at all. Every
+    // other code in the union is a decision the server will repeat.
+    const code = response.error?.code ?? '';
+    const worthRetrying = code === 'SERVICE_UNAVAILABLE' || code === '';
+    if (worthRetrying) {
+      await enqueueAnswer({ attemptId, questionId, selectedAnswerId, isTimeout });
+    }
     throw new Error(response.error?.message || 'Failed to submit answer');
   }
 

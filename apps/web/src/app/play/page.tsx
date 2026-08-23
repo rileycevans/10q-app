@@ -44,7 +44,7 @@ export default function PlayPage() {
     const attempt = game.attempt;
 
     if (attempt.state === 'FINALIZED') {
-      router.push('/tomorrow');
+      router.replace('/tomorrow');
     } else if (attempt.current_index <= 10) {
       trackQuizStart({
         quiz_id: game.quizId!,
@@ -58,10 +58,10 @@ export default function PlayPage() {
         setShowCountdown(true);
       } else {
         // Resume — skip straight to current question
-        router.push(`/play/q/${attempt.current_index}`);
+        router.replace(`/play/q/${attempt.current_index}`);
       }
     } else if (attempt.state === 'READY_TO_FINALIZE') {
-      router.push('/play/finalize');
+      router.replace('/play/finalize');
     }
   }, [game.phase, game.attempt, game.quizId, router]);
 
@@ -89,7 +89,7 @@ export default function PlayPage() {
     if (!showCountdown) return;
 
     if (readyCount < 0) {
-      router.push(`/play/q/${game.attempt!.current_index}`);
+      router.replace(`/play/q/${game.attempt!.current_index}`);
       return;
     }
 

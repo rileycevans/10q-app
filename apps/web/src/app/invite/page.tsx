@@ -238,8 +238,10 @@ function InvitePageInner() {
       )}
 
       {/* Toast Notification */}
+      {/* mb-safe-only keeps this clear of the home indicator, which would
+          otherwise overlap it and intercept taps. */}
       {toast && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300 mb-safe-only">
           <div className={`${
             toast.type === 'success' ? 'bg-green' : 'bg-red'
           } border-[4px] border-ink rounded-[18px] shadow-sticker-sm px-6 py-4 min-w-[300px]`}>

@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
       
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyanA to-magentaA p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyanA to-purpleB p-4">
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 max-w-md text-center">
             <h1 className="font-display text-2xl font-bold text-ink mb-4">
               Oops! Something went wrong

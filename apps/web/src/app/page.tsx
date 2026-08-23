@@ -168,8 +168,10 @@ export default function HomePage() {
 
   return (
     <ArcadeBackground>
-      <div className="flex flex-col min-h-screen">
-        <div className="flex-1 flex items-center justify-center px-4 py-8">
+      {/* ArcadeBackground already provides the full-height flex column; a nested
+        min-h-screen would demand a second viewport and push the dock off-screen. */}
+      <div className="flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 flex items-center justify-center px-4 py-4 sm:py-8">
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
             <div className="mb-6 flex justify-center px-1">
               {/* Plain img: drop any transparent PNG at public/brand/10q-logo.png — no width/height sync */}

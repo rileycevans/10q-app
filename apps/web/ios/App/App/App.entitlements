@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Universal Links. iOS fetches
+	  https://play10q.com/.well-known/apple-app-site-association on install
+	  and routes matching URLs to the app instead of Safari.
+
+	  This is only half the setup — the AASA file must be served from that
+	  path as application/json. Adding the entitlement without the file just
+	  means links keep opening in the browser.
+	-->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:play10q.com</string>
+		<string>applinks:www.play10q.com</string>
+	</array>
+</dict>
+</plist>

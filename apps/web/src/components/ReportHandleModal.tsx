@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { reportHandle, type ReportReason } from '@/domains/profile';
 import { trackHandleReported, trackAppError } from '@/lib/analytics';
+import { useModalA11y } from './useModalA11y';
 
 const REASONS: Array<{ value: ReportReason; label: string }> = [
   { value: 'offensive', label: 'Offensive or hateful' },
@@ -29,6 +30,7 @@ export function ReportHandleModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const dialogRef = useModalA11y(isOpen, onClose);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [details, setDetails] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +80,11 @@ export function ReportHandleModal({
           the DOM tree, so without this a click on Send also dismisses the
           modal and the confirmation is never shown. */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Report Modal"
+        tabIndex={-1}
         className="relative bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-6 w-full max-w-md mx-4"
         onClick={(e) => e.stopPropagation()}
       >

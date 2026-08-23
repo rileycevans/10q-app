@@ -11,6 +11,7 @@ import { createServiceClient } from "../_shared/supabase.ts";
 import { getAuthenticatedUser } from "../_shared/auth.ts";
 import { generateRequestId, logStructured } from "../_shared/utils.ts";
 import { classifyAttempt, isUniqueViolation } from "../_shared/attempt-state.ts";
+import { createPlayerWithGeneratedHandle } from "../_shared/handles.ts";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -66,22 +67,18 @@ Deno.serve(async (req) => {
       .single();
 
     if (playerError && playerError.code === "PGRST116") {
-      // Player doesn't exist, create one with auto-generated handle
-      const handleDisplay = `Player${userId.slice(0, 8)}`;
-      const handleCanonical = handleDisplay.toLowerCase();
+      // Player doesn't exist, create one with a generated handle.
+      //
+      // Not `Player${userId.slice(0, 8)}`: that published the first eight hex
+      // characters of the auth UUID on the global leaderboard — a stable
+      // fragment of a user identifier nobody chose to share.
+      const created = await createPlayerWithGeneratedHandle(supabase, userId, {
+        linked_auth_user_id: userId,
+      });
 
-      const { error: createError } = await supabase
-        .from("players")
-        .insert({
-          id: userId,
-          linked_auth_user_id: userId,
-          handle_display: handleDisplay,
-          handle_canonical: handleCanonical,
-        });
-
-      if (createError) {
+      if (!created.ok) {
         logStructured(requestId, "start_attempt_player_error", {
-          error: createError.message,
+          error: created.error,
         });
         return errorResponse(
           ErrorCodes.SERVICE_UNAVAILABLE,

@@ -130,7 +130,47 @@ Deno.serve(async (req) => {
     }
 
     const handleCanonical = canonicalizeHandle(handle);
+
+    // Throttle before doing any work. This endpoint is unauthenticated,
+    // service-role, and a heavy multi-join measured at 2.27s per call — the
+    // cheapest way to load the database here. It is also the enumeration
+    // path now that handles are guessable across a ~250k space.
+    //
+    // 30 per minute is far above what a person browsing profiles does and
+    // far below what walking the handle space needs. Fails open: a throttle
+    // that takes the endpoint down when it breaks is worse than the abuse.
     const supabase = await createServiceClient();
+    try {
+      const forwarded = req.headers.get("x-forwarded-for");
+      const callerKey =
+        (forwarded ? forwarded.split(",")[0]?.trim() : null) ??
+        req.headers.get("cf-connecting-ip") ??
+        "unknown";
+
+      const { data: allowed, error: limitError } = await supabase.rpc(
+        "check_rate_limit",
+        {
+          p_bucket_key: callerKey,
+          p_endpoint: "get-profile-by-handle",
+          p_limit: 30,
+          p_window_seconds: 60,
+        },
+      );
+
+      if (!limitError && allowed === false) {
+        logStructured(requestId, "get_profile_by_handle_rate_limited", {
+          caller: callerKey,
+        });
+        return errorResponse(
+          ErrorCodes.SERVICE_UNAVAILABLE,
+          "Too many requests. Please slow down and try again shortly.",
+          requestId,
+          429,
+        );
+      }
+    } catch {
+      // Fail open.
+    }
 
     // Get profile by handle
     const { data: profile, error: profileError } = await supabase
@@ -138,7 +178,7 @@ Deno.serve(async (req) => {
       // C7: last_quiz_date comes along so the streak can be expired below.
       // players.current_streak is the value as of the last finalize and never
       // decays, so a player who stopped in April still showed a live streak.
-      .select("id, handle_display, handle_canonical, created_at, current_streak, longest_streak, last_quiz_date")
+      .select("id, public_id, handle_display, handle_canonical, created_at, current_streak, longest_streak, last_quiz_date")
       .eq("handle_canonical", handleCanonical)
       .single();
 
@@ -302,7 +342,17 @@ Deno.serve(async (req) => {
 
     return successResponse(
       {
-        player_id: profile.id,
+        // NOT profile.id. That is the auth user id — a stable cross-session
+        // identifier, the join key across every table, and the subject of
+        // every RLS policy — and this endpoint is unauthenticated, so it was
+        // handed to anyone holding the publishable key. public_id identifies
+        // the player without being any of those things.
+        //
+        // The field keeps its name and shape: store binaries stay installed
+        // for months and the client compares this value to decide whether to
+        // show a Report button (CLAUDE.md rule 5 — never remove or repurpose
+        // a field).
+        player_id: profile.public_id,
         handle_display: profile.handle_display,
         handle_canonical: profile.handle_canonical,
         created_at: profile.created_at,

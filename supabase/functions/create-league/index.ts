@@ -7,6 +7,7 @@ import { corsHeaders, corsHeadersFor } from "../_shared/cors.ts";
 import { requireMinimumClient } from "../_shared/client-version.ts";
 
 import { validateLeagueName } from "../_shared/league-names.ts";
+import { createPlayerWithGeneratedHandle } from "../_shared/handles.ts";
 
 // Inline Error Codes
 const ErrorCodes = {
@@ -216,21 +217,15 @@ Deno.serve(async (req) => {
       .single();
 
     if (!profile) {
-      // Create profile if it doesn't exist
-      const handleDisplay = `Player${userId.slice(0, 8)}`;
-      const handleCanonical = handleDisplay.toLowerCase();
+      // Create profile if it doesn't exist, with a generated handle.
+      //
+      // Not `Player${userId.slice(0, 8)}`: that published the first eight hex
+      // characters of the auth UUID to every other league member.
+      const created = await createPlayerWithGeneratedHandle(supabase, userId);
 
-      const { error: createError } = await supabase
-        .from("players")
-        .insert({
-          id: userId,
-          handle_display: handleDisplay,
-          handle_canonical: handleCanonical,
-        });
-
-      if (createError) {
+      if (!created.ok) {
         logStructured(requestId, "create_league_profile_error", {
-          error: createError.message,
+          error: created.error,
         });
         return errorResponse(
           ErrorCodes.SERVICE_UNAVAILABLE,

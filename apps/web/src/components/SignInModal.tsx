@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { startOAuth, buildOAuthRedirect, type OAuthProvider } from '@/lib/auth/oauth';
+import { useModalA11y } from './useModalA11y';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface SignInModalProps {
 }
 
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
+  const dialogRef = useModalA11y(isOpen, onClose);
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
 
   if (!isOpen) return null;
@@ -35,16 +37,24 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       />
 
       {/* Modal */}
-      <div className="relative bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md mx-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signin-modal-title"
+        tabIndex={-1}
+        className="relative bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md mx-4"
+      >
         <button
           type="button"
           onClick={onClose}
+          aria-label="Close sign in"
           className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-ink hover:bg-ink/10 rounded-full"
         >
           ✕
         </button>
 
-        <h2 className="font-display text-2xl font-bold text-ink mb-2 text-center uppercase tracking-wide">
+        <h2 id="signin-modal-title" className="font-display text-2xl font-bold text-ink mb-2 text-center uppercase tracking-wide">
           Sign in
         </h2>
         <p className="text-center text-sm text-ink/80 font-bold mb-6">
