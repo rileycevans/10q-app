@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { navigation, configureStatusBar } from '@/platform';
+import { navigation, configureStatusBar, push } from '@/platform';
 import { startOutboxDrain } from '@/lib/answer-outbox';
 
 /**
@@ -48,6 +48,25 @@ export function BackButtonHandler() {
   // regardless of which screen the player lands on — including a cold start
   // hours later, on a different network.
   useEffect(() => startOutboxDrain(), []);
+
+  // Route a tapped notification to the screen it is about.
+  //
+  // The server sends a `route` in the payload rather than the client
+  // inferring one from the notification type — that way a new notification
+  // can point somewhere new without shipping a client update, which matters
+  // when store binaries stay installed for months.
+  //
+  // Only same-origin paths are honoured, for the same reason the OAuth
+  // callback sanitises `next`: a payload is data from outside, and a crafted
+  // one should not be able to send anyone off-app.
+  useEffect(() => {
+    return push.onNotificationTap((data) => {
+      const route = data.route;
+      if (typeof route !== 'string') return;
+      if (!route.startsWith('/') || route.startsWith('//')) return;
+      router.push(route);
+    });
+  }, [router]);
 
   useEffect(() => {
     return navigation.onBack(() => {

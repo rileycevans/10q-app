@@ -19,6 +19,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type {
   AppInfo,
+  PushNotifications,
   Haptics,
   Lifecycle,
   Navigation,
@@ -86,6 +87,10 @@ export const oauth: OAuth = NATIVE
 /**
  * Status-bar setup. Called once at app start; a no-op on web.
  */
+export const push: PushNotifications = NATIVE
+  ? require('./push.native').default
+  : require('./push.web').default;
+
 export const configureStatusBar: () => Promise<void> = NATIVE
   ? require('./statusBar.native').configureStatusBar
   : require('./statusBar.web').configureStatusBar;

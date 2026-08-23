@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { clearCachedAttempt } from '@/lib/attempt-cache';
 import { share, haptics } from '@/platform';
 import { publicUrl } from '@/lib/version';
+import { PushPrimer } from '@/components/PushPrimer';
 
 function formatTime(ms: number): string {
   const seconds = (ms / 1000).toFixed(1);
@@ -561,6 +562,7 @@ function ResultsContent() {
       </div>
 
       {/* Handle Nudge Modal */}
+      <PushPrimer show={!!results} />
       <HandleNudgeModal
         isOpen={showHandleNudge}
         onClose={() => {

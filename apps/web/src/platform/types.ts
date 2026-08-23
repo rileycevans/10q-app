@@ -132,3 +132,34 @@ export interface AppInfo {
   /** True for iOS and Android builds. Only the seam should ever branch on it. */
   isNative: boolean;
 }
+
+export type PushPermission = 'granted' | 'denied' | 'prompt';
+
+export interface PushNotifications {
+  /**
+   * What the OS currently thinks, without asking.
+   *
+   * Checked before priming so a player who already granted or denied is not
+   * shown a prompt about a prompt.
+   */
+  checkPermission(): Promise<PushPermission>;
+
+  /**
+   * Ask the OS, then register with APNs/FCM and hand the token to the server.
+   *
+   * Resolves to the granted state. Calling this when already denied does
+   * nothing on iOS — the OS will not re-prompt, and the player has to go to
+   * Settings — so callers should check first and say so rather than
+   * appearing to do nothing.
+   */
+  requestPermissionAndRegister(): Promise<PushPermission>;
+
+  /** Stop delivery to this device. Used on sign-out. */
+  unregister(): Promise<void>;
+
+  /**
+   * A notification was tapped. The handler receives the `data` payload the
+   * server sent, which carries the route to open.
+   */
+  onNotificationTap(handler: (data: Record<string, string>) => void): () => void;
+}

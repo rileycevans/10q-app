@@ -316,6 +316,25 @@ export const edgeFunctions = {
   // They previously declared current_question_* while the server sends
   // question_*, so the adapter read undefined on every resume and TypeScript
   // could not catch it — the type asserted a shape the server never returns.
+  /**
+   * Register or revoke this device's push token.
+   *
+   * Called on permission grant and again on every launch — providers rotate
+   * tokens without warning — so the endpoint is idempotent and this is safe
+   * to fire often.
+   */
+  registerDeviceToken: (params: {
+    token: string;
+    platform?: 'ios' | 'android' | 'web';
+    app_version?: string;
+    unregister?: boolean;
+  }) =>
+    callEdgeFunction<{ registered: boolean }>('register-device-token', {
+      method: 'POST',
+      body: params,
+      requireAuth: true,
+    }),
+
   resumeAttempt: (attemptId: string) =>
     callEdgeFunction<{
       attempt_id: string;
