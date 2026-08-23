@@ -74,3 +74,10 @@ apps/web/android/app/build/
 apps/web/android/app/src/main/assets/public/
 apps/web/android/local.properties
 apps/web/android/.idea/
+
+# Firebase config. Not a credential in the way the service account key is —
+# it carries a project id and an API key scoped to this package — but it is
+# environment config that differs per project and does not belong in the
+# repo. Capacitor's Gradle build picks it up from apps/web/android/app/.
+google-services.json
+GoogleService-Info.plist
