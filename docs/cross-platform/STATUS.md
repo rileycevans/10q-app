@@ -94,6 +94,31 @@ value. Three unrelated causes, one error string. The workflow now reports the
 token's length and whether it contains whitespace — never its value — so the
 next failure says which one it is.
 
+**Phases 5–8 are merged to main and deployed (2026-08-23).** 38 commits.
+CI green, both Supabase deploy jobs green, production verified: 25 ledger
+rows matching 25 repo migrations, answer key and auth linkage still hidden,
+no anon grants on device_tokens, RLS on every table, 186 players and 537
+attempts intact, 4 cron jobs scheduled.
+
+**The ledger drifted again, and it was my doing.** Applying migrations
+through the MCP `apply_migration` tool stamps them with its own timestamp
+rather than the repo filename — so five production rows and three staging
+rows carried versions the repo did not have, and `db push` refused exactly as
+it did before Phase 2's reconciliation. Repaired both environments the same
+way: back up the ledger with its SQL, revert the tool-stamped versions, mark
+the repo filenames applied.
+
+**Rule worth keeping: apply migrations with `supabase db push`, not
+`apply_migration`.** The tool is convenient for one-off DDL and wrong for
+anything the repo also tracks, because the version it records will never
+match the filename.
+
+A second, smaller cause was in the working tree: five untracked `" 2"`
+duplicate migration files shared a version prefix with real ones and made the
+CLI report work that did not exist. They are gitignored so CI never saw them,
+and are parked in the scratchpad rather than deleted — all five were
+byte-identical to their originals.
+
 **Phase 7 — push notifications (complete except device verification).**
 
 | Item | State |
