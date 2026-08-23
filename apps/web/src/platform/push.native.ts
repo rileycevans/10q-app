@@ -2,6 +2,7 @@ import { PushNotifications as CapPush } from '@capacitor/push-notifications';
 import type { PushNotifications, PushPermission } from './types';
 import { edgeFunctions } from '@/lib/api/edge-functions';
 import { APP_VERSION, APP_BUILD, CLIENT_PLATFORM } from '@/lib/version';
+import { trackAppError } from '@/lib/analytics';
 
 /**
  * Native push.
@@ -44,30 +45,56 @@ const push: PushNotifications = {
 
       // The token arrives on an event, not from register(). Wait for it, but
       // not forever — a provider that never answers should not hang the UI.
-      const token = await new Promise<string | null>((resolve) => {
-        let settled = false;
-        const finish = (value: string | null) => {
-          if (settled) return;
-          settled = true;
-          resolve(value);
-        };
-
-        const timer = setTimeout(() => finish(null), REGISTRATION_TIMEOUT_MS);
-
-        void CapPush.addListener('registration', (t) => {
-          clearTimeout(timer);
-          finish(t.value);
-        });
-
-        void CapPush.addListener('registrationError', () => {
-          clearTimeout(timer);
-          finish(null);
-        });
-
-        void CapPush.register();
+      //
+      // addListener is ASYNC: it returns a promise and the listener is not
+      // attached until that resolves. Calling register() before then races
+      // the registration event and loses it, which presents as permission
+      // granted but no token ever reaching the server — exactly what happened
+      // on device. Both listeners are therefore awaited before register().
+      let settled = false;
+      let resolveToken: (value: string | null) => void = () => {};
+      const tokenPromise = new Promise<string | null>((resolve) => {
+        resolveToken = resolve;
       });
 
-      if (!token) return 'granted'; // permission is real; the token is not
+      const finish = (value: string | null) => {
+        if (settled) return;
+        settled = true;
+        resolveToken(value);
+      };
+
+      const timer = setTimeout(() => finish(null), REGISTRATION_TIMEOUT_MS);
+
+      const [regHandle, errHandle] = await Promise.all([
+        CapPush.addListener('registration', (t) => {
+          clearTimeout(timer);
+          finish(t.value);
+        }),
+        CapPush.addListener('registrationError', () => {
+          clearTimeout(timer);
+          finish(null);
+        }),
+      ]);
+
+      // Only now is it safe to ask for a token.
+      await CapPush.register();
+
+      const token = await tokenPromise;
+      if (token) lastKnownToken = token;
+
+      // Scoped to this exchange. The tap listener is separate and lives on.
+      void regHandle.remove();
+      void errHandle.remove();
+
+      if (!token) {
+        // Permission is real, the token is not. Worth knowing about: the
+        // player believes reminders are on and nothing will ever arrive.
+        trackAppError({
+          location: 'push_no_token',
+          message: 'Permission granted but no registration token was issued',
+        });
+        return 'granted';
+      }
 
       await edgeFunctions.registerDeviceToken({
         token,
@@ -76,7 +103,14 @@ const push: PushNotifications = {
       });
 
       return 'granted';
-    } catch {
+    } catch (error) {
+      // Report rather than swallow. This returned 'denied' on any throw,
+      // which is indistinguishable from the player actually declining — and
+      // it is why a registration failure looked like a choice.
+      trackAppError({
+        location: 'push_request_permission',
+        message: error instanceof Error ? error.message : String(error),
+      });
       return 'denied';
     }
   },
@@ -119,13 +153,11 @@ const push: PushNotifications = {
 /**
  * The token this device currently holds.
  *
- * Capacitor has no getter, so it is captured on the registration event and
- * cached. Returns null before the first successful registration.
+ * Capacitor exposes no getter, so it is captured during registration. This
+ * used to be a module-level addListener, which ran on import — before any
+ * permission existed — and raced the same way the registration flow did.
  */
 let lastKnownToken: string | null = null;
-void CapPush.addListener('registration', (t) => {
-  lastKnownToken = t.value;
-});
 
 async function currentToken(): Promise<string | null> {
   return lastKnownToken;
