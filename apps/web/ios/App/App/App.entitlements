@@ -11,6 +11,19 @@
 	  path as application/json. Adding the entitlement without the file just
 	  means links keep opening in the browser.
 	-->
+	<!--
+	  Push notifications. iOS refuses to issue a device token without this,
+	  and the failure is a `registrationError` with no explanation rather
+	  than anything that says "missing entitlement".
+
+	  'development' matches a build installed directly from Xcode, which
+	  registers against the APNs sandbox. Xcode rewrites this to 'production'
+	  automatically when archiving for TestFlight or the App Store, so it does
+	  not need changing by hand at release.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
+
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:play10q.com</string>
