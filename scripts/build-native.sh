@@ -45,6 +45,31 @@ restore() {
 }
 trap restore EXIT INT TERM
 
+# Finder-style duplicates ("Package 2.swift", "App 2") break the native build
+# in a way that is hard to read: Swift compiles both copies and reports
+# "Invalid redeclaration of 'isCapacitorApp'" rather than anything mentioning
+# a duplicate file. They appear from editor or sync accidents, are untracked,
+# and CI never sees them — so this only ever bites locally, which is exactly
+# when the error is most confusing.
+if [ -d "$WEB/ios" ] || [ -d "$WEB/android" ]; then
+  # Only where Swift and Gradle actually compile. The synced web assets under
+  # public/ and assets/ are wiped and recreated by cap sync on every build, so
+  # duplicates there are noise rather than a problem — and flagging them would
+  # make this guard cry wolf on every run.
+  # `|| true` because grep exits 1 when it filters everything out, and under
+  # `set -e` that fails the build in exactly the case where nothing is wrong.
+  DUPES="$(find "$WEB/ios" "$WEB/android" \( -name '* [0-9]' -o -name '* [0-9].*' \) 2>/dev/null \
+    | grep -vE '/(public|assets)/' | head -20 || true)"
+  if [ -n "$DUPES" ]; then
+    echo "Duplicate files in the native projects will break the build:" >&2
+    echo "$DUPES" | sed 's/^/  /' >&2
+    echo >&2
+    echo "They are untracked copies. Remove them with:" >&2
+    echo "  find $WEB/ios $WEB/android \\( -name '* [0-9]' -o -name '* [0-9].*' \\) -exec rm -rf {} +" >&2
+    exit 1
+  fi
+fi
+
 echo "Hiding server-only files..."
 for f in "${HIDE[@]}"; do
   if [ -e "$f" ]; then
