@@ -94,7 +94,7 @@ value. Three unrelated causes, one error string. The workflow now reports the
 token's length and whether it contains whitespace — never its value — so the
 next failure says which one it is.
 
-**Phase 7 — push notifications (schema and registration done).**
+**Phase 7 — push notifications (complete except device verification).**
 
 | Item | State |
 |---|---|
@@ -102,7 +102,14 @@ next failure says which one it is.
 | Per-type preferences | **done** — both stores require granular opt-out |
 | Delivery log | **done** — makes "did they get it?" answerable and gives retries something to deduplicate against |
 | Registration/refresh endpoint | **done** — `register-device-token`, deployed and verified |
-| APNs and FCM credentials | **needs Riley** — nothing can be sent without them |
+| APNs and FCM credentials | **done** — both verified against the real providers, not just present |
+| APNs/FCM senders and dispatcher | **done** — preferences respected, dead tokens revoked, deliveries deduplicated |
+| Client registration through the seam | **done** — web bundle verified free of the push plugin |
+| Permission priming | **done** — after a first completed quiz, not on launch |
+| Tap routing | **done** — server sends the route, client sanitises it |
+| Daily-drop cron | **done** — 11:32 UTC, and only if a quiz actually published |
+| Streak-at-risk cron | **done** — 21:00 UTC, skips streaks of zero |
+| Delivery to a real device | **not yet** — needs a build on Riley's phone |
 | The sender | not started — blocked on credentials |
 | Daily-drop and streak-at-risk triggers | not started |
 | Permission priming, tap routing | not started |
