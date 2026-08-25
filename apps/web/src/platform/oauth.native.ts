@@ -34,9 +34,29 @@ import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
  * in, that is the overwhelmingly common path and it must keep working.
  */
 
-/** Registered in Info.plist and AndroidManifest. */
+/**
+ * Where the provider sends the player back.
+ *
+ * A Universal Link rather than the custom scheme. Apple uses
+ * `response_mode=form_post`, so it POSTs the result to Supabase instead of
+ * redirecting the browser — and a custom scheme cannot reliably receive what
+ * comes next. An https URL can, and iOS routes it into the app through the
+ * Associated Domains entitlement without ever opening Safari.
+ *
+ * The custom scheme is still accepted below, because Google's flow does
+ * redirect normally and either may arrive.
+ */
 const CALLBACK_SCHEME = 'com.play10q.app';
-const REDIRECT_URL = `${CALLBACK_SCHEME}://auth/callback`;
+const REDIRECT_URL = 'https://play10q.com/auth/callback';
+
+/** Either form counts as our callback. */
+function isOurCallback(url: string): boolean {
+  return (
+    url.startsWith(CALLBACK_SCHEME) ||
+    url.startsWith('https://play10q.com/auth/callback') ||
+    url.startsWith('https://www.play10q.com/auth/callback')
+  );
+}
 
 /** A player who abandons the sheet should not leave a listener behind. */
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000;
@@ -68,11 +88,14 @@ async function completeInBrowser(authUrl: string): Promise<void> {
         AUTH_TIMEOUT_MS,
       );
 
+      // Capacitor surfaces both custom-scheme opens and Universal Links
+      // through appUrlOpen, so one listener covers Google and Apple.
+
       // Attach BEFORE opening the browser. addListener is async, and the
       // callback can arrive fast enough to be missed otherwise — the same
       // race that lost push tokens.
       void App.addListener('appUrlOpen', async ({ url }) => {
-        if (!url.startsWith(CALLBACK_SCHEME)) return;
+        if (!isOurCallback(url)) return;
 
         try {
           // Close the sheet first so the player sees the app, not a spinner
