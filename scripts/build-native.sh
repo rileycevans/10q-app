@@ -52,20 +52,29 @@ trap restore EXIT INT TERM
 # and CI never sees them — so this only ever bites locally, which is exactly
 # when the error is most confusing.
 if [ -d "$WEB/ios" ] || [ -d "$WEB/android" ]; then
-  # Only where Swift and Gradle actually compile. The synced web assets under
-  # public/ and assets/ are wiped and recreated by cap sync on every build, so
-  # duplicates there are noise rather than a problem — and flagging them would
-  # make this guard cry wolf on every run.
+  # Sources that feed a build, plus the native projects themselves.
+  #
+  # src/ and packages/ matter most: a `foo 2.ts` beside `foo.ts` is picked up
+  # by module resolution and the build silently uses the STALE copy. That is
+  # not hypothetical — an OAuth fix was built three times against a duplicate
+  # before anyone noticed, and a `capacitor.config 2.ts` was still carrying
+  # the contentInset value that put a black band under the notch.
+  #
+  # The SYNCED copies under ios/App/App/public and android/.../assets/public
+  # are wiped and recreated by cap sync every run, so they are excluded — they
+  # are symptoms of a duplicate in apps/web/public, which is itself checked.
   # `|| true` because grep exits 1 when it filters everything out, and under
   # `set -e` that fails the build in exactly the case where nothing is wrong.
-  DUPES="$(find "$WEB/ios" "$WEB/android" \( -name '* [0-9]' -o -name '* [0-9].*' \) 2>/dev/null \
-    | grep -vE '/(public|assets)/' | head -20 || true)"
+  DUPES="$(find "$WEB/ios" "$WEB/android" "$WEB/src" "$WEB/public" "$ROOT/packages" \
+      -not -path '*/node_modules/*' \
+      \( -name '* [0-9]' -o -name '* [0-9].*' -o -name '* [0-9][0-9]' -o -name '* [0-9][0-9].*' \) 2>/dev/null \
+    | grep -vE '/(ios|android)/.*/(public|assets)/' | head -20 || true)"
   if [ -n "$DUPES" ]; then
     echo "Duplicate files in the native projects will break the build:" >&2
     echo "$DUPES" | sed 's/^/  /' >&2
     echo >&2
     echo "They are untracked copies. Remove them with:" >&2
-    echo "  find $WEB/ios $WEB/android \\( -name '* [0-9]' -o -name '* [0-9].*' \\) -exec rm -rf {} +" >&2
+    echo "  find $WEB/ios $WEB/android $WEB/src $WEB/public $ROOT/packages -not -path '*/node_modules/*' \\( -name '* [0-9]*' \\) -exec rm -rf {} +" >&2
     exit 1
   fi
 fi
