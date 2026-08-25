@@ -2,11 +2,17 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["7PPPD37HA8.com.play10q.app"],
+        "appIDs": [
+          "7PPPD37HA8.com.play10q.app"
+        ],
         "components": [
           {
+            "/": "/auth/callback*",
+            "comment": "OAuth callback. Apple uses response_mode=form_post, which POSTs to Supabase rather than redirecting the browser \u2014 a custom scheme cannot receive that reliably. A Universal Link can, and iOS routes it straight into the app."
+          },
+          {
             "/": "/invite/*",
-            "comment": "Invite links are the growth loop — open them in the app when it is installed."
+            "comment": "Invite links are the growth loop \u2014 open them in the app when it is installed."
           },
           {
             "/": "/u/*",
