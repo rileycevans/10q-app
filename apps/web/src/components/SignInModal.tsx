@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { startOAuth, buildOAuthRedirect, type OAuthProvider } from '@/lib/auth/oauth';
+import { type OAuthProvider } from '@/lib/auth/oauth';
+import { oauth } from '@/platform';
+import { trackAppError } from '@/lib/analytics';
 import { useModalA11y } from './useModalA11y';
 
 interface SignInModalProps {
@@ -15,12 +17,22 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
 
   if (!isOpen) return null;
 
-  const redirectTo = buildOAuthRedirect();
-
   const handleOAuth = async (provider: OAuthProvider) => {
     setLoadingProvider(provider);
     try {
-      await startOAuth(provider, redirectTo);
+      // Through the seam. This called startOAuth directly, which is the web
+      // full-page redirect — inside a WebView that opens Safari and never
+      // comes back, because the callback has no page to return to. The
+      // native implementation opens the same URL in a system browser and
+      // completes the exchange from the custom-scheme callback.
+      await oauth.signIn(provider);
+    } catch (err) {
+      // Web navigates away mid-call so this rarely fires there; on native a
+      // failure is a real dead end and the player deserves to know.
+      trackAppError({
+        location: 'sign_in_modal_oauth',
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setLoadingProvider(null);
     }

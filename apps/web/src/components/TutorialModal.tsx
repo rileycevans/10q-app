@@ -24,8 +24,6 @@ import { validateHandle } from '@10q/contracts';
 import { updateHandle } from '@/domains/profile';
 import { OAuthButtons } from '@/components/SignInModal';
 import {
-  buildOAuthRedirect,
-  startOAuth,
   type OAuthProvider,
 } from '@/lib/auth/oauth';
 import {
@@ -34,6 +32,8 @@ import {
   setResumeAfterOAuth,
 } from '@/lib/tutorial';
 import { useModalA11y } from './useModalA11y';
+import { oauth } from '@/platform';
+import { trackAppError } from '@/lib/analytics';
 
 type Step = 'welcome' | 'signin' | 'handle' | 'done';
 
@@ -162,16 +162,25 @@ function SignInStep() {
   // Anchor the redirect to /, so post-OAuth the user lands on the home
   // page where tutorialOnMount can pick up the resume hint and open at
   // the handle step.
-  const redirectTo = buildOAuthRedirect();
-
   const handleOAuth = async (provider: OAuthProvider) => {
     setLoadingProvider(provider);
-    // Set the resume hint *before* awaiting OAuth — the redirect can fire
-    // synchronously from Supabase's helper, and if we set this after, the
-    // hint wouldn't survive.
+    // Set the resume hint *before* awaiting OAuth — on web the redirect can
+    // fire synchronously from Supabase's helper, and setting it afterwards
+    // would not survive the navigation.
     setResumeAfterOAuth('handle');
     try {
-      await startOAuth(provider, redirectTo);
+      // Through the seam: web redirects, native opens a system browser and
+      // completes from the custom-scheme callback.
+      await oauth.signIn(provider);
+    } catch (err) {
+      // Native does not navigate away, so a failure leaves the player here
+      // with a stale hint that would reopen the handle step for a sign-in
+      // that never happened. Web never reaches this line.
+      consumeResumeHint();
+      trackAppError({
+        location: 'tutorial_modal_oauth',
+        message: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setLoadingProvider(null);
     }
