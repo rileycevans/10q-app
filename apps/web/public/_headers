@@ -1,0 +1,13 @@
+# Cloudflare Workers static-asset headers.
+
+# The Apple App Site Association file has no extension, so Cloudflare serves
+# it with no content-type at all. iOS requires application/json and silently
+# ignores the file otherwise — Universal Links then never work, and the only
+# symptom is that links open Safari instead of the app. Nothing logs it.
+/.well-known/apple-app-site-association
+  Content-Type: application/json
+
+# Android's equivalent. It does carry a .json extension so this is belt and
+# braces, but the two should not drift.
+/.well-known/assetlinks.json
+  Content-Type: application/json
