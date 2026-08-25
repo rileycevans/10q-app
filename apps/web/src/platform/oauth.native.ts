@@ -37,17 +37,35 @@ import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
 /**
  * Where the provider sends the player back.
  *
- * A Universal Link rather than the custom scheme. Apple uses
- * `response_mode=form_post`, so it POSTs the result to Supabase instead of
- * redirecting the browser — and a custom scheme cannot reliably receive what
- * comes next. An https URL can, and iOS routes it into the app through the
- * Associated Domains entitlement without ever opening Safari.
+ * A CUSTOM SCHEME, not a Universal Link — and the reason is a rule that is
+ * easy to get backwards.
  *
- * The custom scheme is still accepted below, because Google's flow does
- * redirect normally and either may arrive.
+ * iOS only routes an https URL into the app when the navigation is USER
+ * INITIATED: someone taps a link. A URL that arrives as a 302 inside
+ * ASWebAuthenticationSession is not user initiated, so iOS lets the sheet
+ * follow it like any other redirect. The Associated Domains entitlement and
+ * a correctly served AASA make no difference — the link was never eligible.
+ *
+ * This was tried and it failed exactly that way: the sheet followed the
+ * redirect to play10q.com/auth/callback, the WEB callback page ran inside the
+ * sheet, exchanged the code against its own storage and routed to the home
+ * screen. The player was signed in — in the browser, not in the app — and
+ * dismissing the sheet threw that session away.
+ *
+ * ASWebAuthenticationSession intercepts custom schemes by design, whatever
+ * started the navigation, which is why Apple recommends one here.
+ *
+ * Apple's response_mode=form_post is not an obstacle: the POST goes to
+ * Supabase's /auth/v1/callback, and only then does Supabase redirect to
+ * redirect_to. That last hop is an ordinary redirect and carries the code
+ * to the scheme without trouble.
+ *
+ * The Universal Link stays registered in the AASA — it is what makes shared
+ * /invite, /u and /results links open in the app, which is a real feature.
+ * It is only wrong as an OAuth return path.
  */
 const CALLBACK_SCHEME = 'com.play10q.app';
-const REDIRECT_URL = 'https://play10q.com/auth/callback';
+const REDIRECT_URL = `${CALLBACK_SCHEME}://auth/callback`;
 
 /** Either form counts as our callback. */
 function isOurCallback(url: string): boolean {
@@ -121,8 +139,29 @@ async function completeInBrowser(authUrl: string): Promise<void> {
             return finish(new Error(action.message));
           }
 
-          // implicit_session or nothing: detectSessionInUrl is false on
-          // native, so check explicitly rather than assuming.
+          if (action.type === 'implicit_session') {
+            // detectSessionInUrl is false on native, so nothing consumes the
+            // fragment automatically. Without this the tokens are simply
+            // dropped and the player is told sign-in failed while holding a
+            // perfectly good session in the URL.
+            const hash = new URLSearchParams(
+              (url.split('#')[1] ?? '').replace(/^#/, ''),
+            );
+            const access_token = hash.get('access_token');
+            const refresh_token = hash.get('refresh_token');
+
+            if (access_token && refresh_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+              if (error) return finish(new Error(error.message));
+              return finish();
+            }
+          }
+
+          // Nothing recognisable in the URL. A session may still exist if the
+          // exchange happened elsewhere, so check before calling it a failure.
           const { data } = await supabase.auth.getSession();
           finish(data.session ? undefined : new Error('Sign-in did not complete'));
         } catch (err) {
