@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { type OAuthProvider } from '@/lib/auth/oauth';
 import { oauth } from '@/platform';
 import { trackAppError } from '@/lib/analytics';
@@ -13,6 +14,7 @@ interface SignInModalProps {
 
 export function SignInModal({ isOpen, onClose }: SignInModalProps) {
   const dialogRef = useModalA11y(isOpen, onClose);
+  const router = useRouter();
   const [loadingProvider, setLoadingProvider] = useState<OAuthProvider | null>(null);
 
   if (!isOpen) return null;
@@ -26,6 +28,14 @@ export function SignInModal({ isOpen, onClose }: SignInModalProps) {
       // native implementation opens the same URL in a system browser and
       // completes the exchange from the custom-scheme callback.
       await oauth.signIn(provider);
+
+      // Web never reaches this line — the page navigated away and the
+      // callback route lands the player on home. Native resolves right here,
+      // still on whatever screen opened the modal, so it makes the same
+      // trip explicitly. Close first: the push is a no-op when the modal was
+      // opened FROM home, and the modal must not linger over it.
+      onClose();
+      router.push('/');
     } catch (err) {
       // Web navigates away mid-call so this rarely fires there; on native a
       // failure is a real dead end and the player deserves to know.
