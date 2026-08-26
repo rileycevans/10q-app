@@ -65,6 +65,25 @@ import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
  * It is only wrong as an OAuth return path.
  */
 const CALLBACK_SCHEME = 'com.play10q.app';
+
+/**
+ * Bare — no query string, ever. The Supabase allow-list holds the custom
+ * scheme as an EXACT entry, and probing /auth/v1/verify shows what that
+ * means in practice:
+ *
+ *   com.play10q.app://auth/callback                      -> accepted
+ *   com.play10q.app://auth/callback?link_provider=apple  -> Site URL fallback
+ *
+ * The fallback sends the whole exchange to https://play10q.com in the
+ * browser sheet, where the web app helpfully resumes whatever session its
+ * storage holds — while the native app waits on a callback that is never
+ * coming. Web gets away with the query param because its allow-list entry
+ * is a wildcard; the scheme entry is not.
+ *
+ * Native never needed the param anyway: link_provider exists so the WEB
+ * callback page can recover an already-linked identity knowing nothing but
+ * its URL. Native still holds `provider` in scope and recovers directly.
+ */
 const REDIRECT_URL = `${CALLBACK_SCHEME}://auth/callback`;
 
 /** Either form counts as our callback. */
@@ -128,15 +147,27 @@ async function completeInBrowser(authUrl: string): Promise<void> {
             const { error } = await supabase.auth.exchangeCodeForSession(action.code);
             if (error) {
               // The code may already have been consumed; a session is what
-              // actually matters.
+              // actually matters — a non-anonymous one, or this reports the
+              // leftover anonymous session as the sign-in that just failed.
               const { data } = await supabase.auth.getSession();
-              if (!data.session) return finish(new Error(error.message));
+              if (!data.session || data.session.user.is_anonymous) {
+                return finish(new Error(error.message));
+              }
             }
             return finish();
           }
 
           if (action.type === 'error') {
             return finish(new Error(action.message));
+          }
+
+          if (action.type === 'recover_sign_in') {
+            // parseCallback only returns this when link_provider survives in
+            // the URL, which native no longer sends — but if it ever arrives,
+            // falling through would hit the session check below and report
+            // the still-anonymous session as a successful sign-in. Surface it
+            // as the already-linked error so signIn() runs its recovery.
+            return finish(new Error('Identity is already linked to another user'));
           }
 
           if (action.type === 'implicit_session') {
@@ -161,9 +192,14 @@ async function completeInBrowser(authUrl: string): Promise<void> {
           }
 
           // Nothing recognisable in the URL. A session may still exist if the
-          // exchange happened elsewhere, so check before calling it a failure.
+          // exchange happened elsewhere, so check before calling it a
+          // failure — but it must be a NON-ANONYMOUS session. Every desired
+          // end state of OAuth is a user with a real identity, and on native
+          // the anonymous session is still sitting in storage, so a bare
+          // "is there a session" check turns every failure into a success.
           const { data } = await supabase.auth.getSession();
-          finish(data.session ? undefined : new Error('Sign-in did not complete'));
+          const signedIn = data.session && !data.session.user.is_anonymous;
+          finish(signedIn ? undefined : new Error('Sign-in did not complete'));
         } catch (err) {
           finish(err instanceof Error ? err : new Error(String(err)));
         }
@@ -181,17 +217,10 @@ async function completeInBrowser(authUrl: string): Promise<void> {
 }
 
 /** Ask Supabase for the URL without navigating to it. */
-async function authUrlFor(
-  provider: OAuthProvider,
-  linkProvider?: OAuthProvider,
-): Promise<string> {
-  const redirectTo = linkProvider
-    ? `${REDIRECT_URL}?link_provider=${linkProvider}`
-    : REDIRECT_URL;
-
+async function authUrlFor(provider: OAuthProvider): Promise<string> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo, skipBrowserRedirect: true },
+    options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
   });
 
   if (error || !data?.url) {
@@ -211,7 +240,7 @@ const oauth: OAuth = {
 
       const { data, error } = await supabase.auth.linkIdentity({
         provider,
-        options: { redirectTo: `${REDIRECT_URL}?link_provider=${provider}`, skipBrowserRedirect: true },
+        options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
       });
 
       if (!error && data?.url) {
@@ -243,7 +272,7 @@ const oauth: OAuth = {
   async link(provider: OAuthProvider) {
     const { data, error } = await supabase.auth.linkIdentity({
       provider,
-      options: { redirectTo: `${REDIRECT_URL}?link_provider=${provider}`, skipBrowserRedirect: true },
+      options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
     });
 
     if (error || !data?.url) {
