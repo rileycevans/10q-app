@@ -90,7 +90,13 @@ export default function PrivacyPage() {
           <Link href="/settings" className="underline font-bold">
             Settings
           </Link>
-          , using the Delete Account button in the Danger Zone.
+          , using the Delete Account button in the Danger Zone. Step-by-step
+          instructions, including what to do if you can no longer sign in, are
+          on the{' '}
+          <Link href="/delete-account" className="underline font-bold">
+            account deletion page
+          </Link>
+          .
         </p>
         <p>
           Deleting your account permanently removes your handle, scores,
