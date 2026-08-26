@@ -37,17 +37,54 @@ import { trackAuthUpgradeStarted, trackSignIn } from '@/lib/analytics';
 /**
  * Where the provider sends the player back.
  *
- * A Universal Link rather than the custom scheme. Apple uses
- * `response_mode=form_post`, so it POSTs the result to Supabase instead of
- * redirecting the browser — and a custom scheme cannot reliably receive what
- * comes next. An https URL can, and iOS routes it into the app through the
- * Associated Domains entitlement without ever opening Safari.
+ * A CUSTOM SCHEME, not a Universal Link — and the reason is a rule that is
+ * easy to get backwards.
  *
- * The custom scheme is still accepted below, because Google's flow does
- * redirect normally and either may arrive.
+ * iOS only routes an https URL into the app when the navigation is USER
+ * INITIATED: someone taps a link. A URL that arrives as a 302 inside
+ * ASWebAuthenticationSession is not user initiated, so iOS lets the sheet
+ * follow it like any other redirect. The Associated Domains entitlement and
+ * a correctly served AASA make no difference — the link was never eligible.
+ *
+ * This was tried and it failed exactly that way: the sheet followed the
+ * redirect to play10q.com/auth/callback, the WEB callback page ran inside the
+ * sheet, exchanged the code against its own storage and routed to the home
+ * screen. The player was signed in — in the browser, not in the app — and
+ * dismissing the sheet threw that session away.
+ *
+ * ASWebAuthenticationSession intercepts custom schemes by design, whatever
+ * started the navigation, which is why Apple recommends one here.
+ *
+ * Apple's response_mode=form_post is not an obstacle: the POST goes to
+ * Supabase's /auth/v1/callback, and only then does Supabase redirect to
+ * redirect_to. That last hop is an ordinary redirect and carries the code
+ * to the scheme without trouble.
+ *
+ * The Universal Link stays registered in the AASA — it is what makes shared
+ * /invite, /u and /results links open in the app, which is a real feature.
+ * It is only wrong as an OAuth return path.
  */
 const CALLBACK_SCHEME = 'com.play10q.app';
-const REDIRECT_URL = 'https://play10q.com/auth/callback';
+
+/**
+ * Bare — no query string, ever. The Supabase allow-list holds the custom
+ * scheme as an EXACT entry, and probing /auth/v1/verify shows what that
+ * means in practice:
+ *
+ *   com.play10q.app://auth/callback                      -> accepted
+ *   com.play10q.app://auth/callback?link_provider=apple  -> Site URL fallback
+ *
+ * The fallback sends the whole exchange to https://play10q.com in the
+ * browser sheet, where the web app helpfully resumes whatever session its
+ * storage holds — while the native app waits on a callback that is never
+ * coming. Web gets away with the query param because its allow-list entry
+ * is a wildcard; the scheme entry is not.
+ *
+ * Native never needed the param anyway: link_provider exists so the WEB
+ * callback page can recover an already-linked identity knowing nothing but
+ * its URL. Native still holds `provider` in scope and recovers directly.
+ */
+const REDIRECT_URL = `${CALLBACK_SCHEME}://auth/callback`;
 
 /** Either form counts as our callback. */
 function isOurCallback(url: string): boolean {
@@ -110,9 +147,12 @@ async function completeInBrowser(authUrl: string): Promise<void> {
             const { error } = await supabase.auth.exchangeCodeForSession(action.code);
             if (error) {
               // The code may already have been consumed; a session is what
-              // actually matters.
+              // actually matters — a non-anonymous one, or this reports the
+              // leftover anonymous session as the sign-in that just failed.
               const { data } = await supabase.auth.getSession();
-              if (!data.session) return finish(new Error(error.message));
+              if (!data.session || data.session.user.is_anonymous) {
+                return finish(new Error(error.message));
+              }
             }
             return finish();
           }
@@ -121,10 +161,45 @@ async function completeInBrowser(authUrl: string): Promise<void> {
             return finish(new Error(action.message));
           }
 
-          // implicit_session or nothing: detectSessionInUrl is false on
-          // native, so check explicitly rather than assuming.
+          if (action.type === 'recover_sign_in') {
+            // parseCallback only returns this when link_provider survives in
+            // the URL, which native no longer sends — but if it ever arrives,
+            // falling through would hit the session check below and report
+            // the still-anonymous session as a successful sign-in. Surface it
+            // as the already-linked error so signIn() runs its recovery.
+            return finish(new Error('Identity is already linked to another user'));
+          }
+
+          if (action.type === 'implicit_session') {
+            // detectSessionInUrl is false on native, so nothing consumes the
+            // fragment automatically. Without this the tokens are simply
+            // dropped and the player is told sign-in failed while holding a
+            // perfectly good session in the URL.
+            const hash = new URLSearchParams(
+              (url.split('#')[1] ?? '').replace(/^#/, ''),
+            );
+            const access_token = hash.get('access_token');
+            const refresh_token = hash.get('refresh_token');
+
+            if (access_token && refresh_token) {
+              const { error } = await supabase.auth.setSession({
+                access_token,
+                refresh_token,
+              });
+              if (error) return finish(new Error(error.message));
+              return finish();
+            }
+          }
+
+          // Nothing recognisable in the URL. A session may still exist if the
+          // exchange happened elsewhere, so check before calling it a
+          // failure — but it must be a NON-ANONYMOUS session. Every desired
+          // end state of OAuth is a user with a real identity, and on native
+          // the anonymous session is still sitting in storage, so a bare
+          // "is there a session" check turns every failure into a success.
           const { data } = await supabase.auth.getSession();
-          finish(data.session ? undefined : new Error('Sign-in did not complete'));
+          const signedIn = data.session && !data.session.user.is_anonymous;
+          finish(signedIn ? undefined : new Error('Sign-in did not complete'));
         } catch (err) {
           finish(err instanceof Error ? err : new Error(String(err)));
         }
@@ -142,17 +217,10 @@ async function completeInBrowser(authUrl: string): Promise<void> {
 }
 
 /** Ask Supabase for the URL without navigating to it. */
-async function authUrlFor(
-  provider: OAuthProvider,
-  linkProvider?: OAuthProvider,
-): Promise<string> {
-  const redirectTo = linkProvider
-    ? `${REDIRECT_URL}?link_provider=${linkProvider}`
-    : REDIRECT_URL;
-
+async function authUrlFor(provider: OAuthProvider): Promise<string> {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,
-    options: { redirectTo, skipBrowserRedirect: true },
+    options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
   });
 
   if (error || !data?.url) {
@@ -161,18 +229,60 @@ async function authUrlFor(
   return data.url;
 }
 
+/**
+ * Does this anonymous account hold anything a link would preserve?
+ *
+ * Anonymous-first means EVERY sign-in starts from an anonymous session — and
+ * for a returning player (sign-out, reinstall, new phone) that session is
+ * minutes old and empty, while their identity already belongs to their real
+ * account. Attempting linkIdentity there is guaranteed to fail, and the
+ * recovery costs a second browser sheet: fail, sign out, sign in again. Two
+ * sheets for the most common path, protecting nothing.
+ *
+ * So: link only when there is something to lose. Three signals, all readable
+ * under RLS (attempts_read_own, league_members_read_member,
+ * players_read_public):
+ *
+ *   attempts        — any quiz ever started; carries scores and streaks
+ *   league_members  — social ties that would otherwise be orphaned
+ *   handle_last_changed_at — set only when the player picked a handle
+ *                     themselves, e.g. in the tutorial before first play
+ *
+ * Errors count as progress. A failed read must degrade to the old two-sheet
+ * flow, never to silently discarding a real account.
+ */
+async function anonymousProgressWorthKeeping(userId: string): Promise<boolean> {
+  try {
+    const [attempt, league, player] = await Promise.all([
+      supabase.from('attempts').select('id').eq('player_id', userId).limit(1),
+      supabase.from('league_members').select('league_id').eq('player_id', userId).limit(1),
+      supabase.from('players').select('handle_last_changed_at').eq('id', userId).maybeSingle(),
+    ]);
+
+    if (attempt.error || league.error || player.error) return true;
+
+    return Boolean(
+      attempt.data?.length ||
+      league.data?.length ||
+      player.data?.handle_last_changed_at,
+    );
+  } catch {
+    return true;
+  }
+}
+
 const oauth: OAuth = {
   async signIn(provider: OAuthProvider) {
     // Mirrors lib/auth/oauth.ts: an anonymous player is upgraded in place so
     // their history survives; anyone else signs in normally.
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user?.is_anonymous) {
+    if (user?.is_anonymous && (await anonymousProgressWorthKeeping(user.id))) {
       trackAuthUpgradeStarted({ provider });
 
       const { data, error } = await supabase.auth.linkIdentity({
         provider,
-        options: { redirectTo: `${REDIRECT_URL}?link_provider=${provider}`, skipBrowserRedirect: true },
+        options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
       });
 
       if (!error && data?.url) {
@@ -204,7 +314,7 @@ const oauth: OAuth = {
   async link(provider: OAuthProvider) {
     const { data, error } = await supabase.auth.linkIdentity({
       provider,
-      options: { redirectTo: `${REDIRECT_URL}?link_provider=${provider}`, skipBrowserRedirect: true },
+      options: { redirectTo: REDIRECT_URL, skipBrowserRedirect: true },
     });
 
     if (error || !data?.url) {
