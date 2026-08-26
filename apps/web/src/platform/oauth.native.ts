@@ -229,13 +229,55 @@ async function authUrlFor(provider: OAuthProvider): Promise<string> {
   return data.url;
 }
 
+/**
+ * Does this anonymous account hold anything a link would preserve?
+ *
+ * Anonymous-first means EVERY sign-in starts from an anonymous session — and
+ * for a returning player (sign-out, reinstall, new phone) that session is
+ * minutes old and empty, while their identity already belongs to their real
+ * account. Attempting linkIdentity there is guaranteed to fail, and the
+ * recovery costs a second browser sheet: fail, sign out, sign in again. Two
+ * sheets for the most common path, protecting nothing.
+ *
+ * So: link only when there is something to lose. Three signals, all readable
+ * under RLS (attempts_read_own, league_members_read_member,
+ * players_read_public):
+ *
+ *   attempts        — any quiz ever started; carries scores and streaks
+ *   league_members  — social ties that would otherwise be orphaned
+ *   handle_last_changed_at — set only when the player picked a handle
+ *                     themselves, e.g. in the tutorial before first play
+ *
+ * Errors count as progress. A failed read must degrade to the old two-sheet
+ * flow, never to silently discarding a real account.
+ */
+async function anonymousProgressWorthKeeping(userId: string): Promise<boolean> {
+  try {
+    const [attempt, league, player] = await Promise.all([
+      supabase.from('attempts').select('id').eq('player_id', userId).limit(1),
+      supabase.from('league_members').select('league_id').eq('player_id', userId).limit(1),
+      supabase.from('players').select('handle_last_changed_at').eq('id', userId).maybeSingle(),
+    ]);
+
+    if (attempt.error || league.error || player.error) return true;
+
+    return Boolean(
+      attempt.data?.length ||
+      league.data?.length ||
+      player.data?.handle_last_changed_at,
+    );
+  } catch {
+    return true;
+  }
+}
+
 const oauth: OAuth = {
   async signIn(provider: OAuthProvider) {
     // Mirrors lib/auth/oauth.ts: an anonymous player is upgraded in place so
     // their history survives; anyone else signs in normally.
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (user?.is_anonymous) {
+    if (user?.is_anonymous && (await anonymousProgressWorthKeeping(user.id))) {
       trackAuthUpgradeStarted({ provider });
 
       const { data, error } = await supabase.auth.linkIdentity({
