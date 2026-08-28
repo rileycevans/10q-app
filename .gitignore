@@ -94,3 +94,5 @@ keystore.properties
 google-services.json
 GoogleService-Info.plist
 apps/web/android/local.properties
+*.aab
+*.apk

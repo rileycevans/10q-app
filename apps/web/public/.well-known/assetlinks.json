@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.play10q.app",
+      "sha256_cert_fingerprints": [
+        "3B:FE:9A:91:C8:D8:A8:BC:B3:BB:67:B3:99:E7:8F:2C:2B:48:62:3E:24:57:9A:86:9D:AD:43:33:12:A9:27:F5"
+      ]
+    }
+  }
+]
