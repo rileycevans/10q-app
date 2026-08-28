@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  Export options for App Store Connect builds.
+
+  signingStyle=automatic matters more than it looks: the DISTRIBUTION
+  provisioning profile is fetched during export, not during archive. An
+  archive on a machine that has only development profiles is signed
+  "Apple Development" and carries aps-environment=development; exporting
+  with this file is what swaps in "Apple Distribution" and resolves the
+  entitlement to production. Verify after any signing change:
+
+    codesign -d --entitlements - --xml Payload/App.app | grep -A1 aps-environment
+
+  Use with -allowProvisioningUpdates so Xcode may create the profile:
+
+    xcodebuild -exportArchive -archivePath <archive> \
+      -exportOptionsPlist apps/web/ios/ExportOptions.plist \
+      -exportPath <out> -allowProvisioningUpdates
+-->
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>7PPPD37HA8</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>signingStyle</key>
+	<string>automatic</string>
+</dict>
+</plist>
