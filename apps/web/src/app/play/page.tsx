@@ -134,7 +134,7 @@ export default function PlayPage() {
     return (
       <ArcadeBackground>
         <div className="flex items-center justify-center min-h-screen px-4">
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-safe-4 right-4">
             <AuthButton />
           </div>
           <div className="bg-paper border-[4px] border-ink rounded-[24px] shadow-sticker p-8 w-full max-w-md text-center">
