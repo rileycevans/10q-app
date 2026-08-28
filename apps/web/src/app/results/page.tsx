@@ -355,7 +355,10 @@ function ResultsContent() {
     const emojis = r.questions.map(getEmoji);
     const row1 = emojis.slice(0, 5).join('');
     const row2 = emojis.slice(5, 10).join('');
-    return `${label} ${date} — ${score} pts\n\n${row1}\n${row2}\n\nplay10q.com`;
+    // /get, not the bare domain: it resolves to the right store for
+    // whoever taps it, and stays correctable after this text ships inside
+    // installed binaries.
+    return `${label} ${date} — ${score} pts\n\n${row1}\n${row2}\n\nPlay at ${publicUrl('/get')}`;
   }
 
   async function handleShare() {
@@ -368,7 +371,10 @@ function ResultsContent() {
     const shared = await share.share({
       title: '10Q',
       text,
-      url: publicUrl('/'),
+      // Matches the URL in the text. Some share targets use this field and
+      // ignore the text's link, so pointing them at different places sends
+      // half the recipients somewhere the other half never sees.
+      url: publicUrl('/get'),
     });
 
     if (shared) {
