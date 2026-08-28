@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { useGameStore, useGameState } from '@/components/GameProvider';
@@ -149,7 +150,27 @@ export default function PlayPage() {
                 <p className="font-display text-2xl mb-8 text-ink">{countdown}</p>
               </>
             )}
+            {/*
+              Before 11:30 UTC there is no quiz, and this used to be a dead
+              end: a countdown and a Go Home button. That is the screen an
+              App Store reviewer reaches by tapping the primary button, and
+              "nothing to do here" is how Guideline 4.2 rejections start.
+              The leaderboard and the previous day's results are live around
+              the clock, so offer them rather than sending people away.
+            */}
             <div className="flex flex-col gap-3">
+              <Link
+                href="/leaderboard"
+                className="flex h-14 w-full items-center justify-center bg-green border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-green focus-visible:outline-offset-2"
+              >
+                LEADERBOARD
+              </Link>
+              <Link
+                href="/results"
+                className="flex h-14 w-full items-center justify-center bg-cyanA border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)] hover:-translate-x-[1px] hover:-translate-y-[1px] focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-cyanA focus-visible:outline-offset-2"
+              >
+                LAST RESULTS
+              </Link>
               <button
                 onClick={() => router.push('/')}
                 className="h-14 w-full bg-paper border-[4px] border-ink rounded-[18px] shadow-sticker-sm font-bold text-lg text-ink transition-transform duration-[120ms] ease-out active:translate-x-[2px] active:translate-y-[2px] active:shadow-[4px_4px_0_var(--ink)]"
