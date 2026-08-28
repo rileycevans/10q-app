@@ -1,5 +1,20 @@
 apply plugin: 'com.android.application'
 
+// Release signing. Values live in keystore.properties, which is gitignored
+// and never leaves this machine — a keystore in the repo would let anyone
+// ship a build Play accepts as genuinely ours, and Play permanently binds an
+// app to its first signing key, so it cannot be rotated afterwards.
+//
+// Absent that file (CI, a fresh clone, any contributor), the release build
+// stays unsigned rather than failing, so tests and debug builds keep working
+// without the secret.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasReleaseSigning = keystorePropertiesFile.exists()
+if (hasReleaseSigning) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.play10q.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,8 +31,21 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
