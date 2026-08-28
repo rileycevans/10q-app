@@ -219,7 +219,7 @@ export default function SettingsPage() {
   return (
     <ArcadeBackground>
       <div className="flex flex-col items-center min-h-screen px-4 py-8">
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-safe-4 right-4">
           <AuthButton />
         </div>
 

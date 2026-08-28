@@ -85,6 +85,17 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/*
+ * Absolutely-positioned chrome (the floating Sign In button) anchors to the
+ * VIEWPORT, so `top-4` puts it under the status bar on a notched iPhone —
+ * ArcadeBackground's pt-safe-only insets its content, but an absolute child
+ * escapes that box. Verified on an iPhone 17 Pro Max simulator: the button
+ * overlapped the clock and battery on every screen that used it.
+ */
+.top-safe-4 {
+  top: calc(env(safe-area-inset-top) + 1rem);
+}
+
 .pt-safe-only {
   padding-top: env(safe-area-inset-top);
 }
