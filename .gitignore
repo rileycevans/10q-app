@@ -81,3 +81,15 @@ apps/web/android/.idea/
 # repo. Capacitor's Gradle build picks it up from apps/web/android/app/.
 google-services.json
 GoogleService-Info.plist
+
+# Signing material — never commit. A leaked keystore or key lets someone
+# ship a build that Android or iOS will accept as genuinely yours, and a
+# keystore cannot be rotated: Play permanently binds an app to its key.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+keystore.properties
+google-services.json
+GoogleService-Info.plist
