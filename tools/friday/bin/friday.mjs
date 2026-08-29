@@ -2,44 +2,60 @@
 /**
  * friday — entry point.
  *
- * Dispatch only. Every command lives in lib/commands/ and returns an exit code;
- * nothing here knows what any of them do.
+ * Friday has two surfaces on purpose:
+ *
+ *   WORKFLOWS   what Riley uses. Task-shaped, few, shown in `friday help`.
+ *   PRIMITIVES  the engine. Namespaced and precise, for agents and for the
+ *               workflows to orchestrate. Listed by `friday capabilities`.
+ *
+ * Neither is the "real" Friday. The workflows exist so a person never has to
+ * choose between `system doctor` and `backend drift`; the primitives exist so
+ * an agent never has to guess which of five things a workflow actually did.
+ *
+ * Dispatch is data-driven: capabilities.json says what exists, handlers.mjs
+ * says what runs, and the two are cross-checked so they cannot drift apart.
  */
 import process from 'node:process';
-import { ui } from '../lib/ui.mjs';
+import { ui, paint } from '../lib/ui.mjs';
+import { resolve, get } from '../lib/capabilities.mjs';
+import { HANDLERS } from '../lib/handlers.mjs';
 import { help } from '../lib/commands/help.mjs';
-import { check } from '../lib/commands/check.mjs';
 import { notYet } from '../lib/commands/not-yet.mjs';
 
-// Commands that exist. Anything listed as `planned` prints what it WILL do and
-// exits non-zero, so an unbuilt command can never be mistaken for a passing one.
-const COMMANDS = {
-  check: { run: check, blurb: 'Is everything OK? Checks your machine and your code.' },
-  fix: { planned: true, blurb: 'Format and auto-fix what can be fixed.' },
-  preview: { planned: true, blurb: 'Run the app locally and open it.' },
-  ship: { planned: true, blurb: 'Ship to staging, or to production behind the gate.' },
-  undo: { planned: true, blurb: 'Show how to undo the last production ship.' },
-  help: { run: help, blurb: 'Show this.' },
-};
-
 async function main(argv) {
-  const [name, ...rest] = argv;
+  if (!argv.length || argv[0] === 'help' || argv[0] === '--help' || argv[0] === '-h') {
+    return help(argv.slice(1));
+  }
 
-  if (!name || name === '--help' || name === '-h') return help([], COMMANDS);
-  if (name === '--version' || name === '-v') {
-    ui.plain('friday 0.1.0 (preview)');
+  if (argv[0] === '--version' || argv[0] === '-v') {
+    const { freshness } = await import('../lib/freshness.mjs');
+    ui.plain(`friday 0.2.0 (preview) · source fingerprint ${freshness().fingerprint}`);
     return 0;
   }
 
-  const cmd = COMMANDS[name];
-  if (!cmd) {
-    ui.fail(`There is no \`friday ${name}\` command.`);
-    help([], COMMANDS);
+  const { capability, rest, attempted } = resolve(argv);
+
+  if (!capability) {
+    ui.blank();
+    ui.fail(`\`friday ${attempted}\` is not something Friday can do.`);
+    ui.blank();
+    ui.plain('  Riley\'s commands:  ' + paint.blue('friday help'));
+    ui.plain('  Everything else:   ' + paint.blue('friday capabilities'));
+    ui.blank();
     return 1;
   }
 
-  if (cmd.planned) return notYet(name, cmd.blurb);
-  return cmd.run(rest, COMMANDS);
+  if (capability.status !== 'implemented') return notYet(capability);
+
+  const handler = HANDLERS[capability.path];
+  if (!handler) {
+    // capabilities.json and handlers.mjs disagree. Friday's bug, not the user's.
+    ui.fail(`${capability.path} is marked implemented but has no handler.`);
+    ui.detail('This is a bug in Friday. Run `friday capabilities` for the full report.');
+    return 70;
+  }
+
+  return handler(rest);
 }
 
 main(process.argv.slice(2))

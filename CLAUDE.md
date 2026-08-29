@@ -96,26 +96,79 @@ Any doc that says Vercel is wrong.
 
 ## friday
 
-`friday` is the repo-local dev CLI. It is aimed at an operator who should not
-have to know how the pipeline is wired, so it trades composability for a small
-number of task-shaped verbs.
+**The law.** These are absolute; the workflow behind them lives in the skills.
+
+1. `friday` is 10Q's authoritative development and operations CLI.
+2. Prefer friday over the underlying tool whenever friday owns the operation.
+3. **Never bypass a friday safety gate** with a direct Supabase, GitHub, Cloudflare,
+   Xcode or Gradle command. A refusal is an unmet invariant, not an obstacle.
+4. Run `friday check` when the environment looks broken, rather than improvising a fix.
+5. friday updates itself when its source changes. There is no manual rebuild.
+6. Complex workflows are documented in [.claude/skills/](.claude/skills/).
+   **Skills explain intent and sequencing; friday owns the invariants.**
+
+`friday` is the repo-local dev CLI, and it has **two surfaces on purpose**.
 
 ```bash
 ./tools/friday/install     # once per machine — symlinks `friday` onto your PATH
-friday check               # machine + secrets + config + repo + code
-friday check --quick       # skip lint/types/tests
 ```
 
-**There is no build step and no install step for updates.** friday is plain Node
-ESM with zero dependencies, so the source you pull is the program that runs;
-`git pull` is the entire update mechanism. If it ever grows a dependency, the
-checksum-and-rebuild logic belongs in `tools/friday/friday`.
+**Workflows** are what Riley uses. Task-shaped, few, and all that `friday help`
+shows:
 
-`fix`, `preview`, `ship` and `undo` are **not built**. They print what they will
-do and exit non-zero — they never pretend to have worked. What exists and what
-comes next is in [docs/friday/PLAN.md](docs/friday/PLAN.md).
+```
+friday check · fix · test · ship staging · ship production · release · undo
+```
 
-Two rules friday is built around, both worth knowing before extending it:
+**Primitives** are the engine underneath, namespaced so the surface stays
+legible as it grows. They are for agents and for the workflows to orchestrate:
+
+```
+friday system doctor · quality lint · quality typecheck · quality unit
+friday secrets list  · backend drift · release ios submit · docs check   …
+```
+
+Neither is the "real" Friday. Workflows exist so a person never has to choose
+between `system doctor` and `backend drift`; primitives exist so an agent never
+has to guess which of five things a workflow actually did.
+
+### Designed vs implemented
+
+`tools/friday/capabilities.json` is the **single source of truth** for what
+Friday is designed to do and what is built. Most of it is designed and not yet
+built — that is deliberate, and the registry says which is which:
+
+```bash
+friday capabilities            # the whole map, ✓ built / ○ designed
+friday capabilities --json     # same, machine-readable
+```
+
+A planned capability prints what it will do and exits non-zero. It never
+pretends to have worked.
+
+> **If you need a capability that is planned but not built, implementing it in
+> Friday is the next development task.** Do not route around Friday with an ad
+> hoc shell command — the invariants it enforces are the reason it exists.
+
+The registry is cross-checked against the handler table at runtime, so
+capabilities.json cannot quietly drift from what actually runs. `friday
+capabilities` reports either kind of mismatch as a bug in Friday.
+
+### Your edits to Friday always take effect
+
+**Friday has no build step and no cache.** It is plain Node ESM with zero
+dependencies, so `friday` execs the source directly: the file you just edited is
+the code that just ran. There is no state in which a stale Friday can run.
+
+That is a stronger guarantee than checksum-and-rebuild, which can still serve a
+stale binary when a build fails — but it holds only while Friday stays
+dependency-free. `friday system doctor` states the mode, prints a source
+fingerprint, and **fails loudly** if anything appears that would break it (a
+`node_modules`, a build output, a dependency in `package.json`). If Friday ever
+does need a build, `tools/friday/friday` is where the rebuild goes, and the
+contract must not change.
+
+Two more rules worth knowing before extending it:
 
 1. **Checking a secret must never decrypt it.** `keychain.exists()` deliberately
    omits `-w` so macOS raises no permission dialog. A health check that prompts
@@ -124,6 +177,8 @@ Two rules friday is built around, both worth knowing before extending it:
    no production database password. Reads, checks and native builds are local;
    anything with public impact is dispatched to CI, where the credentials
    already live and every run leaves an audit trail.
+
+What exists and what comes next: [docs/friday/PLAN.md](docs/friday/PLAN.md).
 
 ## Commands
 
@@ -143,13 +198,28 @@ CI runs lint → typecheck → test → build → e2e, then deploys to Cloudflar
 
 ## Working agreements
 
-Repository skills live in [.agent/skills/](.agent/skills/) and encode the rules that
-apply to this codebase — read the relevant one before working in its area:
+Skills live in two places while the friday migration is in progress.
+
+**[.claude/skills/](.claude/skills/)** — the friday-centred skills. These auto-load, and
+they are the ones to read before any development, backend or release operation:
+
+| Skill | Applies to |
+|---|---|
+| [friday](.claude/skills/friday/SKILL.md) | **Read first.** What friday owns, the command surface, refusals |
+| [development](.claude/skills/development/SKILL.md) | The daily loop; which gate a change needs |
+| [backend](.claude/skills/backend/SKILL.md) | Supabase state, drift, staging, promotion |
+| [release](.claude/skills/release/SKILL.md) | **Orchestrator.** Load before any platform lane |
+| [release-web](.claude/skills/release-web/SKILL.md) | Cloudflare / play10q.com lane |
+| [release-ios](.claude/skills/release-ios/SKILL.md) | App Store / TestFlight lane |
+| [release-android](.claude/skills/release-android/SKILL.md) | Google Play lane |
+| [friday-development](.claude/skills/friday-development/SKILL.md) | Changing friday itself |
+
+**[.agent/skills/](.agent/skills/)** — the domain rules, unchanged. Read the relevant one
+before working in its area:
 
 | Skill | Applies to |
 |---|---|
 | [cross-platform-migration](.agent/skills/cross-platform-migration/SKILL.md) | **Temporary.** Web/iOS/Android migration control |
-| [release](.agent/skills/release/SKILL.md) | Shipping to web, App Store, Play Store |
 | [git-workflow-and-prs](.agent/skills/git-workflow-and-prs/SKILL.md) | Branches, commits, pull requests |
 | [contracts-and-schema-first](.agent/skills/contracts-and-schema-first/SKILL.md) | New features, schema changes, domain events |
 | [trust-boundary-and-security](.agent/skills/trust-boundary-and-security/SKILL.md) | Data access, Edge Functions, RLS |
