@@ -86,11 +86,12 @@ tools/friday/
     ui.mjs            everything friday prints
     exec.mjs          running other programs
     repo.mjs          where we are, what git thinks
-    config.mjs        loads friday.config.mjs and the refs file
+    project.mjs       the few facts about THIS repo that Friday needs
+    toolchain.mjs     what Friday needs installed on the machine
+    config.mjs        reads the refs file
     keychain.mjs      macOS Keychain
     secrets.mjs       the secret registry
     commands/         one file per implemented capability
-friday.config.mjs   configuration, at the repo root
 supabase/refs.json  which Supabase project is which
 ```
 
@@ -110,13 +111,20 @@ fails loudly if a `node_modules`, a build output, or a dependency in
 goes in `tools/friday/friday` — see the comment there — and the contract must
 not change.
 
-**Config is `.mjs` and the registry is `.json`, not `.yml`.** Parsing YAML
-needs a dependency, and a dependency needs installing — which is exactly what
-would reintroduce the possibility of running a stale Friday. Zero dependencies
-is what makes `git pull` the entire update mechanism, so it is worth the
-slightly worse file format. `friday.config.mjs` gets comments for free because
-Node reads a JS module natively; `capabilities.json` and `supabase/refs.json`
-stay JSON so CI and skills can read them too.
+**There is no config file, and there will never be a `friday.yml`.** Parsing
+YAML needs a dependency, a dependency needs installing, and an install step is
+exactly what would reintroduce the possibility of running a stale Friday. Zero
+dependencies is what makes `git pull` the entire update mechanism.
+
+Nor is there a JSON config file yet. 10Q has almost no repo configuration — a
+file holding `{"name": "10Q"}` is ceremony, not configuration — so the handful
+of facts live in `lib/project.mjs`, which documents the rule for when to promote
+them to `tools/friday/config.json`: a real cluster of declarative, non-secret,
+stable facts (Cloudflare project, Apple bundle id, Xcode scheme, Android
+application id, workflow names), and never credentials or release state.
+
+Data that CI and the skills also read stays JSON: `capabilities.json` and
+`supabase/refs.json`.
 
 **Checking a secret never decrypts it.** `keychain.exists()` runs
 `find-generic-password` *without* `-w`, so macOS does not raise a permission

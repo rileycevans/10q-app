@@ -17,7 +17,10 @@
 import { ui, paint } from '../ui.mjs';
 import { run, runLive, has } from '../exec.mjs';
 import { ROOT, gitState, readText } from '../repo.mjs';
-import { loadConfig, loadRefs } from '../config.mjs';
+import { loadRefs } from '../config.mjs';
+import { PROJECT } from '../project.mjs';
+import { TOOLS } from '../toolchain.mjs';
+import { SCRIPTS, FAST_CHECKS } from './quality.mjs';
 import { REGISTRY, DELEGATED, resolve, howToSet } from '../secrets.mjs';
 
 // Lower number = more upstream = offered first.
@@ -31,30 +34,22 @@ export async function check(args = []) {
   ui.title(`friday check`);
   ui.plain(paint.grey(`  ${ROOT}`));
 
-  const { ok: configOk, config, reason } = await loadConfig();
-  if (!configOk) {
-    ui.section('project');
-    ui.fail(reason);
-    ui.nextAction('Restore friday.config.mjs — friday cannot run without it.');
-    return 1;
-  }
-
-  await checkMachine(config, note);
+  await checkMachine(note);
   await checkSecrets(note);
-  checkProject(config, note);
+  checkProject(note);
   await checkRepo(note);
 
   if (quick) {
     ui.section('code');
     ui.info('skipped (--quick)');
   } else {
-    await checkCode(config, note);
+    await checkCode(note);
   }
 
   return summarise(findings);
 }
 
-async function checkMachine(config, note) {
+async function checkMachine(note) {
   ui.section('machine');
 
   // Node's version is pinned by .nvmrc; a mismatch is the cause of a whole
@@ -71,7 +66,7 @@ async function checkMachine(config, note) {
     ui.ok(`Node ${running}`);
   }
 
-  for (const tool of config.tools) {
+  for (const tool of TOOLS) {
     if (tool.bin === 'node') continue; // already reported, with more detail
     if (await has(tool.bin)) {
       ui.ok(tool.label);
@@ -131,10 +126,10 @@ async function checkSecrets(note) {
   }
 }
 
-function checkProject(config, note) {
+function checkProject(note) {
   ui.section('project');
 
-  const refs = loadRefs(config);
+  const refs = loadRefs();
 
   if (refs.missing) {
     ui.fail(`${refs.rel} — missing`);
@@ -196,22 +191,25 @@ async function checkRepo(note) {
   }
 }
 
-async function checkCode(config, note) {
+async function checkCode(note) {
   ui.section('code');
   ui.info('running lint, types and tests — this takes a minute');
 
-  for (const c of config.codeChecks) {
-    const [cmd, ...rest] = c.argv;
+  // Same definitions `friday quality *` uses — one source of truth per check.
+  for (const path of FAST_CHECKS) {
+    const spec = SCRIPTS[path];
+    const [cmd, ...rest] = spec.argv;
     const r = await run(cmd, rest, { cwd: ROOT });
     if (r.ok) {
-      ui.ok(c.label);
+      ui.ok(spec.label);
     } else {
-      ui.fail(`${c.label} — failed`);
+      ui.fail(`${spec.label} — failed`);
       note({
         level: 'fail',
         priority: P.CODE,
-        headline: `${c.label} is failing. Run it to see why`,
-        command: c.argv.join(' '),
+        // Point at the primitive: it shows the real output, not a summary line.
+        headline: `${spec.label} is failing. Run it to see why`,
+        command: `friday ${path.replace('.', ' ')}`,
       });
     }
   }

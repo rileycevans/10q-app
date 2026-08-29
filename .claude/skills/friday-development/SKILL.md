@@ -49,14 +49,44 @@ tools/friday/
     capabilities.mjs   reads the registry, resolves argv, checks for drift
     handlers.mjs       WHAT RUNS — dotted capability path to implementation
     freshness.mjs      proves the source on disk is what executed
+    project.mjs        the few facts about THIS repo that Friday needs
+    toolchain.mjs      what Friday needs installed on the machine
     ui.mjs · exec.mjs · repo.mjs · config.mjs · keychain.mjs · secrets.mjs
     commands/          one file per implemented capability
-friday.config.mjs      repo-root configuration
 supabase/refs.json     which Supabase project is which
 ```
 
-Configuration is a `.mjs` module rather than YAML, and the registry is JSON, for one
-reason: **a YAML parser is a dependency**, and a dependency is an install step. See below.
+## There is no config file, and no `friday.yml`
+
+Sonnet's Friday reads a `friday.yml` because it genuinely needs configuring: workspace
+and scheme names, test destinations, build configurations, DerivedData paths. That is a
+real cluster of repo facts.
+
+10Q has almost none of it. Two rules follow, and both are deliberate divergences from
+Sonnet rather than oversights:
+
+**Never YAML.** A YAML parser is a dependency, a dependency is an install step, and an
+install step is what would reintroduce the possibility of running a stale Friday.
+Declarative data is JSON, parsed natively.
+
+**No general config file yet.** A file holding `{"name": "10Q"}` is ceremony, not
+configuration. The few repo facts live in `lib/project.mjs`; Friday's own requirements
+(which tools, which checks) are not repo configuration at all and live in
+`lib/toolchain.mjs` and `lib/commands/quality.mjs`.
+
+Introduce `tools/friday/config.json` only when the release work produces a genuine
+cluster — Cloudflare project, Apple bundle id, Xcode project and scheme, Android
+application id, GitHub workflow names, release branch and tag conventions — under this
+rule:
+
+> `config.json` holds declarative, non-secret, relatively stable facts about how Friday
+> operates this repository. It holds neither credentials nor mutable deployment or
+> release state.
+
+**Guard that rule.** Friday keeps five kinds of data apart: `capabilities.json` (what
+Friday can do), `supabase/refs.json` (which project is which), repo facts, release
+state, and credentials in the Keychain or CI. A general config file is exactly where
+those five quietly become one junk drawer.
 
 ## Zero dependencies, and the guarantee it buys
 

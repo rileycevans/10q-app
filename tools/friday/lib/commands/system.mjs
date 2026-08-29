@@ -9,17 +9,11 @@
 import { ui, paint } from '../ui.mjs';
 import { has } from '../exec.mjs';
 import { ROOT, readText } from '../repo.mjs';
-import { loadConfig } from '../config.mjs';
+import { TOOLS } from '../toolchain.mjs';
 import { REGISTRY, DELEGATED, resolve } from '../secrets.mjs';
 import { freshness, freshnessStatement } from '../freshness.mjs';
 
 export async function systemDoctor() {
-  const { ok, config, reason } = await loadConfig();
-  if (!ok) {
-    ui.fail(reason);
-    return 1;
-  }
-
   ui.title('friday system doctor');
 
   // Friday's own integrity comes first. If an agent cannot trust that its edits
@@ -44,7 +38,7 @@ export async function systemDoctor() {
   } else {
     ui.ok(`Node ${running}`);
   }
-  for (const t of config.tools) {
+  for (const t of TOOLS) {
     if (t.bin === 'node') continue;
     (await has(t.bin)) ? ui.ok(t.label) : ui.fail(`${t.label} — missing (${t.why}) · ${t.install}`);
   }

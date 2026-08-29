@@ -168,7 +168,21 @@ fingerprint, and **fails loudly** if anything appears that would break it (a
 does need a build, `tools/friday/friday` is where the rebuild goes, and the
 contract must not change.
 
-Two more rules worth knowing before extending it:
+### No config file, and never a `friday.yml`
+
+A YAML parser is a dependency, a dependency is an install step, and an install
+step is what would reintroduce the possibility of running a stale Friday.
+Declarative data is JSON, parsed natively.
+
+There is no JSON config file yet either — a file holding `{"name": "10Q"}` is
+ceremony, not configuration. The few repo facts live in
+`tools/friday/lib/project.mjs`, which documents when to promote them to
+`tools/friday/config.json`: only once the release work produces a real cluster
+(Cloudflare project, Apple bundle id, Xcode scheme, Android application id,
+workflow names), and under one rule — **declarative, non-secret, stable facts
+about how Friday operates this repo; never credentials, never release state.**
+
+Three more rules worth knowing before extending it:
 
 1. **Checking a secret must never decrypt it.** `keychain.exists()` deliberately
    omits `-w` so macOS raises no permission dialog. A health check that prompts

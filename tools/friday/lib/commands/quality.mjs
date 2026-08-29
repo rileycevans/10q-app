@@ -9,11 +9,20 @@ import { ui } from '../ui.mjs';
 import { runLive } from '../exec.mjs';
 import { ROOT } from '../repo.mjs';
 
-const SCRIPTS = {
+/**
+ * The single definition of what each code check IS. `friday check` runs these
+ * too, so there is exactly one place that knows what "lint" means here — the
+ * forked-constants problem CLAUDE.md flags about packages/contracts is not one
+ * to reproduce inside Friday.
+ */
+export const SCRIPTS = {
   'quality.lint': { label: 'Lint', argv: ['npm', 'run', 'lint'] },
   'quality.typecheck': { label: 'Types', argv: ['npm', 'run', 'typecheck'] },
   'quality.unit': { label: 'Unit tests', argv: ['npm', 'test'] },
 };
+
+/** The fast subset `friday check` runs. Ordered cheapest-first. */
+export const FAST_CHECKS = ['quality.lint', 'quality.typecheck', 'quality.unit'];
 
 export function qualityRunner(path) {
   return async function run() {
