@@ -1,0 +1,31 @@
+{
+  "_comment": [
+    "Which Supabase project is which. Committed on purpose: a project ref is not",
+    "a secret (it is in the URL of every API call the app makes), but knowing",
+    "which ref is production IS load-bearing, and until now that knowledge lived",
+    "only in GitHub Actions secrets where nothing local could reach it.",
+    "",
+    "friday refuses to talk to any database until both refs below are filled in.",
+    "A local tool that cannot tell staging from production is more dangerous",
+    "than no tool at all.",
+    "",
+    "Find each ref at: https://supabase.com/dashboard  ->  project  ->",
+    "Project Settings -> General -> Reference ID."
+  ],
+
+  "environments": {
+    "staging": {
+      "ref": null,
+      "displayName": "Staging",
+      "isProduction": false,
+      "githubSecret": "SUPABASE_STAGING_REF"
+    },
+    "production": {
+      "ref": null,
+      "displayName": "Production",
+      "isProduction": true,
+      "githubSecret": "SUPABASE_PROD_REF",
+      "_hint": "A ref appears in the repo already: supabase/migrations/20260823090000_notification_crons.sql points its cron jobs at zcvwamziybpslpavjljw.supabase.co, and scripts/apply-migration.ts names the same project. That is almost certainly production, but friday will not assume it. Confirm in the dashboard before filling this in."
+    }
+  }
+}

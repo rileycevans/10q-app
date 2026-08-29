@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+#
+# friday — the wrapper.
+#
+# This is the file that gets symlinked onto your PATH. It does three things and
+# then gets out of the way:
+#
+#   1. finds the repo root, no matter where you invoked it from
+#   2. checks Node is new enough to run the CLI
+#   3. execs the CLI
+#
+# WHY THERE IS NO BUILD STEP
+#
+# Sonnet's Friday is Swift, so its wrapper checksums the sources and runs
+# `swift build` when they change. Friday here is plain Node ESM with zero
+# dependencies, so there is nothing to compile and nothing to install: the
+# source you pull IS the program that runs. Editing lib/ and running `friday`
+# again is the whole update story.
+#
+# If Friday ever grows a dependency or a bundler, THIS is where the checksum
+# and rebuild logic goes — compare a hash of lib/**/*.mjs against a cached one,
+# rebuild only on change, and write the checksum last so a failed build never
+# poisons the cache.
+set -euo pipefail
+
+# Resolve this script through any symlinks to find where it really lives.
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ "$src" != /* ]] && src="$dir/$src"
+done
+here="$(cd -P "$(dirname "$src")" && pwd)"
+root="$(cd -P "$here/../.." && pwd)"
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "friday: Node is not installed, or not on your PATH." >&2
+  echo "        Install it with:  brew install node" >&2
+  exit 1
+fi
+
+major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+if [ "$major" -lt 22 ]; then
+  echo "friday: needs Node 22 or newer; you have $(node -v)." >&2
+  echo "        This repo pins 22 in .nvmrc. If you use nvm:  nvm use" >&2
+  exit 1
+fi
+
+FRIDAY_REPO_ROOT="$root" exec node "$here/bin/friday.mjs" "$@"

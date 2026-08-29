@@ -50,9 +50,10 @@ apps/web/              Next.js 16 App Router · React 19 · Tailwind 4 · framer
   src/lib/api/         Edge Function client — THE REAL API CONTRACT
 packages/contracts/    scoring · handles · constants shared with the web app
 supabase/
-  functions/           22 Edge Functions — all trusted business logic
+  functions/           31 dirs on disk — 27 are 10Q's, 4 belong to transfers
   migrations/          schema, RLS, triggers
   tests/               ~85 tests that DO NOT RUN — see below
+tools/friday/          the `friday` dev CLI — see below
 scripts/               one-off tooling + release machinery
 docs/cross-platform/   the multi-platform program
 ```
@@ -92,6 +93,37 @@ Any doc that says Vercel is wrong.
   production credentials as defaults. Do not trust it as a safety net.
 - **`packages/contracts/src/scoring.ts` has zero runtime importers.** Only its own test
   imports it. The Edge Functions run the duplicate.
+
+## friday
+
+`friday` is the repo-local dev CLI. It is aimed at an operator who should not
+have to know how the pipeline is wired, so it trades composability for a small
+number of task-shaped verbs.
+
+```bash
+./tools/friday/install     # once per machine — symlinks `friday` onto your PATH
+friday check               # machine + secrets + config + repo + code
+friday check --quick       # skip lint/types/tests
+```
+
+**There is no build step and no install step for updates.** friday is plain Node
+ESM with zero dependencies, so the source you pull is the program that runs;
+`git pull` is the entire update mechanism. If it ever grows a dependency, the
+checksum-and-rebuild logic belongs in `tools/friday/friday`.
+
+`fix`, `preview`, `ship` and `undo` are **not built**. They print what they will
+do and exit non-zero — they never pretend to have worked. What exists and what
+comes next is in [docs/friday/PLAN.md](docs/friday/PLAN.md).
+
+Two rules friday is built around, both worth knowing before extending it:
+
+1. **Checking a secret must never decrypt it.** `keychain.exists()` deliberately
+   omits `-w` so macOS raises no permission dialog. A health check that prompts
+   for every secret teaches the operator to click Deny.
+2. **Production writes go through GitHub Actions, not the laptop.** friday holds
+   no production database password. Reads, checks and native builds are local;
+   anything with public impact is dispatched to CI, where the credentials
+   already live and every run leaves an audit trail.
 
 ## Commands
 
