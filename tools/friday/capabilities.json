@@ -19,66 +19,279 @@
     "",
     "THE RULE FOR AGENTS: if you need a planned capability, implementing it in",
     "Friday is the next development task. Do not route around Friday with an ad",
-    "hoc shell command — the invariant Friday enforces is the reason it exists."
+    "hoc shell command \u2014 the invariant Friday enforces is the reason it exists."
   ],
-
   "capabilities": {
-    "check":            { "surface": "workflow", "status": "implemented", "riley": "Is everything okay?",              "summary": "Machine, secrets, project config, repo and fast code checks, ending in one next action." },
-    "fix":              { "surface": "workflow", "status": "planned",     "riley": "Fix the safe automatic stuff.",    "summary": "Format and auto-fix everything that can be fixed without judgement.", "blockedBy": "The repo has no formatter. Adding one is a separate, deliberate reformat commit." },
-    "test":             { "surface": "workflow", "status": "planned",     "riley": "Prove this is ready.",             "summary": "The full gate: format, lint, types, unit, e2e, export." },
-    "ship.staging":     { "surface": "workflow", "status": "planned",     "riley": "Put this on staging.",             "summary": "Run the gate, ship to staging, print where to go try it." },
-    "ship.production":  { "surface": "workflow", "status": "planned",     "riley": "Safely promote this to production.", "summary": "Preflight, plain-English diff, snapshot, typed confirmation, then the ordered ship.", "blockedBy": "supabase/refs.json is not filled in, and there is no production gate in the pipeline yet." },
-    "release":          { "surface": "workflow", "status": "planned",     "riley": "Get a new 10Q version out.",       "summary": "Drive one versioned release across web, iOS and Android." },
-    "undo":             { "surface": "workflow", "status": "planned",     "riley": "Undo the last production ship.",   "summary": "Print the verified restore command, and how many player attempts it would discard. Never runs it." },
-
-    "capabilities":         { "surface": "primitive", "status": "implemented", "summary": "What Friday is designed to do, and what is built of it." },
-
-    "system.doctor":        { "surface": "primitive", "status": "implemented", "summary": "Is this machine set up? Tools, versions, secrets, and how Friday itself is running." },
-    "system.status":        { "surface": "primitive", "status": "planned",     "summary": "One-screen answer to where everything currently stands." },
-
-    "quality.format":       { "surface": "primitive", "status": "planned",     "summary": "Run the formatter.", "blockedBy": "No formatter in the repo yet." },
-    "quality.lint":         { "surface": "primitive", "status": "implemented", "summary": "Run ESLint across the workspaces." },
-    "quality.typecheck":    { "surface": "primitive", "status": "implemented", "summary": "Run tsc --noEmit across the workspaces." },
-    "quality.unit":         { "surface": "primitive", "status": "implemented", "summary": "Run the vitest suites." },
-    "quality.e2e":          { "surface": "primitive", "status": "planned",     "summary": "Run the Playwright suite." },
-    "quality.export":       { "surface": "primitive", "status": "planned",     "summary": "Build and validate the static export the native shells package." },
-    "quality.gate":         { "surface": "primitive", "status": "planned",     "summary": "Everything above, in order, refusing at the first failure." },
-
-    "docker.up":            { "surface": "primitive", "status": "planned",     "summary": "Start the local Supabase stack." },
-    "docker.down":          { "surface": "primitive", "status": "planned",     "summary": "Stop it." },
-    "docker.status":        { "surface": "primitive", "status": "planned",     "summary": "Is it running, and on which ports." },
-    "docker.doctor":        { "surface": "primitive", "status": "planned",     "summary": "Why the local stack will not start." },
-
-    "backend.status":       { "surface": "primitive", "status": "planned",     "summary": "What is deployed to each hosted project right now." },
-    "backend.drift":        { "surface": "primitive", "status": "planned",     "summary": "Where a hosted project disagrees with this repo." },
-    "backend.diff":         { "surface": "primitive", "status": "planned",     "summary": "The schema difference, as SQL." },
-    "backend.plan":         { "surface": "primitive", "status": "planned",     "summary": "What a deploy would do, in plain English, before it does it." },
-    "backend.verify":       { "surface": "primitive", "status": "planned",     "summary": "Prove a deploy landed and the invariants still hold." },
-    "backend.activation":   { "surface": "primitive", "status": "planned",     "summary": "Which Edge Functions are live, versus what is on disk." },
-    "backend.promote":      { "surface": "primitive", "status": "planned",     "summary": "Move a verified staging state to production, through CI." },
-
-    "release.status":       { "surface": "primitive", "status": "planned",     "summary": "What version and build is live on each channel." },
-    "release.prepare":      { "surface": "primitive", "status": "planned",     "summary": "Bump, build and gate. No public impact." },
-    "release.rc":           { "surface": "primitive", "status": "planned",     "summary": "Cut a release candidate." },
-    "release.notes":        { "surface": "primitive", "status": "planned",     "summary": "Assemble release notes from the range." },
-    "release.tag":          { "surface": "primitive", "status": "planned",     "summary": "Tag the release commit." },
-    "release.web.build":    { "surface": "primitive", "status": "planned",     "summary": "Build the Cloudflare Worker via OpenNext." },
-    "release.web.deploy":   { "surface": "primitive", "status": "planned",     "summary": "Deploy it. Public impact." },
-    "release.web.verify":   { "surface": "primitive", "status": "planned",     "summary": "Prove the live worker is the artifact you built." },
-    "release.ios.build":    { "surface": "primitive", "status": "planned",     "summary": "Export, cap sync, archive, signed IPA." },
-    "release.ios.upload":   { "surface": "primitive", "status": "planned",     "summary": "Upload the IPA to App Store Connect." },
-    "release.ios.submit":   { "surface": "primitive", "status": "planned",     "summary": "Submit for review." },
-    "release.ios.status":   { "surface": "primitive", "status": "planned",     "summary": "Where the build is in TestFlight and review." },
-    "release.android.build":   { "surface": "primitive", "status": "planned",  "summary": "Export, cap sync, signed AAB." },
-    "release.android.upload":  { "surface": "primitive", "status": "planned",  "summary": "Upload the AAB to a Play track." },
-    "release.android.submit":  { "surface": "primitive", "status": "planned",  "summary": "Submit for review." },
-    "release.android.rollout": { "surface": "primitive", "status": "planned",  "summary": "Advance a staged rollout percentage. Public impact." },
-    "release.android.status":  { "surface": "primitive", "status": "planned",  "summary": "Track state and rollout percentage." },
-
-    "secrets.list":         { "surface": "primitive", "status": "implemented", "summary": "Every secret Friday knows about, and where each one resolves from. Never prints a value." },
-    "secrets.set":          { "surface": "primitive", "status": "planned",     "summary": "Store a secret in the Keychain." },
-
-    "docs.generate":        { "surface": "primitive", "status": "planned",     "summary": "Regenerate the parts of the skills that describe Friday's command surface." },
-    "docs.check":           { "surface": "primitive", "status": "planned",     "summary": "Fail if the skills disagree with this registry." }
+    "check": {
+      "surface": "workflow",
+      "status": "implemented",
+      "riley": "Is everything okay?",
+      "summary": "Machine, secrets, project config, repo and fast code checks, ending in one next action."
+    },
+    "fix": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Fix the safe automatic stuff.",
+      "summary": "Format and auto-fix everything that can be fixed without judgement.",
+      "blockedBy": "The repo has no formatter. Adding one is a separate, deliberate reformat commit."
+    },
+    "test": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Prove this is ready.",
+      "summary": "The full gate: format, lint, types, unit, e2e, export."
+    },
+    "preview": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Run it locally and look at it.",
+      "summary": "Start the dev server and open the app."
+    },
+    "ship.staging": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Put this on staging.",
+      "summary": "Run the gate, ship to staging, print where to go try it."
+    },
+    "ship.production": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Safely promote this to production.",
+      "summary": "Preflight, plain-English diff, snapshot, typed confirmation, then the ordered ship.",
+      "blockedBy": "supabase/refs.json is not filled in, and there is no production gate in the pipeline yet."
+    },
+    "release": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Get a new 10Q version out.",
+      "summary": "Drive one versioned release across web, iOS and Android."
+    },
+    "undo": {
+      "surface": "workflow",
+      "status": "planned",
+      "riley": "Undo the last production ship.",
+      "summary": "Print the verified restore command, and how many player attempts it would discard. Never runs it."
+    },
+    "capabilities": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "What Friday is designed to do, and what is built of it."
+    },
+    "system.doctor": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Is this machine set up? Tools, versions, secrets, and how Friday itself is running."
+    },
+    "system.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "One-screen answer to where everything currently stands."
+    },
+    "quality.format": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Run the formatter.",
+      "blockedBy": "No formatter in the repo yet."
+    },
+    "quality.lint": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Run ESLint across the workspaces."
+    },
+    "quality.typecheck": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Run tsc --noEmit across the workspaces."
+    },
+    "quality.unit": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Run the vitest suites."
+    },
+    "quality.e2e": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Run the Playwright suite."
+    },
+    "quality.export": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Build and validate the static export the native shells package."
+    },
+    "quality.gate": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Everything above, in order, refusing at the first failure."
+    },
+    "docker.up": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Start the local Supabase stack."
+    },
+    "docker.down": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Stop it."
+    },
+    "docker.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Is it running, and on which ports."
+    },
+    "docker.doctor": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Why the local stack will not start."
+    },
+    "backend.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "What is deployed to each hosted project right now."
+    },
+    "backend.drift": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Where a hosted project disagrees with this repo."
+    },
+    "backend.diff": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "The schema difference, as SQL."
+    },
+    "backend.plan": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "What a deploy would do, in plain English, before it does it."
+    },
+    "backend.verify": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Prove a deploy landed and the invariants still hold."
+    },
+    "backend.activation": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Which Edge Functions are live, versus what is on disk."
+    },
+    "backend.promote": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Move a verified staging state to production, through CI."
+    },
+    "release.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "What version and build is live on each channel."
+    },
+    "release.preflight": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Verify the repo, gates and credentials are ready to release. Read-only."
+    },
+    "release.prepare": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Bump, build and gate. No public impact."
+    },
+    "release.rc": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Cut a release candidate."
+    },
+    "release.notes": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Assemble release notes from the range."
+    },
+    "release.tag": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Tag the release commit."
+    },
+    "release.web.build": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Build the Cloudflare Worker via OpenNext."
+    },
+    "release.web.deploy": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Deploy it. Public impact."
+    },
+    "release.web.verify": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Prove the live worker is the artifact you built."
+    },
+    "release.web.rollback": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Redeploy the previous worker. The only channel where rollback is possible \u2014 mobile is forward-only."
+    },
+    "release.ios.build": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Export, cap sync, archive, signed IPA."
+    },
+    "release.ios.upload": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Upload the IPA to App Store Connect."
+    },
+    "release.ios.submit": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Submit for review."
+    },
+    "release.ios.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Where the build is in TestFlight and review."
+    },
+    "release.android.build": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Export, cap sync, signed AAB."
+    },
+    "release.android.upload": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Upload the AAB to a Play track."
+    },
+    "release.android.submit": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Submit for review."
+    },
+    "release.android.rollout": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Advance a staged rollout percentage. Public impact."
+    },
+    "release.android.status": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Track state and rollout percentage."
+    },
+    "secrets.list": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Every secret Friday knows about, and where each one resolves from. Never prints a value."
+    },
+    "secrets.set": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Store a secret in the Keychain."
+    },
+    "docs.generate": {
+      "surface": "primitive",
+      "status": "planned",
+      "summary": "Regenerate the parts of the skills that describe Friday's command surface."
+    },
+    "docs.check": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Fail if the skills disagree with this registry."
+    }
   }
 }

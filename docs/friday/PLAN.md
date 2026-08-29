@@ -47,6 +47,7 @@ about itself.
 ✓ system doctor      diagnosis, including Friday's own freshness
 ✓ quality lint · quality typecheck · quality unit
 ✓ secrets list       where each secret resolves from, never its value
+✓ docs check         fails if a skill names a capability Friday does not declare
 ```
 
 Plus the wrapper, the Keychain layer, the secret registry, and
