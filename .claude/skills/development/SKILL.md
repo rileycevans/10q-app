@@ -73,6 +73,54 @@ the mental model behind that answer, not a substitute for asking.
 
 **When in doubt, run `friday test`.** It is slower, not dangerous.
 
+## The quality baseline
+
+10Q carries explicitly baselined legacy quality debt. `friday quality gate` passes when
+there is **no regression from that baseline**, not when every historical finding is gone.
+
+```
+QUALITY
+  ! eslint: 4 grandfathered findings
+  + no new lint findings
+  + typecheck
+  + unit
+PASS — no regression from baseline
+```
+
+That is an honest pass. The grandfathered findings are reported every time, never
+hidden, and the gate names any check it could not run rather than quietly covering less
+than it claims.
+
+**The point of the baseline is interpretability.** Without it, a red check leaves you
+unable to tell *"this was already broken when you got here"* from *"your change made
+something worse"* — and those need completely different responses. A red check is not
+inherently unacceptable; an **unexplained** red check is.
+
+> **Do not expand the baseline to make a new change pass.** New violations are
+> regressions and must be fixed. When existing debt is removed, shrink the baseline.
+
+Friday enforces the direction:
+
+```bash
+friday quality baseline            # what is accepted, and whether it has moved
+friday quality baseline --shrink   # remove resolved debt — always allowed
+```
+
+Growing it requires an explicit token (`--accept-new-debt ACCEPT`) and prints exactly
+what would be grandfathered, permanently, before doing it. That deliberate friction is
+the feature: it exists so that widening the baseline can never become the reflex when
+lint fails.
+
+### What may and may not be baselined
+
+Baselineable: legacy ESLint findings, formatting debt, and static-analysis warnings that
+are demonstrably pre-existing.
+
+**Never baselineable:** failing tests, schema/RLS/security invariants, broken builds,
+Friday's own registry integrity, `friday docs check`, the freshness and dependency-free
+invariants, and release or backend safety checks. If something protecting production is
+red, *"it was already red"* is not a safety argument.
+
 ## Docker and the local Supabase stack
 
 `friday test` boots a real Postgres via the Supabase CLI when the change requires it.

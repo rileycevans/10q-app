@@ -1,6 +1,6 @@
 # scripts/release
 
-Deterministic release machinery. The [release skill](../../.agent/skills/release/SKILL.md) is the operator, [docs/cross-platform/release/](../../docs/cross-platform/release/) is the source of truth, and these scripts are the hands.
+Deterministic release machinery. The [release skill](../../.claude/skills/release/SKILL.md) is the operator, [docs/cross-platform/release/](../../docs/cross-platform/release/) is the source of truth, and these scripts are the hands.
 
 > **STATUS: STUBS.** Every script here exits non-zero with the reason. They define the intended contract so the skill and docs can reference stable names, and so nothing mistakes an unimplemented step for a passing one. Implement them in Phase 9 of [the migration plan](../../docs/cross-platform/05-migration-plan.md).
 

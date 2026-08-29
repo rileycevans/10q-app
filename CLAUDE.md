@@ -106,6 +106,15 @@ Any doc that says Vercel is wrong.
 5. friday updates itself when its source changes. There is no manual rebuild.
 6. Complex workflows are documented in [.claude/skills/](.claude/skills/).
    **Skills explain intent and sequencing; friday owns the invariants.**
+7. **Riley uses the workflows; agents may use the primitives.** Both surfaces are real.
+   Reach past a workflow when you need to distinguish causes or drive one step.
+8. **Exit 2 means designed-but-not-built, never a failure you caused.** Most of friday
+   is planned. `friday capabilities <name>` gives the full contract for one capability —
+   purpose, where it runs, preconditions, what it mutates, what success means, and the
+   invariant it protects. Implementing it is the next task; improvising around it is not.
+9. **This repo carries explicitly baselined legacy quality debt.** `friday quality gate`
+   passes when there is no *regression* from that baseline. Do not widen the baseline to
+   make your own change pass — new violations are yours to fix.
 
 `friday` is the repo-local dev CLI, and it has **two surfaces on purpose**.
 
@@ -212,7 +221,10 @@ CI runs lint → typecheck → test → build → e2e, then deploys to Cloudflar
 
 ## Working agreements
 
-Skills live in two places while the friday migration is in progress.
+Skills live in two places, and both are current. `.claude/skills/` holds the
+friday-centred **operational** skills — how work gets done and shipped.
+`.agent/skills/` holds the **domain** rules — how 10Q itself must behave. Neither
+supersedes the other, and the split is deliberate rather than a migration in flight.
 
 **[.claude/skills/](.claude/skills/)** — the friday-centred skills. These auto-load, and
 they are the ones to read before any development, backend or release operation:

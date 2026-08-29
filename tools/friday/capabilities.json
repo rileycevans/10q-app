@@ -26,272 +26,632 @@
       "surface": "workflow",
       "status": "implemented",
       "riley": "Is everything okay?",
-      "summary": "Machine, secrets, project config, repo and fast code checks, ending in one next action."
+      "summary": "Machine, secrets, project config, repo and fast code checks, ending in one next action.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "Reports every problem it found and names exactly one next action.",
+      "invariant": "Read-only. Must never mutate anything, so it is safe to run when confused."
     },
     "fix": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Fix the safe automatic stuff.",
       "summary": "Format and auto-fix everything that can be fixed without judgement.",
-      "blockedBy": "The repo has no formatter. Adding one is a separate, deliberate reformat commit."
+      "blockedBy": "The repo has no formatter. Adding one is a separate, deliberate reformat commit.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Source files, in place.",
+      "success": "Formatting and auto-fixable lint applied; nothing else touched.",
+      "invariant": "Only changes that cannot alter behaviour. Never a fix that requires judgement."
     },
     "test": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Prove this is ready.",
-      "summary": "The full gate: format, lint, types, unit, e2e, export."
+      "summary": "The full gate: format, lint, types, unit, e2e, export.",
+      "execution": "local",
+      "governedBy": "development",
+      "requires": [
+        "quality.gate"
+      ],
+      "mutates": null,
+      "success": "Every gate check passed, or the first failure is reported and the rest are not claimed.",
+      "invariant": "Refuses on first failure. Never reports a partial run as a pass."
     },
     "preview": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Run it locally and look at it.",
-      "summary": "Start the dev server and open the app."
+      "summary": "Start the dev server and open the app.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Starts a local server process.",
+      "success": "Dev server serving, URL printed.",
+      "invariant": "Local only. Must never point at a hosted project."
     },
     "ship.staging": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Put this on staging.",
-      "summary": "Run the gate, ship to staging, print where to go try it."
+      "summary": "Run the gate, ship to staging, print where to go try it.",
+      "execution": "ci",
+      "governedBy": "backend",
+      "requires": [
+        "quality.gate",
+        "backend.plan"
+      ],
+      "mutates": "Staging database schema and Edge Functions.",
+      "success": "Migrations applied, functions deployed, and a receipt recorded tying the staging state to this SHA.",
+      "invariant": "Runs the gate first and refuses if it fails. The receipt is what makes production promotion verifiable later."
     },
     "ship.production": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Safely promote this to production.",
       "summary": "Preflight, plain-English diff, snapshot, typed confirmation, then the ordered ship.",
-      "blockedBy": "supabase/refs.json is not filled in, and there is no production gate in the pipeline yet."
+      "blockedBy": "supabase/refs.json is not filled in, and there is no production gate in the pipeline yet.",
+      "execution": "ci",
+      "governedBy": "backend",
+      "requires": [
+        "ship.staging",
+        "backend.verify",
+        "backend.plan"
+      ],
+      "mutates": "PRODUCTION database schema, Edge Functions, and the web client.",
+      "success": "Backend applied and verified, then web deployed, in that order. Reports which halves landed.",
+      "invariant": "Refuses unless staging represents this exact SHA. Snapshots before touching anything. Requires a typed confirmation naming the change. Backend before clients, always \u2014 and ordered, not atomic: if the web half fails, production holds new backend and old client, which is safe only because backend changes are backward-compatible by rule."
     },
     "release": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Get a new 10Q version out.",
-      "summary": "Drive one versioned release across web, iOS and Android."
+      "summary": "Drive one versioned release across web, iOS and Android.",
+      "execution": "local",
+      "governedBy": "release",
+      "requires": [
+        "release.preflight"
+      ],
+      "mutates": "Version files, tags, and whichever platform lanes are invoked.",
+      "success": "One versioned release exists across the lanes that were asked for.",
+      "invariant": "prepare, submit and release are three distinct verbs and are never collapsed. Publishing needs explicit confirmation naming platform and version."
     },
     "undo": {
       "surface": "workflow",
       "status": "planned",
       "riley": "Undo the last production ship.",
-      "summary": "Print the verified restore command, and how many player attempts it would discard. Never runs it."
+      "summary": "Print the verified restore command, and how many player attempts it would discard. Never runs it.",
+      "execution": "local",
+      "governedBy": "backend",
+      "requires": [
+        "ship.production"
+      ],
+      "mutates": "Nothing. It prints and never executes.",
+      "success": "Prints the verified restore command AND the number of player attempts that restore would discard.",
+      "invariant": "MUST NOT run the restore. A restore rewinds player data as well as schema, and each player gets one attempt per day, so those players lose their only attempt permanently."
     },
     "capabilities": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "What Friday is designed to do, and what is built of it."
+      "summary": "What Friday is designed to do, and what is built of it.",
+      "execution": "local",
+      "governedBy": "friday",
+      "mutates": null,
+      "success": "Lists every capability and its status.",
+      "invariant": "Cross-checks the registry against the handler table; reports either kind of drift as a Friday bug."
     },
     "system.doctor": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Is this machine set up? Tools, versions, secrets, and how Friday itself is running."
+      "summary": "Is this machine set up? Tools, versions, secrets, and how Friday itself is running.",
+      "execution": "local",
+      "governedBy": "friday",
+      "mutates": null,
+      "success": "Machine state reported, and Friday's own freshness proven first.",
+      "invariant": "If the freshness guarantee is broken, say so before anything else \u2014 nothing else it reports can be trusted."
     },
     "system.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "One-screen answer to where everything currently stands."
+      "summary": "One-screen answer to where everything currently stands.",
+      "execution": "local",
+      "governedBy": "friday",
+      "requires": [
+        "backend.status",
+        "release.status"
+      ],
+      "mutates": null,
+      "success": "One screen: branch, backend state per environment, live versions per channel.",
+      "invariant": "Read-only. Must distinguish 'unknown' from 'nothing deployed'."
     },
     "quality.format": {
       "surface": "primitive",
       "status": "planned",
       "summary": "Run the formatter.",
-      "blockedBy": "No formatter in the repo yet."
+      "blockedBy": "No formatter in the repo yet.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Source files, in place.",
+      "success": "Formatter run, files rewritten.",
+      "invariant": "Blocked until a formatter exists; introducing one is a single deliberate reformat commit, not a side effect."
     },
     "quality.lint": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Run ESLint across the workspaces."
+      "summary": "Run ESLint across the workspaces.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "ESLint's real output, not a summary.",
+      "invariant": "Reports raw output so a caller can act on it."
     },
     "quality.typecheck": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Run tsc --noEmit across the workspaces."
+      "summary": "Run tsc --noEmit across the workspaces.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "tsc clean.",
+      "invariant": "Distinguish a stale .next build tree from genuine type errors \u2014 reporting the first as the second is a false signal."
     },
     "quality.unit": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Run the vitest suites."
+      "summary": "Run the vitest suites.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "vitest suites pass.",
+      "invariant": "Covers the npm workspaces only. supabase/tests does NOT run \u2014 see CLAUDE.md."
     },
     "quality.e2e": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Run the Playwright suite."
+      "summary": "Run the Playwright suite.",
+      "execution": "local",
+      "governedBy": "development",
+      "requires": [
+        "docker.up"
+      ],
+      "mutates": "Starts browsers and a server.",
+      "success": "Playwright suite passes.",
+      "invariant": "Needs a built app; must say so rather than failing obscurely."
     },
     "quality.export": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Build and validate the static export the native shells package."
+      "summary": "Build and validate the static export the native shells package.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Writes and then restores the static export tree.",
+      "success": "Static export builds and validates, and the source tree is restored afterwards.",
+      "invariant": "The native shells package this export. Must assert the source tree was restored \u2014 a half-restored tree is worse than a failed build."
     },
     "quality.gate": {
       "surface": "primitive",
-      "status": "planned",
-      "summary": "Everything above, in order, refusing at the first failure."
+      "status": "implemented",
+      "summary": "Everything above, in order, refusing at the first failure.",
+      "execution": "local",
+      "governedBy": "development",
+      "requires": [
+        "quality.lint",
+        "quality.typecheck",
+        "quality.unit"
+      ],
+      "mutates": null,
+      "success": "No regression from the quality baseline, and every check either passed or is named as not run.",
+      "invariant": "Grandfathered findings are reported, never hidden. Checks that are not implemented are named as NOT COVERED. A gate that quietly covers less than it claims is worse than no gate."
+    },
+    "quality.baseline": {
+      "surface": "primitive",
+      "status": "implemented",
+      "summary": "Show the accepted legacy findings, and whether they have moved. --shrink to reduce; expanding needs an explicit token.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "tools/friday/quality-baseline.json",
+      "success": "Shows accepted debt and whether it moved.",
+      "invariant": "Shrinks freely; grows only with an explicit token. An agent whose new code fails lint must fix the code, not widen the baseline."
     },
     "docker.up": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Start the local Supabase stack."
+      "summary": "Start the local Supabase stack.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Starts the local Supabase stack.",
+      "success": "Stack running, ports reported.",
+      "invariant": "Local only, never a hosted project."
     },
     "docker.down": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Stop it."
+      "summary": "Stop it.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": "Stops the local stack.",
+      "success": "Stack stopped.",
+      "invariant": "Must be safe to call when nothing is running."
     },
     "docker.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Is it running, and on which ports."
+      "summary": "Is it running, and on which ports.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "Running or not, and on which ports.",
+      "invariant": "Read-only."
     },
     "docker.doctor": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Why the local stack will not start."
+      "summary": "Why the local stack will not start.",
+      "execution": "local",
+      "governedBy": "development",
+      "mutates": null,
+      "success": "Names the specific reason the stack will not start.",
+      "invariant": "Read-only. Distinguish Docker-not-running from a port conflict from a bad migration."
     },
     "backend.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "What is deployed to each hosted project right now."
+      "summary": "What is deployed to each hosted project right now.",
+      "execution": "local",
+      "governedBy": "backend",
+      "mutates": null,
+      "success": "What is deployed to each environment right now.",
+      "invariant": "Read-only. Requires supabase/refs.json to be filled in \u2014 refuses rather than guessing which project is which."
     },
     "backend.drift": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Where a hosted project disagrees with this repo."
+      "summary": "Where a hosted project disagrees with this repo.",
+      "execution": "local",
+      "governedBy": "backend",
+      "requires": [
+        "backend.status"
+      ],
+      "mutates": null,
+      "success": "Every place a hosted project disagrees with this repo.",
+      "invariant": "Read-only. This is the command that answers 'is the thing I am looking at actually deployed?' \u2014 it must never report clean on incomplete information."
     },
     "backend.diff": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "The schema difference, as SQL."
+      "summary": "The schema difference, as SQL.",
+      "execution": "local",
+      "governedBy": "backend",
+      "requires": [
+        "backend.drift"
+      ],
+      "mutates": null,
+      "success": "The schema difference, as SQL.",
+      "invariant": "Read-only."
     },
     "backend.plan": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "What a deploy would do, in plain English, before it does it."
+      "summary": "What a deploy would do, in plain English, before it does it.",
+      "execution": "local",
+      "governedBy": "backend",
+      "requires": [
+        "backend.diff"
+      ],
+      "mutates": null,
+      "success": "An ordered plan in plain English, including what runs first and what it will affect.",
+      "invariant": "Read-only. This is what a human reads before confirming a production ship, so it must be understandable by someone who cannot read a migration."
     },
     "backend.verify": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Prove a deploy landed and the invariants still hold."
+      "summary": "Prove a deploy landed and the invariants still hold.",
+      "execution": "ci",
+      "governedBy": "backend",
+      "requires": [
+        "ship.staging"
+      ],
+      "mutates": null,
+      "success": "Proves the deploy landed AND the invariants still hold \u2014 not merely that the command exited 0.",
+      "invariant": "'It deployed' is not success. Verify the resulting state."
     },
     "backend.activation": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Which Edge Functions are live, versus what is on disk."
+      "summary": "Which Edge Functions are live, versus what is on disk.",
+      "execution": "local",
+      "governedBy": "backend",
+      "mutates": null,
+      "success": "Which Edge Functions are actually live, versus what is on disk.",
+      "invariant": "This exists because 3 of 27 functions were never deployed for weeks and nothing noticed. Must compare against the functions manifest, not a hardcoded list."
     },
     "backend.promote": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Move a verified staging state to production, through CI."
+      "summary": "Move a verified staging state to production, through CI.",
+      "execution": "ci",
+      "governedBy": "backend",
+      "requires": [
+        "backend.verify"
+      ],
+      "mutates": "PRODUCTION database and Edge Functions.",
+      "success": "Verified staging state moved to production.",
+      "invariant": "The primitive under ship.production. Same refusals apply; it is not a way around them."
     },
     "release.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "What version and build is live on each channel."
+      "summary": "What version and build is live on each channel.",
+      "execution": "local",
+      "governedBy": "release",
+      "mutates": null,
+      "success": "Version and build live on each channel, and what is in flight.",
+      "invariant": "Read-only. Must distinguish 'in review' from 'live' from 'unknown'."
     },
     "release.preflight": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Verify the repo, gates and credentials are ready to release. Read-only."
+      "summary": "Verify the repo, gates and credentials are ready to release. Read-only.",
+      "execution": "local",
+      "governedBy": "release",
+      "mutates": null,
+      "success": "Repo, gates and credentials are ready. Exits non-zero on any failure.",
+      "invariant": "Read-only, no public impact. Runs before anything else in a release."
     },
     "release.prepare": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Bump, build and gate. No public impact."
+      "summary": "Bump, build and gate. No public impact.",
+      "execution": "local",
+      "governedBy": "release",
+      "requires": [
+        "release.preflight"
+      ],
+      "mutates": "version.json, native version files, a tag.",
+      "success": "A version, a SHA and release notes are established once, for all three lanes.",
+      "invariant": "NO public impact. Establishes the canonical release SHA that every lane must use \u2014 no lane may invent its own version."
     },
     "release.rc": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Cut a release candidate."
+      "summary": "Cut a release candidate.",
+      "execution": "local",
+      "governedBy": "release",
+      "requires": [
+        "release.prepare"
+      ],
+      "mutates": "Tags a release candidate.",
+      "success": "An RC exists, tied to the canonical SHA.",
+      "invariant": "No public impact."
     },
     "release.notes": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Assemble release notes from the range."
+      "summary": "Assemble release notes from the range.",
+      "execution": "local",
+      "governedBy": "release",
+      "requires": [
+        "release.prepare"
+      ],
+      "mutates": "Release notes content.",
+      "success": "Notes assembled from the commit range.",
+      "invariant": "No public impact."
     },
     "release.tag": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Tag the release commit."
+      "summary": "Tag the release commit.",
+      "execution": "local",
+      "governedBy": "release",
+      "requires": [
+        "release.prepare"
+      ],
+      "mutates": "Git tags.",
+      "success": "The release commit is tagged.",
+      "invariant": "Tags the canonical SHA, never HEAD-at-the-time."
     },
     "release.web.build": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Build the Cloudflare Worker via OpenNext."
+      "summary": "Build the Cloudflare Worker via OpenNext.",
+      "execution": "local",
+      "governedBy": "release-web",
+      "requires": [
+        "release.prepare"
+      ],
+      "mutates": "Build output.",
+      "success": "An OpenNext worker artifact built from the canonical SHA.",
+      "invariant": "No public impact."
     },
     "release.web.deploy": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Deploy it. Public impact."
+      "summary": "Deploy it. Public impact.",
+      "execution": "ci",
+      "governedBy": "release-web",
+      "requires": [
+        "release.web.build",
+        "backend.verify"
+      ],
+      "mutates": "play10q.com.",
+      "success": "The worker is live.",
+      "invariant": "PUBLIC IMPACT. Backend must already be deployed and verified \u2014 a client must never ship ahead of the schema it needs."
     },
     "release.web.verify": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Prove the live worker is the artifact you built."
+      "summary": "Prove the live worker is the artifact you built.",
+      "execution": "local",
+      "governedBy": "release-web",
+      "requires": [
+        "release.web.deploy"
+      ],
+      "mutates": null,
+      "success": "The live worker is byte-for-byte the artifact that was built, at the expected SHA.",
+      "invariant": "Deploy succeeding is not the same as the right thing being live."
     },
     "release.web.rollback": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Redeploy the previous worker. The only channel where rollback is possible \u2014 mobile is forward-only."
+      "summary": "Redeploy the previous worker. The only channel where rollback is possible \u2014 mobile is forward-only.",
+      "execution": "ci",
+      "governedBy": "release-web",
+      "mutates": "play10q.com.",
+      "success": "The previous worker is live again.",
+      "invariant": "PUBLIC IMPACT. Web is the ONLY channel that can be rolled back; mobile is forward-only. Never imply otherwise."
     },
     "release.ios.build": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Export, cap sync, archive, signed IPA."
+      "summary": "Export, cap sync, archive, signed IPA.",
+      "execution": "local",
+      "governedBy": "release-ios",
+      "requires": [
+        "release.prepare",
+        "quality.export"
+      ],
+      "mutates": "Xcode archive, IPA, sourcemaps.",
+      "success": "A signed IPA built from the canonical SHA.",
+      "invariant": "Local because it needs Xcode and signing material CI does not have. No public impact. Never invents a version."
     },
     "release.ios.upload": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Upload the IPA to App Store Connect."
+      "summary": "Upload the IPA to App Store Connect.",
+      "execution": "local",
+      "governedBy": "release-ios",
+      "requires": [
+        "release.ios.build"
+      ],
+      "mutates": "App Store Connect build list.",
+      "success": "The build appears in ASC processing.",
+      "invariant": "No PUBLIC impact. Upload succeeding is not submission."
     },
     "release.ios.submit": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Submit for review."
+      "summary": "Submit for review.",
+      "execution": "local",
+      "governedBy": "release-ios",
+      "requires": [
+        "release.ios.upload"
+      ],
+      "mutates": "App Store Connect submission state.",
+      "success": "ASC reports the build as waiting for review.",
+      "invariant": "No public impact yet \u2014 review is not release. Submits the exact build from the canonical SHA. Successful upload is NOT successful review; Friday verifies the resulting ASC state rather than assuming."
     },
     "release.ios.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Where the build is in TestFlight and review."
+      "summary": "Where the build is in TestFlight and review.",
+      "execution": "local",
+      "governedBy": "release-ios",
+      "mutates": null,
+      "success": "Where the build sits in TestFlight and review.",
+      "invariant": "Read-only. Distinguish processing, waiting for review, in review, approved, and live."
     },
     "release.android.build": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Export, cap sync, signed AAB."
+      "summary": "Export, cap sync, signed AAB.",
+      "execution": "local",
+      "governedBy": "release-android",
+      "requires": [
+        "release.prepare",
+        "quality.export"
+      ],
+      "mutates": "Gradle output, AAB, sourcemaps.",
+      "success": "A signed AAB built from the canonical SHA.",
+      "invariant": "Local because it needs Gradle and the keystore. No public impact. Never invents a version."
     },
     "release.android.upload": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Upload the AAB to a Play track."
+      "summary": "Upload the AAB to a Play track.",
+      "execution": "local",
+      "governedBy": "release-android",
+      "requires": [
+        "release.android.build"
+      ],
+      "mutates": "A Play testing track.",
+      "success": "The AAB is on the track.",
+      "invariant": "No public impact."
     },
     "release.android.submit": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Submit for review."
+      "summary": "Submit for review.",
+      "execution": "local",
+      "governedBy": "release-android",
+      "requires": [
+        "release.android.upload"
+      ],
+      "mutates": "Play review state.",
+      "success": "Submitted for review.",
+      "invariant": "No public impact yet."
     },
     "release.android.rollout": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Advance a staged rollout percentage. Public impact."
+      "summary": "Advance a staged rollout percentage. Public impact.",
+      "execution": "local",
+      "governedBy": "release-android",
+      "requires": [
+        "release.android.submit"
+      ],
+      "mutates": "The live rollout percentage.",
+      "success": "The rollout is at the requested percentage.",
+      "invariant": "PUBLIC IMPACT, and it is one-way \u2014 a staged rollout can be halted but not un-shipped. Requires explicit confirmation naming the percentage."
     },
     "release.android.status": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Track state and rollout percentage."
+      "summary": "Track state and rollout percentage.",
+      "execution": "local",
+      "governedBy": "release-android",
+      "mutates": null,
+      "success": "Track state and rollout percentage.",
+      "invariant": "Read-only."
     },
     "secrets.list": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Every secret Friday knows about, and where each one resolves from. Never prints a value."
+      "summary": "Every secret Friday knows about, and where each one resolves from. Never prints a value.",
+      "execution": "local",
+      "governedBy": "friday",
+      "mutates": null,
+      "success": "Every secret Friday knows about and where each resolves from.",
+      "invariant": "Presence and source only. NEVER decrypts, never prints a value, never triggers a Keychain prompt."
     },
     "secrets.set": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Store a secret in the Keychain."
+      "summary": "Store a secret in the Keychain.",
+      "execution": "local",
+      "governedBy": "friday",
+      "mutates": "The macOS Keychain.",
+      "success": "The secret is stored.",
+      "invariant": "Never echoes the value. Never writes a secret to the repo or to a shell history."
     },
     "docs.generate": {
       "surface": "primitive",
       "status": "planned",
-      "summary": "Regenerate the parts of the skills that describe Friday's command surface."
+      "summary": "Regenerate the parts of the skills that describe Friday's command surface.",
+      "execution": "local",
+      "governedBy": "friday-development",
+      "mutates": "Generated blocks inside .claude/skills/.",
+      "success": "Generated sections regenerated from the registry.",
+      "invariant": "Only rewrites clearly delimited generated blocks. Never touches hand-written prose."
     },
     "docs.check": {
       "surface": "primitive",
       "status": "implemented",
-      "summary": "Fail if the skills disagree with this registry."
+      "summary": "Fail if the skills disagree with this registry.",
+      "execution": "local",
+      "governedBy": "friday-development",
+      "mutates": null,
+      "success": "Every command a skill names resolves to a declared capability.",
+      "invariant": "Checks only what CAN be checked. Does not claim to verify that prose is correct or complete."
     }
   }
 }

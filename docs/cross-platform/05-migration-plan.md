@@ -346,7 +346,7 @@ The genuinely useful ones. Per [ADR-001](01-architecture-decision.md), these are
 **Entry:** Phases 1–8 exits met.
 **Branch:** `feat/release-machinery`
 
-Build what [release/](release/) describes: `scripts/release/`, the `.agent/skills/release/` operator skill, promotion gates reading Sentry and PostHog, and the rollback runbooks.
+Build what [release/](release/) describes: `scripts/release/`, the `.claude/skills/release/` operator skill, promotion gates reading Sentry and PostHog, and the rollback runbooks.
 
 Then execute [release/FIRST_STORE_RELEASE.md](release/FIRST_STORE_RELEASE.md). Much of it needs a human — Apple Developer enrollment, signing, store console work — so start the account and certificate items early; they have real lead time and block nothing else.
 

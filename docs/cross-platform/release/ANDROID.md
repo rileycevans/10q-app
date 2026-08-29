@@ -2,7 +2,7 @@
 
 **Scope:** everything between a green `main` and a 10Q build running on a stranger's Android phone. Prerequisites and account setup, the build chain, signing, Sentry pinning, Play testing tracks, Managed Publishing, staged rollout, the Data safety declaration, target API level, and the automation boundary.
 
-**Read first:** [RELEASE_ARCHITECTURE.md](RELEASE_ARCHITECTURE.md) for the release state machine, and [VERSIONING.md](VERSIONING.md) — this doc consumes `app_version` and `app_build` and does not define them. The operator skill that routes here is `.agent/skills/release/SKILL.md`.
+**Read first:** [RELEASE_ARCHITECTURE.md](RELEASE_ARCHITECTURE.md) for the release state machine, and [VERSIONING.md](VERSIONING.md) — this doc consumes `app_version` and `app_build` and does not define them. The operator skill that routes here is `.claude/skills/release/SKILL.md`.
 
 **Sibling channels:** [WEB.md](WEB.md) · [IOS.md](IOS.md). They are three independently controllable channels. See [Version skew](#112-version-skew-is-permanent-on-android) — it is not optional reading.
 
@@ -150,7 +150,7 @@ In CI, decode to a path under the runner's temp dir, never into the workspace, a
   env: { ANDROID_KEYSTORE_BASE64: "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" }
 ```
 
-This is safety rule 6 in `.agent/skills/release/SKILL.md`: *never commit secrets or signing material*. If a procedure needs the keystore, confirm its location out of band and reference it by path.
+This is safety rule 6 in `.claude/skills/release/SKILL.md`: *never commit secrets or signing material*. If a procedure needs the keystore, confirm its location out of band and reference it by path.
 
 ### 1.5 `assetlinks.json` for App Links on `play10q.com` (human + agent)
 
@@ -768,7 +768,7 @@ Two documented behaviors that produce silent damage:
 
 ## 10. `prepare` / `submit` / `release` on Android
 
-Same three verbs as iOS and web. `.agent/skills/release/SKILL.md` safety rule 1: **never collapse them.**
+Same three verbs as iOS and web. `.claude/skills/release/SKILL.md` safety rule 1: **never collapse them.**
 
 | Verb | Android meaning | Mechanism | Public impact |
 |---|---|---|---|

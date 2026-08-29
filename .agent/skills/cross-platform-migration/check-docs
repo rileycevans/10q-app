@@ -45,7 +45,7 @@ done
 # --- 3. Do the cross-references resolve? ------------------------------------
 bold "== Cross-references =="
 tmp=$(mktemp)
-find docs/cross-platform .agent/skills/cross-platform-migration .agent/skills/release scripts/release \
+find docs/cross-platform .agent/skills/cross-platform-migration .claude/skills/release scripts/release \
      -name '*.md' 2>/dev/null | sort -u | while IFS= read -r src; do
   dir=$(dirname "$src")
   grep -oE '\]\([^)]+\)' "$src" 2>/dev/null \

@@ -26,7 +26,7 @@ Each is first-class infrastructure, not post-migration cleanup.
 | **Observability** | [OBSERVABILITY.md](OBSERVABILITY.md) | One PostHog project and one Sentry project, dimensioned by `client_platform`. One funnel, one error stream, always sliceable |
 | **Testing** | [TESTING.md](TESTING.md) | Test product behavior **once** against shared code. Platform tests cover only genuine divergence |
 | **Distribution** | [release/](release/) | One source tree, three independently controllable release channels |
-| **Automation** | [`.agent/skills/release/`](../../.agent/skills/release/SKILL.md) | One operator skill. Docs are the source of truth; `scripts/release/` is the machinery |
+| **Automation** | [`.claude/skills/release/`](../../.claude/skills/release/SKILL.md) | One operator skill. Docs are the source of truth; `scripts/release/` is the machinery |
 
 Plus [STORE_READINESS.md](STORE_READINESS.md) — Apple and Google compliance status.
 

@@ -238,7 +238,7 @@ If a build cannot reach the T1 denominator inside its soak window, that is infor
 
 ### 2.5 The go/no-go summary block
 
-This is what `scripts/release/gate` prints and the `.agent/skills/release/` operator skill shows before any promotion. One screen, no scrolling, and the verdict is the last line so it is what the operator's eye lands on.
+This is what `scripts/release/gate` prints and the `.claude/skills/release/` operator skill shows before any promotion. One screen, no scrolling, and the verdict is the last line so it is what the operator's eye lands on.
 
 Design rules: every row shows **value, threshold, verdict** so a reader can audit the judgement rather than trust it. Comparisons name the baseline build. Warnings are listed even when the verdict is GO — the T3 gate refuses to advance while any warning is unresolved, so a warning ignored at T1 becomes a blocker later.
 

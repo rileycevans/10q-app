@@ -316,7 +316,7 @@ Before any release, answer one question: **which channels does this change actua
 | **Shared React** | `apps/web/src/app/**`, `components/**`, `lib/**`, `domains/**`, `packages/contracts/**` | — | ✅ next web release | ✅ **requires a new binary** | ✅ **requires a new binary** | Web now; mobile on the next store cycle. Expect users on all three for weeks. |
 | **Native shell** | `apps/mobile/**` (`capacitor.config.ts`, `ios/`, `android/`, plugins, native permissions) | — | ✗ | ✅ | ✅ | Store release only. No web impact. |
 | **Config / secrets** | `NEXT_PUBLIC_*`, CI env, Supabase dashboard settings, CF vars | — | rebuild + redeploy | rebuild + **resubmit** | rebuild + **resubmit** | `NEXT_PUBLIC_*` is inlined at build time — there is no runtime config for a shipped binary. |
-| **Automation** | `.github/workflows/**`, `scripts/release/**`, `.agent/skills/release/**` | — | — | — | — | No user impact, but changes how every other row ships. Gate it like product code. |
+| **Automation** | `.github/workflows/**`, `scripts/release/**`, `.claude/skills/release/**` | — | — | — | — | No user impact, but changes how every other row ships. Gate it like product code. |
 
 ### Classifying a diff
 
@@ -348,7 +348,7 @@ Release engineering here rests on four pillars that are only useful *interlocked
          │                       (CF versions / TestFlight / Play tracks)
          │
          ▼
-    AUTOMATION    ──operates──►  scripts/release/ + .agent/skills/release/
+    AUTOMATION    ──operates──►  scripts/release/ + .claude/skills/release/
                                  one operator, no ad-hoc console clicking
 ```
 
@@ -394,7 +394,7 @@ The channel mechanics of §3. Owned per-channel by [WEB.md](WEB.md), [IOS.md](IO
 
 ### 5.4 Automation — the release skill is the operator
 
-`.agent/skills/release/SKILL.md` is the single operator for all of this, backed by `scripts/release/`. Its non-negotiable rules — never collapse the verbs, never publish on inferred intent, gates are not advisory, backend before clients, hand off what needs a human — are the enforcement layer for this document.
+`.claude/skills/release/SKILL.md` is the single operator for all of this, backed by `scripts/release/`. Its non-negotiable rules — never collapse the verbs, never publish on inferred intent, gates are not advisory, backend before clients, hand off what needs a human — are the enforcement layer for this document.
 
 > **Rule: every state transition has a named command.** Nobody runs `wrangler`, `fastlane` or a console click ad hoc. If a transition genuinely requires a human (Apple ID sign-in, signing material, store console session, expedite request, App Review appeal), the skill **says so explicitly and hands off**, naming what it needs back. It does not improvise.
 
@@ -517,7 +517,7 @@ Everything in this table is a prerequisite. An agent that assumes any of it is p
 | PostHog platform dimension | Missing | no super properties registered | [OBSERVABILITY.md](../OBSERVABILITY.md) |
 | PostHog feature flags | Zero usage | — | §6 (the only mobile kill switch) |
 | **Any Capacitor project** | Absent | no `capacitor.config.*`, no `ios/`, no `android/`, no `@capacitor/*` dependency, no AASA file, no `assetlinks.json` | [05-migration-plan.md Phase 5](../05-migration-plan.md) |
-| `scripts/release/preflight`, `verify` | Not written | referenced by `.agent/skills/release/SKILL.md` | §5.4 |
+| `scripts/release/preflight`, `verify` | Not written | referenced by `.claude/skills/release/SKILL.md` | §5.4 |
 | Apple / Google developer accounts | Unknown to this repo | — | [FIRST_STORE_RELEASE.md](FIRST_STORE_RELEASE.md) |
 
 > **If you find `docs/DEPLOYMENT.md`, ignore it.** It predates the current architecture and describes deploying to Vercel. Web deployment is Cloudflare Workers via OpenNext — see [WEB.md](WEB.md).
@@ -567,4 +567,4 @@ Context outside `release/`:
 | [../OBSERVABILITY.md](../OBSERVABILITY.md) | The five identifiers, PostHog super properties, Sentry `release`/`dist` |
 | [../STORE_READINESS.md](../STORE_READINESS.md) | Apple and Google compliance blockers independent of release mechanics |
 | [../TESTING.md](../TESTING.md) | The gate table referenced in §5.2 |
-| `.agent/skills/release/SKILL.md` | The operator that executes this state machine |
+| `.claude/skills/release/SKILL.md` | The operator that executes this state machine |

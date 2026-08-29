@@ -1,0 +1,45 @@
+{
+  "_comment": [
+    "Legacy quality findings this repo explicitly accepts.",
+    "",
+    "A finding is identified by file + rule, never by line number — lines drift",
+    "on unrelated edits and would produce false regressions. Counts are kept so a",
+    "second instance of a known rule in a known file is still caught.",
+    "",
+    "This file may shrink freely. Growing it is a deliberate act: run",
+    "`friday quality baseline --accept-new-debt` and be prepared to justify it.",
+    "If your own change fails lint, fix the change — do not widen the baseline.",
+    "",
+    "Never baseline: failing tests, schema/RLS/security invariants, broken builds,",
+    "Friday's own integrity checks, or release and backend safety checks."
+  ],
+  "version": 1,
+  "establishedAt": "2026-08-29",
+  "establishedBecause": "Seeded at the point Friday was handed over, from findings that predate it. Every entry here is pre-existing debt, not something Friday introduced.",
+  "eslint": [
+    {
+      "file": "apps/web/src/app/get/GetAppClient.tsx",
+      "rule": "react-hooks/set-state-in-effect",
+      "count": 1,
+      "severity": "error"
+    },
+    {
+      "file": "apps/web/src/app/invite/page.tsx",
+      "rule": "@typescript-eslint/no-unused-vars",
+      "count": 1,
+      "severity": "warning"
+    },
+    {
+      "file": "apps/web/src/app/page.tsx",
+      "rule": "@next/next/no-img-element",
+      "count": 1,
+      "severity": "warning"
+    },
+    {
+      "file": "apps/web/src/app/play/q/[index]/ClientPage.tsx",
+      "rule": "(no rule)",
+      "count": 4,
+      "severity": "warning"
+    }
+  ]
+}

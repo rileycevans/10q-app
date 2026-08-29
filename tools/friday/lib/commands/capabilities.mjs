@@ -6,7 +6,7 @@
  * without misleading anyone, because this is where the truth lives.
  */
 import { ui, paint } from '../ui.mjs';
-import { all, workflows, byNamespace, integrity } from '../capabilities.mjs';
+import { all, get, workflows, byNamespace, integrity } from '../capabilities.mjs';
 import { HANDLER_PATHS } from '../handlers.mjs';
 
 const mark = (c) => (c.status === 'implemented' ? paint.green('✓') : paint.grey('○'));
@@ -14,6 +14,42 @@ const display = (p) => p.replace(/\./g, ' ');
 
 export function capabilities(args = []) {
   const jsonOut = args.includes('--json');
+
+  // `friday capabilities backend drift` — the full contract for one capability,
+  // which is what someone about to implement it actually needs.
+  const words = args.filter((a) => !a.startsWith('-'));
+  if (words.length) {
+    const cap = get(words.join('.'));
+    if (!cap) {
+      ui.fail(`No capability called \`${words.join(' ')}\`.`);
+      return 1;
+    }
+    if (jsonOut) {
+      console.log(JSON.stringify(cap, null, 2));
+      return 0;
+    }
+    ui.title(`friday ${display(cap.path)}`);
+    ui.plain(`  ${mark(cap)} ${cap.status === 'implemented' ? 'built' : 'designed, not built yet'}   ${paint.grey(cap.surface)}`);
+    ui.blank();
+    const row = (k, v) => v && ui.plain(`  ${paint.bold(k.padEnd(12))} ${v}`);
+    row('Purpose', cap.summary);
+    row('Riley says', cap.riley);
+    row('Runs', cap.execution === 'ci' ? 'through CI (public impact, credentials stay in GitHub)' : 'locally');
+    row('Governed by', `.claude/skills/${cap.governedBy}/SKILL.md`);
+    row('Needs first', (cap.requires || []).map(display).join(', ') || null);
+    row('Mutates', cap.mutates || 'nothing — read-only');
+    row('Success', cap.success);
+    row('Invariant', cap.invariant);
+    row('Blocked by', cap.blockedBy);
+    ui.blank();
+    if (cap.status !== 'implemented') {
+      ui.plain(paint.grey('  Implementing this in Friday is the next development task.'));
+      ui.plain(paint.grey('  See .claude/skills/friday-development/SKILL.md'));
+      ui.blank();
+    }
+    return 0;
+  }
+
   if (jsonOut) {
     console.log(JSON.stringify({ capabilities: all(), integrity: integrity(HANDLER_PATHS) }, null, 2));
     return 0;
@@ -54,11 +90,12 @@ export function capabilities(args = []) {
   ui.plain(paint.grey('  do not route around Friday with an ad hoc shell command.'));
 
   const bad = integrity(HANDLER_PATHS);
-  if (bad.lying.length || bad.undeclared.length) {
+  if (bad.lying.length || bad.undeclared.length || bad.underDesigned.length) {
     ui.blank();
     ui.fail('This registry disagrees with the code. That is a bug in Friday:');
     for (const p of bad.lying) ui.detail(`${display(p)} claims to be built, but nothing implements it`);
     for (const p of bad.undeclared) ui.detail(`${display(p)} is implemented but missing from capabilities.json`);
+    for (const u of bad.underDesigned) ui.detail(`${display(u.path)} is missing: ${u.missing.join(', ')}`);
     ui.blank();
     return 1;
   }

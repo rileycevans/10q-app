@@ -60,14 +60,26 @@ export function resolve(argv) {
  * Registry vs handlers, both directions. Either kind of mismatch is a bug in
  * Friday itself, not something a user did.
  */
+/** Fields every capability must carry, so no capability is just a name. */
+const REQUIRED_DESIGN = ['summary', 'execution', 'governedBy', 'success', 'invariant'];
+
 export function integrity(handlerPaths) {
   const handlers = new Set(handlerPaths);
   const claimed = all().filter((c) => c.status === 'implemented').map((c) => c.path);
+
+  // A planned capability whose entire design is its command name is useless to
+  // whoever has to implement it. The registry is the design, so it must carry
+  // enough to act on: what it is for, where it runs, which skill governs it,
+  // what success means, and the invariant it protects.
+  const underDesigned = all()
+    .filter((c) => REQUIRED_DESIGN.some((f) => !c[f]))
+    .map((c) => ({ path: c.path, missing: REQUIRED_DESIGN.filter((f) => !c[f]) }));
 
   return {
     // Registry says implemented, but nothing implements it.
     lying: claimed.filter((p) => !handlers.has(p)),
     // Something implements it, but the registry does not admit it exists.
     undeclared: [...handlers].filter((p) => !REGISTRY[p]),
+    underDesigned,
   };
 }

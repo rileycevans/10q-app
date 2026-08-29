@@ -24,7 +24,7 @@ Every item has an ID, an owner, what it blocks, and a verification you can actua
 
 1. **Never invent a value marked 🚧.** A guessed bundle identifier that reaches a store is permanent — see [DEC-01](#dec-01--bundle-identifier--application-id).
 2. **Never commit signing material.** Keystores, `.p8` keys, `.p12` certificates, provisioning profiles, service-account JSON. The root `.gitignore` does **not** currently cover any of these patterns (verified: `/Users/rocky/Code/10q-app/.gitignore` has no `*.jks`, `*.keystore`, `*.p8`, `*.p12`, `*.mobileprovision`). Adding those patterns is part of [GPL-04](#33-keystore-generation-and-custody).
-3. **Never press a public-impact button.** Uploading to TestFlight internal is not public. Submitting for review, publishing a Play track, releasing to the App Store — those are. Draft, then hand off. This mirrors safety rule 1 in `.agent/skills/release/SKILL.md`.
+3. **Never press a public-impact button.** Uploading to TestFlight internal is not public. Submitting for review, publishing a Play track, releasing to the App Store — those are. Draft, then hand off. This mirrors safety rule 1 in `.claude/skills/release/SKILL.md`.
 
 ---
 
@@ -746,7 +746,7 @@ Expressed relative to a target public launch, **T**. Assumes DEC-04 = personal a
 
 ### 8.4 Launch does not mean "all three at once"
 
-The architectural rule from [../01-architecture-decision.md](../01-architecture-decision.md) and `.agent/skills/release/SKILL.md` applies from the very first release: **one codebase does not mean one deployment channel.** Web, iOS and Android are three independently controllable channels. Clients and backend must tolerate version skew from day one — the store binary you ship at T is still installed and talking to your backend in six months.
+The architectural rule from [../01-architecture-decision.md](../01-architecture-decision.md) and `.claude/skills/release/SKILL.md` applies from the very first release: **one codebase does not mean one deployment channel.** Web, iOS and Android are three independently controllable channels. Clients and backend must tolerate version skew from day one — the store binary you ship at T is still installed and talking to your backend in six months.
 
 Suggested first-launch order, giving each channel its own blast radius:
 
