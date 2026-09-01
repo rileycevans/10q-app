@@ -65,6 +65,18 @@ const eslintConfig = defineConfig([
     ".open-next/**",
     "playwright-report/**",
     "test-results/**",
+
+    // Native projects. `cap sync` copies the built web bundle into both, and
+    // Gradle writes its own copies again under android/app/build — so the same
+    // minified output gets linted three or four times over. None of it is
+    // source: editing it does nothing, because the next sync overwrites it.
+    //
+    // CI never saw this (a fresh checkout has no synced bundle), so lint was
+    // green there while a working machine reported hundreds of findings in
+    // files nobody wrote. That divergence is the actual bug — a check that
+    // disagrees with CI teaches you to ignore it.
+    "ios/**",
+    "android/**",
   ]),
 ]);
 
