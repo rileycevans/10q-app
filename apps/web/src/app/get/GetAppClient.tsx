@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { ArcadeBackground } from '@/components/ArcadeBackground';
 import { APP_STORE_URL, PLAY_STORE_URL } from '@/lib/store-links';
@@ -28,15 +28,30 @@ function detectPlatform(): Platform {
   return 'desktop';
 }
 
-export function GetAppClient() {
-  // Starts null so the server-rendered markup and the first client render
-  // agree. Committing to a platform before mount would mismatch and, worse,
-  // flash the wrong destination.
-  const [platform, setPlatform] = useState<Platform | null>(null);
+/**
+ * Platform detection has to satisfy three things at once: the server render
+ * and the first client render must agree (or React warns and the wrong
+ * destination flashes), the value must never change after mount, and reading
+ * it must not trigger a second render pass.
+ *
+ * useSyncExternalStore does all three. The previous useState + useEffect
+ * version set state synchronously inside the effect, which React flags as a
+ * cascading render — and which failed CI's lint gate, blocking every deploy
+ * behind it.
+ *
+ * The subscribe function is a no-op because the value genuinely cannot
+ * change: a device does not stop being an iPhone mid-session.
+ */
+const NOOP_SUBSCRIBE = () => () => {};
 
-  useEffect(() => {
-    setPlatform(detectPlatform());
-  }, []);
+export function GetAppClient() {
+  // Server snapshot is null, matching what the server can actually know;
+  // the client snapshot resolves on the first client render, before paint.
+  const platform = useSyncExternalStore<Platform | null>(
+    NOOP_SUBSCRIBE,
+    detectPlatform,
+    () => null,
+  );
 
   const storeUrl =
     platform === 'ios' ? APP_STORE_URL
